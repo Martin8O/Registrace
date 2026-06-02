@@ -1,0 +1,22 @@
+{
+  "register_button": "Register",
+  "pricing_info": "Pricing information",
+  "arrival_date": "Arrival date",
+  "arrival_time": "Arrival time",
+  "departure_date": "Departure date",
+  "early_departure": "Early departure",
+  "accommodation": "Accommodation",
+  "full_name": "Full name",
+  "age_category": "Age category",
+  "price_type": "Price type",
+  "participation_price": "Participation price",
+  "meal_price": "Meal price",
+  "center": "Center",
+  "email": "Email",
+  "gdpr_consent": "Consent to personal data processing",
+  "total_price": "Total price",
+  "add_participant": "Add participant",
+  "remove_participant": "Remove participant",
+  "register": "Register",
+  "registration_success": "Registration has been successfully submitted"
+}

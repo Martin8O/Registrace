@@ -1,0 +1,22 @@
+{
+  "register_button": "Registrovat se",
+  "pricing_info": "Informace o cenách",
+  "arrival_date": "Datum příjezdu",
+  "arrival_time": "Čas příjezdu",
+  "departure_date": "Datum odjezdu",
+  "early_departure": "Dřívější odjezd",
+  "accommodation": "Ubytování",
+  "full_name": "Celé jméno",
+  "age_category": "Věková kategorie",
+  "price_type": "Typ ceny",
+  "participation_price": "Cena za účast",
+  "meal_price": "Cena za stravu",
+  "center": "Středisko",
+  "email": "E-mail",
+  "gdpr_consent": "Souhlas se zpracováním osobních údajů",
+  "total_price": "Celková cena",
+  "add_participant": "Přidat účastníka",
+  "remove_participant": "Odebrat účastníka",
+  "register": "Zaregistrovat",
+  "registration_success": "Registrace byla úspěšně odeslána"
+}
