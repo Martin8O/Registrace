@@ -49,4 +49,27 @@ Fields named *Discount are subtracted from total (not added).
 morningArrivalDiscount, afternoonArrivalDiscount, eveningArrivalDiscount, earlyDepartureDiscount
 
 ## Current build status
-[Claude Code will update this section as the build progresses]
+
+### Milestone: Project foundation complete (commit a430c62 — chore: setup project foundation)
+
+**Installed libraries**
+- @prisma/client 7.8.0 + prisma 7.8.0
+- @supabase/supabase-js 2.106.2 + @supabase/ssr 0.10.3
+- next-intl 4.13.0
+- zod 4.4.3
+- react-hook-form 7.77.0 + @hookform/resolvers 5.4.0
+- resend 6.12.4
+
+**i18n routing**
+- Locale routing via proxy.ts (Next.js 16 convention, named `proxy` export)
+- Locales: cs (default) and en, prefix-always mode
+- `X-NEXT-INTL-LOCALE` header read in root layout for correct `<html lang>`
+- Translation keys: 20 keys in locales/cs.json and locales/en.json
+
+**Env files**
+- .env.local — placeholder values, gitignored
+- .env.example — empty values, committed (safe)
+
+**Last verified**
+- `npx tsc --noEmit` → 0 errors
+- `npm run build` → clean, no warnings (Next.js 16.2.7 Turbopack)
