@@ -52,17 +52,28 @@ morningArrivalDiscount, afternoonArrivalDiscount, eveningArrivalDiscount, earlyD
 
 ## Current build status
 
-### Milestone: Database foundation complete (2026-06-03)
+### Milestones complete (2026-06-03)
 
-**Prisma schema** (`prisma/schema.prisma`)
-- 8 enums, 10 models fully defined
-- Generator `output = "../generated/prisma"` (required in Prisma 7)
-- Datasource: `provider = "postgresql"` only — no url/directUrl (Prisma 7 moved these out)
-
-**Prisma 7 connection architecture**
+**Database foundation**
+- Prisma schema: 8 enums, 10 models, migration `20260603120610_init` applied (Supabase, eu-west-1)
+- Generator `output = "../generated/prisma"` (required in Prisma 7); datasource has no url/directUrl
 - `prisma.config.ts` — CLI config; loads `.env.local` via dotenv, passes `DIRECT_URL` for migrate
 - `lib/db/index.ts` — singleton via `@prisma/adapter-pg` with pooled `DATABASE_URL`
-- Seed command in `prisma.config.ts` under `migrations.seed` (not in package.json)
+- Center table seeded with 25 records
+
+**Validation layer** (`lib/validation/`)
+- `registrations.ts` — `calculatePriceSchema`, `registrationSubmitSchema`
+- `events.ts` — `eventCreateSchema` (status required), `eventUpdateSchema`, `eventStatusSchema`
+- Refinements: honeypot must be empty, participants min 1 / max 10, pricingType rejected for non-AGE_15_PLUS
+- `index.ts` — barrel re-export only
+- No Prisma imports; enum values declared as local `as const` tuples
+
+**API route stubs** (`app/api/`)
+- Public: `GET /events`, `GET /events/[id]`, `POST /registration/calculate-price`, `POST /registration/submit`
+- Admin: events (GET list, POST create, GET/PUT by id, PATCH status), registrations (GET list, GET/PUT by id, POST export, POST resend-confirmation), centers (GET/POST), audit-log (GET)
+- Auth: `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`
+- Stub auth guard: `app/api/_lib/guard.ts` — checks Authorization header; TODO: swap for Supabase session
+- Stubs only: no DB writes, no pricing logic, no email sending
 
 **Installed libraries**
 - @prisma/client 7.8.0 + prisma 7.8.0
@@ -73,10 +84,6 @@ morningArrivalDiscount, afternoonArrivalDiscount, eveningArrivalDiscount, earlyD
 - react-hook-form 7.77.0 + @hookform/resolvers 5.4.0
 - resend 6.12.4
 - tsx 4.22.4 (dev) + dotenv 17.4.2 (dev)
-
-**Database state**
-- Migration `20260603120610_init` applied (Supabase, eu-west-1)
-- Center table seeded with 25 records
 
 **i18n routing**
 - Locale routing via proxy.ts (Next.js 16 convention, named `proxy` export)
@@ -89,7 +96,5 @@ morningArrivalDiscount, afternoonArrivalDiscount, eveningArrivalDiscount, earlyD
 - .env.example — empty values, committed (safe)
 
 **Last verified**
-- `npx prisma generate` → client generated to generated/prisma
-- `npx prisma validate` → schema valid
 - `npx tsc --noEmit` → 0 errors
 - `npm run build` → clean, no warnings (Next.js 16.2.7 Turbopack)
