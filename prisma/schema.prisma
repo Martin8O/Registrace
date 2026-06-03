@@ -1,9 +1,239 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../generated/prisma"
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+}
+
+enum AgeCategory {
+  AGE_0_3
+  AGE_4_7
+  AGE_8_14
+  AGE_15_PLUS
+}
+
+enum PricingType {
+  STANDARD
+  SUPPORTED
+  SURPLUS
+}
+
+enum ArrivalTime {
+  MORNING
+  AFTERNOON
+  EVENING
+}
+
+enum EarlyDeparture {
+  NONE
+  AFTER_BREAKFAST
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  ARCHIVED
+}
+
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+}
+
+enum RegistrationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  WAITLIST
+}
+
+enum UserRole {
+  ADMIN
+}
+
+model User {
+  id        String   @id @db.Uuid
+  email     String   @unique
+  role      UserRole @default(ADMIN)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  auditLogs AuditLog[]
+
+  @@index([email])
+}
+
+model Center {
+  id        String   @id @default(cuid())
+  name_cs   String
+  name_en   String
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  registrations Registration[]
+}
+
+model Event {
+  id               String      @id @default(cuid())
+  title_cs         String
+  title_en         String
+  subtitle_cs      String?
+  subtitle_en      String?
+  contactName      String?
+  contactPhone     String?
+  contactEmail     String?
+  status           EventStatus @default(DRAFT)
+  maxRegistrations Int?
+  startDate        DateTime
+  endDate          DateTime
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  deletedAt        DateTime?
+
+  dates         EventDate[]
+  pricingRules  PricingRule[]
+  meals         EventMeal[]
+  registrations Registration[]
+
+  @@index([status])
+  @@index([startDate])
+}
+
+model EventDate {
+  id        String   @id @default(cuid())
+  eventId   String
+  date      DateTime
+  label_cs  String
+  label_en  String
+  sortOrder Int      @default(0)
+
+  event          Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  mealSlots      EventMeal[]
+  arrivalDates   Registration[] @relation("ArrivalDate")
+  departureDates Registration[] @relation("DepartureDate")
+
+  @@index([eventId])
+}
+
+model PricingRule {
+  id                       String      @id @default(cuid())
+  eventId                  String
+  ageCategory              AgeCategory
+  pricingType              PricingType @default(STANDARD)
+  dailyRate                Int         @default(0)
+  nightRate                Int         @default(0)
+  morningArrivalDiscount   Int         @default(0)
+  afternoonArrivalDiscount Int         @default(0)
+  eveningArrivalDiscount   Int         @default(0)
+  earlyDepartureDiscount   Int         @default(0)
+  createdAt                DateTime    @default(now())
+  updatedAt                DateTime    @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, ageCategory, pricingType])
+  @@index([eventId])
+}
+
+model EventMeal {
+  id          String   @id @default(cuid())
+  eventId     String
+  eventDateId String
+  mealType    MealType
+  price       Int      @default(0)
+  isClosed    Boolean  @default(false)
+  label_cs    String
+  label_en    String
+
+  event            Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventDate        EventDate         @relation(fields: [eventDateId], references: [id], onDelete: Cascade)
+  participantMeals ParticipantMeal[]
+
+  @@unique([eventDateId, mealType])
+  @@index([eventId])
+}
+
+model Registration {
+  id                 String             @id @default(cuid())
+  eventId            String
+  centerId           String
+  arrivalDateId      String
+  arrivalTime        ArrivalTime
+  departureDateId    String
+  earlyDeparture     EarlyDeparture     @default(NONE)
+  hasAccommodation   Boolean            @default(false)
+  email              String
+  gdprConsent        Boolean            @default(false)
+  totalPrice         Int                @default(0)
+  status             RegistrationStatus @default(PENDING)
+  idempotencyKey     String?            @unique
+  confirmationSentAt DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  deletedAt          DateTime?
+  ipAddress          String?
+
+  event         Event         @relation(fields: [eventId], references: [id])
+  center        Center        @relation(fields: [centerId], references: [id])
+  arrivalDate   EventDate     @relation("ArrivalDate", fields: [arrivalDateId], references: [id])
+  departureDate EventDate     @relation("DepartureDate", fields: [departureDateId], references: [id])
+  participants  Participant[]
+
+  @@index([eventId])
+  @@index([email])
+  @@index([createdAt])
+}
+
+model Participant {
+  id                 String      @id @default(cuid())
+  registrationId     String
+  fullName           String
+  ageCategory        AgeCategory
+  pricingType        PricingType @default(STANDARD)
+  participationPrice Int         @default(0)
+  mealPrice          Int         @default(0)
+  totalPrice         Int         @default(0)
+  sortOrder          Int         @default(0)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  deletedAt          DateTime?
+
+  registration Registration      @relation(fields: [registrationId], references: [id], onDelete: Cascade)
+  meals        ParticipantMeal[]
+
+  @@index([registrationId])
+}
+
+model ParticipantMeal {
+  id            String @id @default(cuid())
+  participantId String
+  eventMealId   String
+  price         Int    @default(0)
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  eventMeal   EventMeal   @relation(fields: [eventMealId], references: [id])
+
+  @@unique([participantId, eventMealId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?  @db.Uuid
+  action     String
+  entityType String
+  entityId   String
+  oldData    Json?
+  newData    Json?
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
 }

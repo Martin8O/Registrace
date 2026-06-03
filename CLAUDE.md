@@ -42,7 +42,9 @@ Bilingual (CZ/EN) web application for registration to meditation and community e
 /locales/cs.json + en.json
 /modules/events/ + registrations/ + pricing/ + auth/
 /lib/db/ + validation/ + utils/ + email/
-/prisma/schema.prisma
+/prisma/schema.prisma + seed.ts + migrations/
+/prisma.config.ts — Prisma 7 CLI config (root level)
+/generated/prisma — generated Prisma client (gitignored)
 
 ## Pricing discount field naming
 Fields named *Discount are subtracted from total (not added).
@@ -50,15 +52,31 @@ morningArrivalDiscount, afternoonArrivalDiscount, eveningArrivalDiscount, earlyD
 
 ## Current build status
 
-### Milestone: Project foundation complete (commit a430c62 — chore: setup project foundation)
+### Milestone: Database foundation complete (2026-06-03)
+
+**Prisma schema** (`prisma/schema.prisma`)
+- 8 enums, 10 models fully defined
+- Generator `output = "../generated/prisma"` (required in Prisma 7)
+- Datasource: `provider = "postgresql"` only — no url/directUrl (Prisma 7 moved these out)
+
+**Prisma 7 connection architecture**
+- `prisma.config.ts` — CLI config; loads `.env.local` via dotenv, passes `DIRECT_URL` for migrate
+- `lib/db/index.ts` — singleton via `@prisma/adapter-pg` with pooled `DATABASE_URL`
+- Seed command in `prisma.config.ts` under `migrations.seed` (not in package.json)
 
 **Installed libraries**
 - @prisma/client 7.8.0 + prisma 7.8.0
+- @prisma/adapter-pg 7.8.0 + pg 8.21.0 + @types/pg 8.20.0
 - @supabase/supabase-js 2.106.2 + @supabase/ssr 0.10.3
 - next-intl 4.13.0
 - zod 4.4.3
 - react-hook-form 7.77.0 + @hookform/resolvers 5.4.0
 - resend 6.12.4
+- tsx 4.22.4 (dev) + dotenv 17.4.2 (dev)
+
+**Database state**
+- Migration `20260603120610_init` applied (Supabase, eu-west-1)
+- Center table seeded with 25 records
 
 **i18n routing**
 - Locale routing via proxy.ts (Next.js 16 convention, named `proxy` export)
@@ -67,9 +85,11 @@ morningArrivalDiscount, afternoonArrivalDiscount, eveningArrivalDiscount, earlyD
 - Translation keys: 20 keys in locales/cs.json and locales/en.json
 
 **Env files**
-- .env.local — placeholder values, gitignored
+- .env.local — real values, gitignored
 - .env.example — empty values, committed (safe)
 
 **Last verified**
+- `npx prisma generate` → client generated to generated/prisma
+- `npx prisma validate` → schema valid
 - `npx tsc --noEmit` → 0 errors
 - `npm run build` → clean, no warnings (Next.js 16.2.7 Turbopack)
