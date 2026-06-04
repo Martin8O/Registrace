@@ -1,22 +1,53 @@
 {
-  "register_button": "Register",
-  "pricing_info": "Pricing information",
-  "arrival_date": "Arrival date",
-  "arrival_time": "Arrival time",
-  "departure_date": "Departure date",
-  "early_departure": "Early departure",
-  "accommodation": "Accommodation",
-  "full_name": "Full name",
-  "age_category": "Age category",
-  "price_type": "Price type",
-  "participation_price": "Participation price",
-  "meal_price": "Meal price",
-  "center": "Center",
-  "email": "Email",
-  "gdpr_consent": "Consent to personal data processing",
-  "total_price": "Total price",
-  "add_participant": "Add participant",
-  "remove_participant": "Remove participant",
-  "register": "Register",
-  "registration_success": "Registration has been successfully submitted"
+  "form": {
+    "register_button": "Register",
+    "pricing_info": "Pricing information",
+    "arrival_date": "Arrival date",
+    "arrival_time": "Arrival time",
+    "departure_date": "Departure date",
+    "early_departure": "Early departure",
+    "accommodation": "Accommodation",
+    "full_name": "Full name",
+    "age_category": "Age category",
+    "price_type": "Price type",
+    "participation_price": "Participation price",
+    "meal_price": "Meal price",
+    "center": "Center",
+    "email": "Email",
+    "gdpr_consent": "Consent to personal data processing",
+    "total_price": "Total price",
+    "add_participant": "Add participant",
+    "remove_participant": "Remove participant",
+    "register": "Register",
+    "registration_success": "Registration has been successfully submitted"
+  },
+  "home": {
+    "heading": "Registrations for events in Těnovice",
+    "subheading": "Click on the event name to open registration."
+  },
+  "badge": {
+    "closed": "closed"
+  },
+  "event": {
+    "pricingInfo": "Pricing Info",
+    "pricingModal": {
+      "close": "Close",
+      "title": "Pricing Overview",
+      "breakfast": "Breakfast",
+      "lunch": "Lunch",
+      "dinner": "Dinner",
+      "dailyRate": {
+        "age03": "Daily rate age 0–3",
+        "age47": "Daily rate age 4–7",
+        "age814": "Daily rate age 8–14",
+        "age15standard": "Daily rate age 15+ standard",
+        "age15supported": "Daily rate age 15+ supported",
+        "age15surplus": "Daily rate age 15+ surplus"
+      },
+      "eveningArrivalDiscount": "Evening arrival discount (15+)",
+      "earlyDepartureDiscount": "Early departure discount (15+)",
+      "pricePerNight": "Price per night (15+)"
+    },
+    "registrationFormPlaceholder": "Registration form — coming next"
+  }
 }

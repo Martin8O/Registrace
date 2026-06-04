@@ -50,9 +50,19 @@ Bilingual (CZ/EN) web application for registration to meditation and community e
 Fields named *Discount are subtracted from total (not added).
 morningArrivalDiscount, afternoonArrivalDiscount, eveningArrivalDiscount, earlyDepartureDiscount
 
+## Translation key conventions
+All keys are nested — no flat root-level keys.
+Namespaces: `form` (registration form), `home` (homepage),
+`event` (event detail page), `badge` (status badges)
+
+Key distinction to preserve:
+- `form.pricing_info` — section label inside the registration form
+- `event.pricingInfo` — button label on the event detail page
+These are different UI elements; do not merge or replace one with the other.
+
 ## Current build status
 
-### Milestones complete (2026-06-03)
+### Milestones complete (2026-06-03 – 2026-06-04)
 
 **Database foundation**
 - Prisma schema: 8 enums, 10 models, migration `20260603120610_init` applied (Supabase, eu-west-1)
@@ -89,12 +99,26 @@ morningArrivalDiscount, afternoonArrivalDiscount, eveningArrivalDiscount, earlyD
 - Locale routing via proxy.ts (Next.js 16 convention, named `proxy` export)
 - Locales: cs (default) and en, prefix-always mode
 - `X-NEXT-INTL-LOCALE` header read in root layout for correct `<html lang>`
-- Translation keys: 20 keys in locales/cs.json and locales/en.json
+- Translation keys: 39 keys in 4 namespaces — `form` (20), `home` (2), `badge` (1), `event` (16)
 
 **Env files**
 - .env.local — real values, gitignored
 - .env.example — empty values, committed (safe)
 
-**Last verified**
+**Public-facing pages** (`app/[locale]/`, `components/`)
+- `lib/mock/events.ts` — typed `MockEvent[]` with 4 statuses; DRAFT never shown publicly
+- `components/shared/LanguageSwitcher.tsx` — client component; segment-split pathname, preserves path on switch
+- `components/public/PricingModal.tsx` — full-screen overlay, 12 hardcoded pricing rows, closes on button or overlay click
+- `components/public/PricingInfoButton.tsx` — client island that owns modal `useState`, usable from server-component pages
+- `app/[locale]/page.tsx` — lists PUBLISHED events only (DRAFT/CLOSED/ARCHIVED all hidden)
+- `app/[locale]/events/[id]/page.tsx` — localized title/subtitle, PricingInfoButton, registration placeholder; `notFound()` on unknown id
+- `app/[locale]/layout.tsx` — extended with `min-h-screen bg-white` wrapper
+
+**Translation key refactor**
+- All 20 original flat root-level keys moved under `form` namespace
+- No flat string keys remain at root level; all keys are nested
+- Total: 39 keys across 4 namespaces (`form`, `home`, `badge`, `event`)
+
+**Last verified** (2026-06-04)
 - `npx tsc --noEmit` → 0 errors
 - `npm run build` → clean, no warnings (Next.js 16.2.7 Turbopack)

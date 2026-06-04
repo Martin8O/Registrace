@@ -1,22 +1,53 @@
 {
-  "register_button": "Registrovat se",
-  "pricing_info": "Informace o cenách",
-  "arrival_date": "Datum příjezdu",
-  "arrival_time": "Čas příjezdu",
-  "departure_date": "Datum odjezdu",
-  "early_departure": "Dřívější odjezd",
-  "accommodation": "Ubytování",
-  "full_name": "Celé jméno",
-  "age_category": "Věková kategorie",
-  "price_type": "Typ ceny",
-  "participation_price": "Cena za účast",
-  "meal_price": "Cena za stravu",
-  "center": "Středisko",
-  "email": "E-mail",
-  "gdpr_consent": "Souhlas se zpracováním osobních údajů",
-  "total_price": "Celková cena",
-  "add_participant": "Přidat účastníka",
-  "remove_participant": "Odebrat účastníka",
-  "register": "Zaregistrovat",
-  "registration_success": "Registrace byla úspěšně odeslána"
+  "form": {
+    "register_button": "Registrovat se",
+    "pricing_info": "Informace o cenách",
+    "arrival_date": "Datum příjezdu",
+    "arrival_time": "Čas příjezdu",
+    "departure_date": "Datum odjezdu",
+    "early_departure": "Dřívější odjezd",
+    "accommodation": "Ubytování",
+    "full_name": "Celé jméno",
+    "age_category": "Věková kategorie",
+    "price_type": "Typ ceny",
+    "participation_price": "Cena za účast",
+    "meal_price": "Cena za stravu",
+    "center": "Středisko",
+    "email": "E-mail",
+    "gdpr_consent": "Souhlas se zpracováním osobních údajů",
+    "total_price": "Celková cena",
+    "add_participant": "Přidat účastníka",
+    "remove_participant": "Odebrat účastníka",
+    "register": "Zaregistrovat",
+    "registration_success": "Registrace byla úspěšně odeslána"
+  },
+  "home": {
+    "heading": "Registrace na akce v Těnovicích",
+    "subheading": "Klikněte na název akce pro otevření registrace."
+  },
+  "badge": {
+    "closed": "uzavřeno"
+  },
+  "event": {
+    "pricingInfo": "Informace o cenách",
+    "pricingModal": {
+      "close": "Zavřít",
+      "title": "Přehled cen",
+      "breakfast": "Snídaně",
+      "lunch": "Oběd",
+      "dinner": "Večeře",
+      "dailyRate": {
+        "age03": "Denní sazba věk 0–3",
+        "age47": "Denní sazba věk 4–7",
+        "age814": "Denní sazba věk 8–14",
+        "age15standard": "Denní sazba 15+ standardní",
+        "age15supported": "Denní sazba 15+ podpora",
+        "age15surplus": "Denní sazba 15+ přebytek"
+      },
+      "eveningArrivalDiscount": "Sleva za večerní příjezd (15+)",
+      "earlyDepartureDiscount": "Sleva za brzký odjezd (15+)",
+      "pricePerNight": "Cena za noc (15+)"
+    },
+    "registrationFormPlaceholder": "Registrační formulář — připravuje se"
+  }
 }
