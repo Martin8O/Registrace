@@ -1,4 +1,4 @@
-# TENOVICE — Project Memory for Claude Code
+# REGISTRACE — Project Memory for Claude Code
 
 ## What this project is
 Bilingual (CZ/EN) web application for registration to meditation and community events.

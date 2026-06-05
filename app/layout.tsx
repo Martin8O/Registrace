@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Tenovice',
+  title: 'Registrace',
   description: 'Registrace na akce',
 };
 
