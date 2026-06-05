@@ -52,6 +52,7 @@ enum RegistrationStatus {
 }
 
 enum UserRole {
+  SUPER_ADMIN
   ADMIN
 }
 
@@ -63,8 +64,19 @@ model User {
   updatedAt DateTime @updatedAt
 
   auditLogs AuditLog[]
+  centers   UserCenter[]
 
   @@index([email])
+}
+
+model UserCenter {
+  id       String @id @default(cuid())
+  userId   String @db.Uuid
+  centerId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  center Center @relation(fields: [centerId], references: [id])
+  @@unique([userId, centerId])
+  @@index([userId])
 }
 
 model Center {
@@ -77,6 +89,7 @@ model Center {
   updatedAt DateTime @updatedAt
 
   registrations Registration[]
+  admins        UserCenter[]
 }
 
 model Event {

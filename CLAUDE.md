@@ -62,10 +62,12 @@ These are different UI elements; do not merge or replace one with the other.
 
 ## Current build status
 
-### Milestones complete (2026-06-03 – 2026-06-04)
+### Milestones complete (2026-06-03 – 2026-06-05)
 
 **Database foundation**
-- Prisma schema: 8 enums, 10 models, migration `20260603120610_init` applied (Supabase, eu-west-1)
+- Prisma schema: 8 enums, 11 models, migration `20260603120610_init` applied (Supabase, eu-west-1)
+- `UserRole` enum: `SUPER_ADMIN` + `ADMIN` (default remains `ADMIN`)
+- `UserCenter` join table: links users to their assigned centres; `@@unique([userId, centerId])`
 - Generator `output = "../generated/prisma"` (required in Prisma 7); datasource has no url/directUrl
 - `prisma.config.ts` — CLI config; loads `.env.local` via dotenv, passes `DIRECT_URL` for migrate
 - `lib/db/index.ts` — singleton via `@prisma/adapter-pg` with pooled `DATABASE_URL`
@@ -119,6 +121,6 @@ These are different UI elements; do not merge or replace one with the other.
 - No flat string keys remain at root level; all keys are nested
 - Total: 39 keys across 4 namespaces (`form`, `home`, `badge`, `event`)
 
-**Last verified** (2026-06-04)
+**Last verified** (2026-06-05)
 - `npx tsc --noEmit` → 0 errors
 - `npm run build` → clean, no warnings (Next.js 16.2.7 Turbopack)
