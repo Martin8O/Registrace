@@ -63,8 +63,9 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  auditLogs AuditLog[]
-  centers   UserCenter[]
+  auditLogs     AuditLog[]
+  centers       UserCenter[]
+  createdEvents Event[]
 
   @@index([email])
 }
@@ -105,10 +106,12 @@ model Event {
   maxRegistrations Int?
   startDate        DateTime
   endDate          DateTime
+  createdBy        String?     @db.Uuid
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
   deletedAt        DateTime?
 
+  creator       User?          @relation(fields: [createdBy], references: [id])
   dates         EventDate[]
   pricingRules  PricingRule[]
   meals         EventMeal[]
@@ -116,6 +119,7 @@ model Event {
 
   @@index([status])
   @@index([startDate])
+  @@index([createdBy])
 }
 
 model EventDate {

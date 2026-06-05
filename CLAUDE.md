@@ -34,6 +34,14 @@ Bilingual (CZ/EN) web application for registration to meditation and community e
 17. Export endpoint = POST (not GET), filters in body.
 18. Honeypot field on registration form, validated server-side.
 19. Max 10 participants per registration.
+20. SUPER_ADMIN sees all. ADMIN is scoped to their center(s) only.
+
+## Roles
+- SUPER_ADMIN: full access to everything (Martin only)
+- ADMIN: center-scoped; can only create and manage events where `Event.createdBy = their userId`
+
+Super-admin assigns center admins via User Management in admin panel.
+Super-admin can manage events for any center.
 
 ## Folder structure
 /app/[locale]/ — public pages (CZ/EN routing)
@@ -68,6 +76,7 @@ These are different UI elements; do not merge or replace one with the other.
 - Prisma schema: 8 enums, 11 models, migration `20260603120610_init` applied (Supabase, eu-west-1)
 - `UserRole` enum: `SUPER_ADMIN` + `ADMIN` (default remains `ADMIN`)
 - `UserCenter` join table: links users to their assigned centres; `@@unique([userId, centerId])`
+- `Event.createdBy` — nullable UUID FK to `User`; scopes each event to its creator (ADMIN sees only their own events; SUPER_ADMIN sees all)
 - Generator `output = "../generated/prisma"` (required in Prisma 7); datasource has no url/directUrl
 - `prisma.config.ts` — CLI config; loads `.env.local` via dotenv, passes `DIRECT_URL` for migrate
 - `lib/db/index.ts` — singleton via `@prisma/adapter-pg` with pooled `DATABASE_URL`
@@ -120,6 +129,12 @@ These are different UI elements; do not merge or replace one with the other.
 - All 20 original flat root-level keys moved under `form` namespace
 - No flat string keys remain at root level; all keys are nested
 - Total: 39 keys across 4 namespaces (`form`, `home`, `badge`, `event`)
+
+**Schema addendum — Event.createdBy** (`prisma/schema.prisma`)
+- `Event.createdBy String? @db.Uuid` — FK to `User`, nullable (existing events → NULL)
+- `Event.creator User?` — relation field; `@@index([createdBy])` added
+- `User.createdEvents Event[]` — back-relation
+- Migration not yet applied (pending with UserRole/UserCenter in B7)
 
 **Last verified** (2026-06-05)
 - `npx tsc --noEmit` → 0 errors
