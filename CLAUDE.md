@@ -156,9 +156,26 @@ These are different UI elements; do not merge or replace one with the other.
 - `User.createdEvents Event[]` — back-relation
 - Migration not yet applied (pending with UserRole/UserCenter in B7)
 
-**Last verified** (2026-06-08, after Milestone 11 / B5 polish)
+**Admin panel (B6 / Milestone 12)**
+- Locale layout is now **provider-only**; public chrome lives in
+  `app/[locale]/(public)/layout.tsx`; admin uses its own `(panel)` shell
+  (`components/admin/AdminSidebar.tsx`). Login is standalone (outside the shell).
+  Public URLs unchanged (route groups are URL-invisible).
+- **Real Supabase Auth**: `lib/supabase/{client,server,middleware}.ts` (public env
+  vars only). `proxy.ts` composes next-intl + a **session-presence** guard:
+  `/[locale]/admin/**` → login redirect, `/api/admin/**` → 401. **No second
+  `middleware.ts`.** Role lookup + center-ownership 403 are `// TODO(B7):`.
+- All admin screens use **mock data**; the 7-step event form (`EventStepper.tsx`)
+  **validates `eventCreateSchema` only — never POSTs/persists** (like B5).
+  `Event.createdBy` from session is parked for B7 (memory `b7-createdby-from-session`).
+- **Do NOT modify** (still frozen): `prisma/schema.prisma`, `lib/validation/*`,
+  `app/api/*`. Migration still pending (B7).
+
+**Last verified** (2026-06-08, after Milestone 12 / B6 admin panel)
 - `npx tsc --noEmit` → 0 errors
 - `npm run build` → clean, no warnings (Next.js 16.2.7 Turbopack)
+- In-browser: public pages unchanged; admin login/redirect/logout, `/api/admin` 401,
+  7-step form validation, all admin screens, and 375px mobile all verified.
 
 ### Design system (B4.5) — standing rules
 

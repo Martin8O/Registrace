@@ -25,6 +25,8 @@ export type MockCenter = {
   id: string
   name_cs: string
   name_en: string
+  isActive: boolean
+  sortOrder: number
 }
 
 // Three consecutive days (Fri / Sat / Sun, 4–6 Sep 2026) within evt-001's range.
@@ -53,9 +55,9 @@ export const mockMealSlots: MockMealSlot[] = [
 // A handful of BDC centres (subset of the 25 seeded). Bilingual names — most are
 // identical across locales, a couple differ (Praha/Prague, Plzeň/Pilsen).
 export const mockCenters: MockCenter[] = [
-  { id: 'ctr-tenovice', name_cs: 'Těnovice', name_en: 'Tenovice' },
-  { id: 'ctr-praha', name_cs: 'Praha', name_en: 'Prague' },
-  { id: 'ctr-brno', name_cs: 'Brno', name_en: 'Brno' },
-  { id: 'ctr-plzen', name_cs: 'Plzeň', name_en: 'Pilsen' },
-  { id: 'ctr-olomouc', name_cs: 'Olomouc', name_en: 'Olomouc' },
+  { id: 'ctr-tenovice', name_cs: 'Těnovice', name_en: 'Tenovice', isActive: true, sortOrder: 10 },
+  { id: 'ctr-praha', name_cs: 'Praha', name_en: 'Prague', isActive: true, sortOrder: 20 },
+  { id: 'ctr-brno', name_cs: 'Brno', name_en: 'Brno', isActive: true, sortOrder: 30 },
+  { id: 'ctr-plzen', name_cs: 'Plzeň', name_en: 'Pilsen', isActive: true, sortOrder: 40 },
+  { id: 'ctr-olomouc', name_cs: 'Olomouc', name_en: 'Olomouc', isActive: false, sortOrder: 50 },
 ]

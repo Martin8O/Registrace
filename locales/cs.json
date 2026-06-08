@@ -103,5 +103,255 @@
       "pricePerNight": "Cena za noc (15+)"
     },
     "registrationFormPlaceholder": "Registrační formulář — připravuje se"
+  },
+  "admin": {
+    "brand": "Administrace",
+    "nav": {
+      "dashboard": "Přehled",
+      "events": "Akce",
+      "registrations": "Registrace",
+      "centers": "Centra",
+      "users": "Uživatelé",
+      "logout": "Odhlásit se"
+    },
+    "common": {
+      "all": "Vše",
+      "save": "Uložit",
+      "saved": "Uloženo",
+      "cancel": "Zrušit",
+      "edit": "Upravit",
+      "back": "Zpět",
+      "actions": "Akce",
+      "none": "—",
+      "yes": "Ano",
+      "no": "Ne",
+      "view": "Zobrazit",
+      "add": "Přidat",
+      "remove": "Odebrat",
+      "menu": "Menu"
+    },
+    "login": {
+      "title": "Přihlášení do administrace",
+      "subtitle": "Zadejte přihlašovací údaje správce.",
+      "email": "E-mail",
+      "password": "Heslo",
+      "submit": "Přihlásit se",
+      "signingIn": "Přihlašuji…",
+      "error": "Přihlášení se nezdařilo. Zkontrolujte e-mail a heslo."
+    },
+    "dashboard": {
+      "title": "Přehled",
+      "subtitle": "Souhrn akcí a registrací.",
+      "totalEvents": "Celkem akcí",
+      "totalRegistrations": "Celkem registrací",
+      "quickLinks": "Rychlé odkazy",
+      "goToEvents": "Spravovat akce",
+      "goToRegistrations": "Spravovat registrace"
+    },
+    "eventStatus": {
+      "DRAFT": "Koncept",
+      "PUBLISHED": "Publikováno",
+      "CLOSED": "Uzavřeno",
+      "ARCHIVED": "Archivováno"
+    },
+    "regStatus": {
+      "PENDING": "Čeká",
+      "CONFIRMED": "Potvrzeno",
+      "CANCELLED": "Zrušeno",
+      "WAITLIST": "Náhradník"
+    },
+    "age": {
+      "AGE_0_3": "0–3 roky",
+      "AGE_4_7": "4–7 let",
+      "AGE_8_14": "8–14 let",
+      "AGE_15_PLUS": "15 let a více"
+    },
+    "pricingType": {
+      "STANDARD": "Standardní",
+      "SUPPORTED": "Podporovaná",
+      "SURPLUS": "Nadbytek"
+    },
+    "mealType": {
+      "BREAKFAST": "Snídaně",
+      "LUNCH": "Oběd",
+      "DINNER": "Večeře"
+    },
+    "arrivalTime": {
+      "MORNING": "Ráno",
+      "AFTERNOON": "Odpoledne",
+      "EVENING": "Večer"
+    },
+    "events": {
+      "title": "Akce",
+      "new": "Nová akce",
+      "empty": "Žádné akce neodpovídají filtru.",
+      "filterStatus": "Stav",
+      "edit": "Upravit",
+      "viewRegistrations": "Registrace",
+      "table": {
+        "title": "Název",
+        "status": "Stav",
+        "start": "Začátek",
+        "end": "Konec",
+        "actions": "Akce"
+      }
+    },
+    "eventForm": {
+      "newTitle": "Nová akce",
+      "stepLabel": "Krok {current} z {total}",
+      "next": "Další",
+      "prev": "Zpět",
+      "save": "Uložit akci",
+      "saveSuccess": "Akce ověřena — ukládání bude propojeno v B7.",
+      "validationError": "Opravte prosím označená pole.",
+      "errorsTitle": "Formulář obsahuje chyby:",
+      "steps": {
+        "basic": "Základní údaje",
+        "schedule": "Termín",
+        "pricing": "Ceník",
+        "meals": "Strava",
+        "settings": "Nastavení",
+        "preview": "Náhled",
+        "save": "Uložení"
+      },
+      "fields": {
+        "title_cs": "Název (CZ)",
+        "title_en": "Název (EN)",
+        "subtitle_cs": "Podtitul (CZ)",
+        "subtitle_en": "Podtitul (EN)",
+        "contactName": "Kontaktní osoba",
+        "contactPhone": "Telefon",
+        "contactEmail": "Kontaktní e-mail",
+        "startDate": "Datum začátku",
+        "endDate": "Datum konce",
+        "maxRegistrations": "Maximální počet registrací",
+        "status": "Stav",
+        "dailyRate": "Denní sazba",
+        "nightRate": "Cena za noc",
+        "morningArrivalDiscount": "Sleva za ranní příjezd",
+        "afternoonArrivalDiscount": "Sleva za odpolední příjezd",
+        "eveningArrivalDiscount": "Sleva za večerní příjezd",
+        "earlyDepartureDiscount": "Sleva za dřívější odjezd",
+        "dateLabelCs": "Označení dne (CZ)",
+        "dateLabelEn": "Označení dne (EN)",
+        "mealType": "Typ jídla",
+        "price": "Cena",
+        "mealLabelCs": "Označení (CZ)",
+        "mealLabelEn": "Označení (EN)",
+        "isClosed": "Uzavřeno"
+      },
+      "schedule": {
+        "eventDates": "Dny akce",
+        "addDate": "Přidat den",
+        "noDates": "Zatím nebyly přidány žádné dny."
+      },
+      "pricing": {
+        "intro": "Cenová pravidla se sbírají jako UI stav (ukládání v B7).",
+        "ageCategory": "Věková kategorie",
+        "pricingType": "Typ ceny",
+        "lockedZeroNote": "Děti 0–14 mají denní sazbu vždy 0 (neměnné pravidlo)."
+      },
+      "meals": {
+        "intro": "Strava se zadává pro každý den akce (UI stav).",
+        "addMeal": "Přidat jídlo",
+        "noDates": "Nejprve přidejte dny akce v kroku Termín.",
+        "forDate": "Den"
+      },
+      "preview": {
+        "intro": "Zkontrolujte zadané údaje. Ukládání bude propojeno v B7.",
+        "basic": "Základní údaje",
+        "schedule": "Termín",
+        "pricing": "Ceník",
+        "meals": "Strava",
+        "settings": "Nastavení",
+        "noPricing": "Žádná cenová pravidla.",
+        "noMeals": "Žádná jídla.",
+        "notSet": "—"
+      },
+      "errors": {
+        "required": "Povinné pole",
+        "email": "Neplatný e-mail",
+        "endDate": "Datum konce musí být po datu začátku",
+        "date": "Neplatné datum",
+        "maxRegistrations": "Musí být kladné celé číslo"
+      }
+    },
+    "registrations": {
+      "title": "Registrace",
+      "empty": "Žádné registrace neodpovídají filtru.",
+      "filterEvent": "Akce",
+      "filterStatus": "Stav",
+      "allEvents": "Všechny akce",
+      "table": {
+        "id": "ID",
+        "email": "E-mail",
+        "center": "Centrum",
+        "date": "Vytvořeno",
+        "participants": "Účastníci",
+        "total": "Celkem",
+        "status": "Stav"
+      }
+    },
+    "registrationDetail": {
+      "title": "Detail registrace",
+      "notFound": "Registrace nebyla nalezena.",
+      "email": "E-mail",
+      "event": "Akce",
+      "center": "Centrum",
+      "arrival": "Příjezd",
+      "departure": "Odjezd",
+      "arrivalTime": "Čas příjezdu",
+      "accommodation": "Ubytování",
+      "status": "Stav",
+      "participants": "Účastníci",
+      "fullName": "Jméno a příjmení",
+      "age": "Věk",
+      "pricingType": "Typ ceny",
+      "total": "Celková cena",
+      "save": "Uložit změny",
+      "saved": "Změny uloženy (propojení v B7).",
+      "resend": "Znovu odeslat potvrzení",
+      "resent": "Potvrzení znovu odesláno (propojení v B7)."
+    },
+    "centers": {
+      "title": "Centra",
+      "add": "Přidat centrum",
+      "edit": "Upravit",
+      "empty": "Žádná centra.",
+      "nameCs": "Název (CZ)",
+      "nameEn": "Název (EN)",
+      "active": "Aktivní",
+      "inactive": "Neaktivní",
+      "sortOrder": "Pořadí",
+      "saved": "Uloženo (propojení v B7).",
+      "table": {
+        "nameCs": "Název (CZ)",
+        "nameEn": "Název (EN)",
+        "active": "Aktivní",
+        "sortOrder": "Pořadí",
+        "actions": "Akce"
+      }
+    },
+    "users": {
+      "title": "Uživatelé",
+      "superAdminOnlyNote": "Tuto stránku uvidí pouze SUPER_ADMIN (propojení v B7).",
+      "invite": "Pozvat správce",
+      "inviteEmail": "E-mail",
+      "inviteRole": "Role",
+      "inviteCenters": "Přiřazená centra",
+      "send": "Odeslat pozvánku",
+      "invited": "Pozvánka připravena (propojení v B7).",
+      "deactivate": "Deaktivovat",
+      "empty": "Žádní uživatelé.",
+      "noCenters": "—",
+      "allCenters": "Všechna centra",
+      "table": {
+        "email": "E-mail",
+        "role": "Role",
+        "centers": "Přiřazená centra",
+        "createdAt": "Vytvořeno",
+        "actions": "Akce"
+      }
+    }
   }
 }

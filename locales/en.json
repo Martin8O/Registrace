@@ -103,5 +103,255 @@
       "pricePerNight": "Price per night (15+)"
     },
     "registrationFormPlaceholder": "Registration form — coming next"
+  },
+  "admin": {
+    "brand": "Administration",
+    "nav": {
+      "dashboard": "Dashboard",
+      "events": "Events",
+      "registrations": "Registrations",
+      "centers": "Centers",
+      "users": "Users",
+      "logout": "Log out"
+    },
+    "common": {
+      "all": "All",
+      "save": "Save",
+      "saved": "Saved",
+      "cancel": "Cancel",
+      "edit": "Edit",
+      "back": "Back",
+      "actions": "Actions",
+      "none": "—",
+      "yes": "Yes",
+      "no": "No",
+      "view": "View",
+      "add": "Add",
+      "remove": "Remove",
+      "menu": "Menu"
+    },
+    "login": {
+      "title": "Admin sign-in",
+      "subtitle": "Enter your administrator credentials.",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Sign in",
+      "signingIn": "Signing in…",
+      "error": "Sign-in failed. Check your email and password."
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "subtitle": "Overview of events and registrations.",
+      "totalEvents": "Total events",
+      "totalRegistrations": "Total registrations",
+      "quickLinks": "Quick links",
+      "goToEvents": "Manage events",
+      "goToRegistrations": "Manage registrations"
+    },
+    "eventStatus": {
+      "DRAFT": "Draft",
+      "PUBLISHED": "Published",
+      "CLOSED": "Closed",
+      "ARCHIVED": "Archived"
+    },
+    "regStatus": {
+      "PENDING": "Pending",
+      "CONFIRMED": "Confirmed",
+      "CANCELLED": "Cancelled",
+      "WAITLIST": "Waitlist"
+    },
+    "age": {
+      "AGE_0_3": "0–3 years",
+      "AGE_4_7": "4–7 years",
+      "AGE_8_14": "8–14 years",
+      "AGE_15_PLUS": "15+ years"
+    },
+    "pricingType": {
+      "STANDARD": "Standard",
+      "SUPPORTED": "Supported",
+      "SURPLUS": "Surplus"
+    },
+    "mealType": {
+      "BREAKFAST": "Breakfast",
+      "LUNCH": "Lunch",
+      "DINNER": "Dinner"
+    },
+    "arrivalTime": {
+      "MORNING": "Morning",
+      "AFTERNOON": "Afternoon",
+      "EVENING": "Evening"
+    },
+    "events": {
+      "title": "Events",
+      "new": "New event",
+      "empty": "No events match the filter.",
+      "filterStatus": "Status",
+      "edit": "Edit",
+      "viewRegistrations": "Registrations",
+      "table": {
+        "title": "Title",
+        "status": "Status",
+        "start": "Start",
+        "end": "End",
+        "actions": "Actions"
+      }
+    },
+    "eventForm": {
+      "newTitle": "New event",
+      "stepLabel": "Step {current} of {total}",
+      "next": "Next",
+      "prev": "Back",
+      "save": "Save event",
+      "saveSuccess": "Event validated — saving wired in B7.",
+      "validationError": "Please fix the highlighted fields.",
+      "errorsTitle": "The form has errors:",
+      "steps": {
+        "basic": "Basic info",
+        "schedule": "Schedule",
+        "pricing": "Pricing",
+        "meals": "Meals",
+        "settings": "Settings",
+        "preview": "Preview",
+        "save": "Save"
+      },
+      "fields": {
+        "title_cs": "Title (CZ)",
+        "title_en": "Title (EN)",
+        "subtitle_cs": "Subtitle (CZ)",
+        "subtitle_en": "Subtitle (EN)",
+        "contactName": "Contact name",
+        "contactPhone": "Phone",
+        "contactEmail": "Contact email",
+        "startDate": "Start date",
+        "endDate": "End date",
+        "maxRegistrations": "Maximum registrations",
+        "status": "Status",
+        "dailyRate": "Daily rate",
+        "nightRate": "Price per night",
+        "morningArrivalDiscount": "Morning arrival discount",
+        "afternoonArrivalDiscount": "Afternoon arrival discount",
+        "eveningArrivalDiscount": "Evening arrival discount",
+        "earlyDepartureDiscount": "Early departure discount",
+        "dateLabelCs": "Day label (CZ)",
+        "dateLabelEn": "Day label (EN)",
+        "mealType": "Meal type",
+        "price": "Price",
+        "mealLabelCs": "Label (CZ)",
+        "mealLabelEn": "Label (EN)",
+        "isClosed": "Closed"
+      },
+      "schedule": {
+        "eventDates": "Event days",
+        "addDate": "Add day",
+        "noDates": "No days added yet."
+      },
+      "pricing": {
+        "intro": "Pricing rules are collected as UI state (saved in B7).",
+        "ageCategory": "Age category",
+        "pricingType": "Price type",
+        "lockedZeroNote": "Children 0–14 always have a daily rate of 0 (fixed rule)."
+      },
+      "meals": {
+        "intro": "Meals are entered per event day (UI state).",
+        "addMeal": "Add meal",
+        "noDates": "First add event days in the Schedule step.",
+        "forDate": "Day"
+      },
+      "preview": {
+        "intro": "Review the entered data. Saving will be wired in B7.",
+        "basic": "Basic info",
+        "schedule": "Schedule",
+        "pricing": "Pricing",
+        "meals": "Meals",
+        "settings": "Settings",
+        "noPricing": "No pricing rules.",
+        "noMeals": "No meals.",
+        "notSet": "—"
+      },
+      "errors": {
+        "required": "Required",
+        "email": "Invalid email",
+        "endDate": "End date must be on or after the start date",
+        "date": "Invalid date",
+        "maxRegistrations": "Must be a positive whole number"
+      }
+    },
+    "registrations": {
+      "title": "Registrations",
+      "empty": "No registrations match the filter.",
+      "filterEvent": "Event",
+      "filterStatus": "Status",
+      "allEvents": "All events",
+      "table": {
+        "id": "ID",
+        "email": "Email",
+        "center": "Center",
+        "date": "Created",
+        "participants": "Participants",
+        "total": "Total",
+        "status": "Status"
+      }
+    },
+    "registrationDetail": {
+      "title": "Registration detail",
+      "notFound": "Registration not found.",
+      "email": "Email",
+      "event": "Event",
+      "center": "Center",
+      "arrival": "Arrival",
+      "departure": "Departure",
+      "arrivalTime": "Arrival time",
+      "accommodation": "Accommodation",
+      "status": "Status",
+      "participants": "Participants",
+      "fullName": "Full name",
+      "age": "Age",
+      "pricingType": "Price type",
+      "total": "Total price",
+      "save": "Save changes",
+      "saved": "Changes saved (wired in B7).",
+      "resend": "Resend confirmation",
+      "resent": "Confirmation resent (wired in B7)."
+    },
+    "centers": {
+      "title": "Centers",
+      "add": "Add center",
+      "edit": "Edit",
+      "empty": "No centers.",
+      "nameCs": "Name (CZ)",
+      "nameEn": "Name (EN)",
+      "active": "Active",
+      "inactive": "Inactive",
+      "sortOrder": "Sort order",
+      "saved": "Saved (wired in B7).",
+      "table": {
+        "nameCs": "Name (CZ)",
+        "nameEn": "Name (EN)",
+        "active": "Active",
+        "sortOrder": "Sort order",
+        "actions": "Actions"
+      }
+    },
+    "users": {
+      "title": "Users",
+      "superAdminOnlyNote": "Only SUPER_ADMIN will see this page (wired in B7).",
+      "invite": "Invite admin",
+      "inviteEmail": "Email",
+      "inviteRole": "Role",
+      "inviteCenters": "Assigned centers",
+      "send": "Send invite",
+      "invited": "Invite prepared (wired in B7).",
+      "deactivate": "Deactivate",
+      "empty": "No users.",
+      "noCenters": "—",
+      "allCenters": "All centers",
+      "table": {
+        "email": "Email",
+        "role": "Role",
+        "centers": "Assigned centers",
+        "createdAt": "Created",
+        "actions": "Actions"
+      }
+    }
   }
 }
