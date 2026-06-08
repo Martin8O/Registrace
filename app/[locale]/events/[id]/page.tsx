@@ -1,7 +1,9 @@
 import { notFound } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import PricingInfoButton from '@/components/public/PricingInfoButton'
+import RegistrationForm from '@/components/public/RegistrationForm'
 import { mockEvents, type MockEvent } from '@/lib/mock/events'
+import { mockCenters, mockEventDates, mockMealSlots } from '@/lib/mock/registrationOptions'
 
 const badgeVariants: Record<MockEvent['status'], string> = {
   PUBLISHED: 'bg-gold-100 text-gold-800 border border-gold-300',
@@ -34,7 +36,6 @@ export default async function EventPage({
   params: Promise<{ locale: string; id: string }>
 }) {
   const { locale, id } = await params
-  const t = await getTranslations('event')
   const tBadge = await getTranslations('badge')
 
   const event = mockEvents.find((e) => e.id === id)
@@ -63,10 +64,12 @@ export default async function EventPage({
         <PricingInfoButton />
       </div>
 
-      {/* Registration placeholder — B5 form not implemented yet */}
-      <div className="mt-8 section-card">
-        <div className="text-gray-500">{t('registrationFormPlaceholder')}</div>
-      </div>
+      <RegistrationForm
+        eventId={event.id}
+        dates={mockEventDates}
+        meals={mockMealSlots}
+        centers={mockCenters}
+      />
     </div>
   )
 }

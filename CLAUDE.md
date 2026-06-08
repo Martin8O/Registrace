@@ -156,7 +156,7 @@ These are different UI elements; do not merge or replace one with the other.
 - `User.createdEvents Event[]` — back-relation
 - Migration not yet applied (pending with UserRole/UserCenter in B7)
 
-**Last verified** (2026-06-05)
+**Last verified** (2026-06-08, after Milestone 10 / B5)
 - `npx tsc --noEmit` → 0 errors
 - `npm run build` → clean, no warnings (Next.js 16.2.7 Turbopack)
 
@@ -176,8 +176,8 @@ These are different UI elements; do not merge or replace one with the other.
 - **`LanguageSwitcher`** lives only in the locale layout — right-aligned under the logo,
   just below the header's crimson rule (never duplicated in page bodies); pill style,
   active locale = `bg-primary-500 text-white`.
-- **B5 registration form is NOT implemented yet** — the registration placeholder div must
-  stay untouched.
+- **B5 registration form is implemented** (Milestone 10) — `components/public/RegistrationForm.tsx`
+  replaced the old placeholder div on the event detail page; do not reintroduce a placeholder.
 - **Do NOT modify**: `prisma/schema.prisma`, `lib/validation/*`, `app/api/*`.
   (`lib/mock/events.ts` is presentation scaffolding and may evolve with the public UI.)
 - **Event mock data carries a `center`** (`{ name, city, email, phone }`) and bilingual
@@ -186,5 +186,5 @@ These are different UI elements; do not merge or replace one with the other.
 - **Composed first line** (homepage cards + event detail heading):
   `{center.name} — {title} — {date range}`. Homepage card then shows the short subtitle +
   status badge; the event detail shows the admin description + status badge + pricing button.
-- **No registration button or center-contact card on the event detail yet** — those arrive
-  with the B5 form / richer description. Registration placeholder div stays untouched.
+- **Event detail now renders the B5 registration form** below the pricing button (replacing the
+  old placeholder). A center-contact card / richer description can still arrive later.
