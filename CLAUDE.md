@@ -156,7 +156,7 @@ These are different UI elements; do not merge or replace one with the other.
 - `User.createdEvents Event[]` — back-relation
 - Migration not yet applied (pending with UserRole/UserCenter in B7)
 
-**Last verified** (2026-06-08, after Milestone 10 / B5)
+**Last verified** (2026-06-08, after Milestone 11 / B5 polish)
 - `npx tsc --noEmit` → 0 errors
 - `npm run build` → clean, no warnings (Next.js 16.2.7 Turbopack)
 
@@ -176,15 +176,21 @@ These are different UI elements; do not merge or replace one with the other.
 - **`LanguageSwitcher`** lives only in the locale layout — right-aligned under the logo,
   just below the header's crimson rule (never duplicated in page bodies); pill style,
   active locale = `bg-primary-500 text-white`.
-- **B5 registration form is implemented** (Milestone 10) — `components/public/RegistrationForm.tsx`
-  replaced the old placeholder div on the event detail page; do not reintroduce a placeholder.
+- **B5 registration form is implemented** (M10, refined M11) — `components/public/RegistrationForm.tsx`
+  replaced the old placeholder on the event detail page; do not reintroduce a placeholder.
+  Helpers: `lib/utils/{mealAvailability,useDebounce,formatDate}.ts`; the consent link opens
+  `components/public/GdprModal.tsx` (content under `form.gdprModal.*`, contact `info@bdc.cz`).
+  Even participant cards use `bg-gold-50` (alternating). The grand total is the B3 stub (0 CZK)
+  until the `/modules/pricing` engine lands in B7 — not a bug; never compute prices client-side.
 - **Do NOT modify**: `prisma/schema.prisma`, `lib/validation/*`, `app/api/*`.
   (`lib/mock/events.ts` is presentation scaffolding and may evolve with the public UI.)
 - **Event mock data carries a `center`** (`{ name, city, email, phone }`) and bilingual
   `description_cs` / `description_en`. Event `title_*` holds the clean name only — no
   embedded season/year (that lives in the dates).
 - **Composed first line** (homepage cards + event detail heading):
-  `{center.name} — {title} — {date range}`. Homepage card then shows the short subtitle +
-  status badge; the event detail shows the admin description + status badge + pricing button.
+  `{center.name} — {title}` then the date range after a small left-margin gap (no dash before
+  the date; short format like `5.9.–12.9.` via `lib/utils/formatDate.ts`). Homepage card adds the
+  short subtitle + status badge; event detail puts the status badge + "Informace o cenách" button
+  on one right-aligned (`justify-between`) row below the description.
 - **Event detail now renders the B5 registration form** below the pricing button (replacing the
   old placeholder). A center-contact card / richer description can still arrive later.

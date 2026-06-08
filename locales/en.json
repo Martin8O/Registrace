@@ -14,7 +14,8 @@
     "meal_price": "Meal price",
     "center": "Center",
     "email": "Email",
-    "gdpr_consent": "Consent to personal data processing",
+    "gdpr_consent": "I consent to the processing of my personal data for this registration.",
+    "gdpr_details": "Read the detailed, required information in our <link>personal data protection policy</link>.",
     "total_price": "Total price",
     "add_participant": "Add participant",
     "remove_participant": "Remove participant",
@@ -51,6 +52,23 @@
       "fullName": "Name must be at least 2 characters",
       "gdpr": "Consent is required to continue",
       "required": "This field is required"
+    },
+    "gdprModal": {
+      "title": "Personal data protection",
+      "intro": "When you register for an event we process your personal data in accordance with the GDPR. Below is the essential information on how we handle it.",
+      "controller_title": "Data controller",
+      "controller_body": "Buddhismus Diamantové cesty linie Karma Kagjü, Na Maninách 1288/17a, 170 00 Prague 7 – Holešovice, Czech Republic. Data-protection contact: info@bdc.cz (subject: data protection).",
+      "data_title": "What data we process",
+      "data_body": "Participants' first and last name, e-mail address, the chosen centre, and details of your stay (arrival, departure, accommodation and meals).",
+      "purpose_title": "Purpose and legal basis",
+      "purpose_body": "We process the data to handle your registration and send you a confirmation — on the basis of contract performance (Art. 6(1)(b) GDPR) and your consent (Art. 6(1)(a) GDPR).",
+      "retention_title": "Retention period",
+      "retention_body": "We keep the data for as long as necessary to meet our legal and contractual obligations. Documents required for tax purposes are kept for approximately 10 years.",
+      "sharing_title": "Sharing with third parties",
+      "sharing_body": "We do not share your data with third parties for commercial purposes. We pass it on only to the extent necessary to run the event, for example to the hosting centre.",
+      "rights_title": "Your rights",
+      "rights_body": "You have the right to access your data, to rectification, erasure, restriction of processing, portability, and the right to object (Art. 15–21 GDPR). Send your requests to info@bdc.cz.",
+      "close": "Close"
     }
   },
   "home": {

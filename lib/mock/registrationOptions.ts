@@ -29,9 +29,9 @@ export type MockCenter = {
 
 // Three consecutive days (Fri / Sat / Sun, 4–6 Sep 2026) within evt-001's range.
 export const mockEventDates: MockEventDate[] = [
-  { id: 'date-fri', date: '2026-09-04', label_cs: 'Pátek 4. 9. 2026', label_en: 'Friday 4 Sep 2026', sortOrder: 1 },
-  { id: 'date-sat', date: '2026-09-05', label_cs: 'Sobota 5. 9. 2026', label_en: 'Saturday 5 Sep 2026', sortOrder: 2 },
-  { id: 'date-sun', date: '2026-09-06', label_cs: 'Neděle 6. 9. 2026', label_en: 'Sunday 6 Sep 2026', sortOrder: 3 },
+  { id: 'date-fri', date: '2026-09-04', label_cs: 'Pátek 4. 9.', label_en: 'Friday 4 Sep', sortOrder: 1 },
+  { id: 'date-sat', date: '2026-09-05', label_cs: 'Sobota 5. 9.', label_en: 'Saturday 5 Sep', sortOrder: 2 },
+  { id: 'date-sun', date: '2026-09-06', label_cs: 'Neděle 6. 9.', label_en: 'Sunday 6 Sep', sortOrder: 3 },
 ]
 
 // Breakfast / lunch / dinner per day. Saturday lunch is closed to demonstrate

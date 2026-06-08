@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getTranslations } from 'next-intl/server'
 import { mockEvents, type MockEvent } from '@/lib/mock/events'
+import { formatDateRangeShort } from '@/lib/utils/formatDate'
 
 const badgeVariants: Record<MockEvent['status'], string> = {
   PUBLISHED: 'bg-gold-100 text-gold-800 border border-gold-300',
@@ -14,17 +15,6 @@ const badgeLabelKey: Record<MockEvent['status'], string> = {
   DRAFT: 'draft',
   CLOSED: 'closed',
   ARCHIVED: 'archived',
-}
-
-function formatDateRange(startDate: string, endDate: string): string {
-  const fmt = (iso: string): string => {
-    const parts = iso.split('-')
-    const y = parts[0] ?? ''
-    const m = parts[1] ?? ''
-    const d = parts[2] ?? ''
-    return `${d}.${m}.${y}`
-  }
-  return `${fmt(startDate)}–${fmt(endDate)}`
 }
 
 export default async function HomePage({
@@ -52,7 +42,7 @@ export default async function HomePage({
         {publishedEvents.map((event) => {
           const title = locale === 'cs' ? event.title_cs : event.title_en
           const subtitle = locale === 'cs' ? event.subtitle_cs : event.subtitle_en
-          const dateRange = formatDateRange(event.startDate, event.endDate)
+          const dateRange = formatDateRangeShort(event.startDate, event.endDate)
 
           return (
             <li key={event.id}>
@@ -61,7 +51,8 @@ export default async function HomePage({
                   href={`/${locale}/events/${event.id}`}
                   className="font-serif text-2xl font-semibold text-neutral-900 hover:text-primary-600 transition"
                 >
-                  {event.center.name} — {title} — {dateRange}
+                  {event.center.name} — {title}
+                  <span className="ml-2.5">{dateRange}</span>
                 </Link>
                 <div className="h-0.5 w-10 bg-primary-500 mt-2 rounded" />
 

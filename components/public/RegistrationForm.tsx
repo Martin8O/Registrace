@@ -18,6 +18,7 @@ import {
 } from '@/lib/validation'
 import { getAvailableMealIds } from '@/lib/utils/mealAvailability'
 import { useDebounce } from '@/lib/utils/useDebounce'
+import GdprModal from './GdprModal'
 import type {
   MockCenter,
   MockEventDate,
@@ -146,6 +147,7 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
   const [price, setPrice] = useState<PriceResponse | null>(null)
   const [priceLoading, setPriceLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [gdprOpen, setGdprOpen] = useState(false)
 
   // idempotencyKey (invariant 14): generated client-side on mount to avoid an
   // SSR/CSR hydration mismatch — kept in form state, never rendered to the DOM.
@@ -304,8 +306,8 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
               render={({ field }) => (
                 <div className="flex flex-wrap gap-2">
                   {[
-                    { value: false, key: 'no' },
                     { value: true, key: 'yes' },
+                    { value: false, key: 'no' },
                   ].map((opt) => {
                     const domId = `accommodation-${opt.key}`
                     return (
@@ -347,7 +349,10 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
             const pricing = price?.participants?.[i]
 
             return (
-              <div key={field.id} className="participant-card">
+              <div
+                key={field.id}
+                className={`participant-card ${i % 2 === 1 ? 'bg-gold-50' : ''}`}
+              >
                 <div className="flex items-center justify-between">
                   <p className="font-serif text-lg font-semibold text-neutral-900">
                     {t('participant_number', { number: i + 1 })}
@@ -356,8 +361,9 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
                     <button
                       type="button"
                       onClick={() => remove(i)}
-                      className="text-sm font-medium text-danger-600 hover:text-danger-700 transition"
+                      className="inline-flex items-center gap-1.5 text-sm font-medium text-danger-600 hover:text-danger-700 transition"
                     >
+                      <TrashIcon />
                       {t('remove_participant')}
                     </button>
                   )}
@@ -401,7 +407,7 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
                 )}
 
                 <Field label={t('meals')}>
-                  <div className="space-y-3">
+                  <div className="space-y-5">
                     {sortedDates.map((d) => {
                       const slots = meals.filter(
                         (m) => m.eventDateId === d.id && availableMealIds.has(m.id),
@@ -504,6 +510,19 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
           />
           <span className="text-sm text-neutral-700">{t('gdpr_consent')}</span>
         </label>
+        <p className="mt-1.5 pl-7 text-sm text-neutral-500">
+          {t.rich('gdpr_details', {
+            link: (chunks: ReactNode) => (
+              <button
+                type="button"
+                onClick={() => setGdprOpen(true)}
+                className="text-primary-600 underline underline-offset-2 hover:text-primary-700"
+              >
+                {chunks}
+              </button>
+            ),
+          })}
+        </p>
         {errors.gdprConsent && <p className="mt-1 text-sm text-danger-600">{t('errors.gdpr')}</p>}
 
         {/* Honeypot (invariant 18) — RHF field key must be `honeypot`; hidden. */}
@@ -542,6 +561,8 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
           {formatCzk(totalPrice)}
         </span>
       </div>
+
+      <GdprModal isOpen={gdprOpen} onClose={() => setGdprOpen(false)} />
     </form>
   )
 }
@@ -578,6 +599,29 @@ function PriceRow({ label, value }: { label: string; value: number }) {
       <span className="text-sm text-neutral-700">{label}</span>
       <span className="price-amount">{formatCzk(value)}</span>
     </div>
+  )
+}
+
+// Bin / trash icon (inline SVG — no icon library dependency).
+function TrashIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 6h18" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </svg>
   )
 }
 
