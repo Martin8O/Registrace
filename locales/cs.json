@@ -23,10 +23,14 @@
   },
   "home": {
     "heading": "Registrace na akce BDC",
-    "subheading": "Klikněte na název akce pro otevření registrace."
+    "subheading": "Klikněte na název akce pro otevření registrace.",
+    "openRegistration": "Registrovat"
   },
   "badge": {
-    "closed": "uzavřeno"
+    "published": "otevřeno",
+    "closed": "uzavřeno",
+    "draft": "koncept",
+    "archived": "archivováno"
   },
   "event": {
     "pricingInfo": "Informace o cenách",

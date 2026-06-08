@@ -1,8 +1,32 @@
 import { notFound } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
-import LanguageSwitcher from '@/components/shared/LanguageSwitcher'
 import PricingInfoButton from '@/components/public/PricingInfoButton'
-import { mockEvents } from '@/lib/mock/events'
+import { mockEvents, type MockEvent } from '@/lib/mock/events'
+
+const badgeVariants: Record<MockEvent['status'], string> = {
+  PUBLISHED: 'bg-gold-100 text-gold-800 border border-gold-300',
+  DRAFT: 'bg-muted-bg text-muted-fg border border-muted-border',
+  CLOSED: 'bg-neutral-200 text-neutral-600 border border-neutral-300',
+  ARCHIVED: 'bg-neutral-200 text-neutral-600 border border-neutral-300',
+}
+
+const badgeLabelKey: Record<MockEvent['status'], string> = {
+  PUBLISHED: 'published',
+  DRAFT: 'draft',
+  CLOSED: 'closed',
+  ARCHIVED: 'archived',
+}
+
+function formatDateRange(startDate: string, endDate: string): string {
+  const fmt = (iso: string): string => {
+    const parts = iso.split('-')
+    const y = parts[0] ?? ''
+    const m = parts[1] ?? ''
+    const d = parts[2] ?? ''
+    return `${d}.${m}.${y}`
+  }
+  return `${fmt(startDate)}–${fmt(endDate)}`
+}
 
 export default async function EventPage({
   params,
@@ -11,30 +35,38 @@ export default async function EventPage({
 }) {
   const { locale, id } = await params
   const t = await getTranslations('event')
+  const tBadge = await getTranslations('badge')
 
   const event = mockEvents.find((e) => e.id === id)
   if (!event) notFound()
 
   const title = locale === 'cs' ? event.title_cs : event.title_en
-  const subtitle = locale === 'cs' ? event.subtitle_cs : event.subtitle_en
+  const description = locale === 'cs' ? event.description_cs : event.description_en
+  const dateRange = formatDateRange(event.startDate, event.endDate)
 
   return (
-    <main className="max-w-2xl mx-auto px-4 py-10">
-      <div className="flex items-start justify-between mb-8">
-        <div />
-        <LanguageSwitcher />
-      </div>
+    <div className="max-w-public mx-auto px-5 md:px-8 pt-4 md:pt-6 pb-10 md:pb-14">
+      <h1 className="font-serif text-2xl md:text-3xl font-semibold text-neutral-900 leading-snug">
+        {event.center.name} — {title} — {dateRange}
+      </h1>
+      <div className="h-0.5 w-12 bg-primary-500 mt-3 rounded" />
 
-      <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
-      {subtitle !== null && (
-        <p className="mt-2 text-gray-500">{subtitle}</p>
-      )}
+      <p className="mt-4 text-neutral-600 leading-relaxed">{description}</p>
 
       <div className="mt-4">
+        <span className={`badge ${badgeVariants[event.status]}`}>
+          {tBadge(badgeLabelKey[event.status])}
+        </span>
+      </div>
+
+      <div className="mt-6">
         <PricingInfoButton />
       </div>
 
-      <div className="mt-8 text-gray-500">{t('registrationFormPlaceholder')}</div>
-    </main>
+      {/* Registration placeholder — B5 form not implemented yet */}
+      <div className="mt-8 section-card">
+        <div className="text-gray-500">{t('registrationFormPlaceholder')}</div>
+      </div>
+    </div>
   )
 }

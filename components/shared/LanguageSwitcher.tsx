@@ -15,20 +15,21 @@ export default function LanguageSwitcher() {
   }
 
   return (
-    <div className="flex gap-2 text-sm">
+    <span className="inline-flex items-center rounded-full border border-neutral-300 text-xs font-medium overflow-hidden shrink-0">
       <button
+        type="button"
         onClick={() => switchTo('cs')}
-        className={locale === 'cs' ? 'font-bold underline' : 'text-gray-500 hover:text-gray-900'}
+        className={`px-2.5 py-1 transition ${locale === 'cs' ? 'bg-primary-500 text-white' : 'text-neutral-600 hover:bg-neutral-50'}`}
       >
         CZ
       </button>
-      <span className="text-gray-300">|</span>
       <button
+        type="button"
         onClick={() => switchTo('en')}
-        className={locale === 'en' ? 'font-bold underline' : 'text-gray-500 hover:text-gray-900'}
+        className={`px-2.5 py-1 transition ${locale === 'en' ? 'bg-primary-500 text-white' : 'text-neutral-600 hover:bg-neutral-50'}`}
       >
         EN
       </button>
-    </div>
+    </span>
   )
 }

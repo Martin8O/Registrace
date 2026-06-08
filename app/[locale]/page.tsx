@@ -1,7 +1,20 @@
 import Link from 'next/link'
 import { getTranslations } from 'next-intl/server'
-import LanguageSwitcher from '@/components/shared/LanguageSwitcher'
-import { mockEvents } from '@/lib/mock/events'
+import { mockEvents, type MockEvent } from '@/lib/mock/events'
+
+const badgeVariants: Record<MockEvent['status'], string> = {
+  PUBLISHED: 'bg-gold-100 text-gold-800 border border-gold-300',
+  DRAFT: 'bg-muted-bg text-muted-fg border border-muted-border',
+  CLOSED: 'bg-neutral-200 text-neutral-600 border border-neutral-300',
+  ARCHIVED: 'bg-neutral-200 text-neutral-600 border border-neutral-300',
+}
+
+const badgeLabelKey: Record<MockEvent['status'], string> = {
+  PUBLISHED: 'published',
+  DRAFT: 'draft',
+  CLOSED: 'closed',
+  ARCHIVED: 'archived',
+}
 
 function formatDateRange(startDate: string, endDate: string): string {
   const fmt = (iso: string): string => {
@@ -21,20 +34,21 @@ export default async function HomePage({
 }) {
   const { locale } = await params
   const t = await getTranslations('home')
+  const tBadge = await getTranslations('badge')
 
   const publishedEvents = mockEvents.filter((e) => e.status === 'PUBLISHED')
 
   return (
-    <main className="max-w-2xl mx-auto px-4 py-10">
-      <div className="flex items-start justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('heading')}</h1>
-          <p className="mt-1 text-gray-500 text-sm">{t('subheading')}</p>
-        </div>
-        <LanguageSwitcher />
+    <div className="max-w-public mx-auto px-5 md:px-8 pt-4 md:pt-6 pb-10 md:pb-14">
+      <div className="mb-10">
+        <h1 className="font-serif text-4xl md:text-5xl font-semibold text-neutral-900 leading-tight">
+          {t('heading')}
+        </h1>
+        <div className="h-0.5 w-12 bg-primary-500 mt-3 rounded" />
+        <p className="mt-4 text-neutral-500">{t('subheading')}</p>
       </div>
 
-      <ul className="space-y-4">
+      <ul className="space-y-5">
         {publishedEvents.map((event) => {
           const title = locale === 'cs' ? event.title_cs : event.title_en
           const subtitle = locale === 'cs' ? event.subtitle_cs : event.subtitle_en
@@ -42,20 +56,38 @@ export default async function HomePage({
 
           return (
             <li key={event.id}>
-              <Link
-                href={`/${locale}/events/${event.id}`}
-                className="block p-4 rounded-lg border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-colors"
-              >
-                <div className="font-medium text-gray-900">{title}</div>
+              <div className="section-card">
+                <Link
+                  href={`/${locale}/events/${event.id}`}
+                  className="font-serif text-2xl font-semibold text-neutral-900 hover:text-primary-600 transition"
+                >
+                  {event.center.name} — {title} — {dateRange}
+                </Link>
+                <div className="h-0.5 w-10 bg-primary-500 mt-2 rounded" />
+
                 {subtitle !== null && (
-                  <div className="text-sm text-gray-500 mt-0.5">{subtitle}</div>
+                  <p className="mt-3 text-neutral-600">{subtitle}</p>
                 )}
-                <div className="text-xs text-gray-400 mt-1">{dateRange}</div>
-              </Link>
+
+                <div className="mt-4">
+                  <span className={`badge ${badgeVariants[event.status]}`}>
+                    {tBadge(badgeLabelKey[event.status])}
+                  </span>
+                </div>
+
+                <div className="mt-5">
+                  <Link
+                    href={`/${locale}/events/${event.id}`}
+                    className="btn-primary inline-block"
+                  >
+                    {t('openRegistration')}
+                  </Link>
+                </div>
+              </div>
             </li>
           )
         })}
       </ul>
-    </main>
+    </div>
   )
 }

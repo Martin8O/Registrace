@@ -22,11 +22,15 @@
     "registration_success": "Registration has been successfully submitted"
   },
   "home": {
-    "heading": "BDC Event Registration",
-    "subheading": "Click on the event name to open registration."
+    "heading": "DWB Event Registration",
+    "subheading": "Click on the event name to open registration.",
+    "openRegistration": "Register"
   },
   "badge": {
-    "closed": "closed"
+    "published": "open",
+    "closed": "closed",
+    "draft": "draft",
+    "archived": "archived"
   },
   "event": {
     "pricingInfo": "Pricing Info",

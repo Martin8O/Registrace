@@ -139,3 +139,32 @@ These are different UI elements; do not merge or replace one with the other.
 **Last verified** (2026-06-05)
 - `npx tsc --noEmit` → 0 errors
 - `npm run build` → clean, no warnings (Next.js 16.2.7 Turbopack)
+
+### Design system (B4.5) — standing rules
+
+(Full implementation log in `DEVELOPMENT_HISTORY.md`, Milestone 9.)
+
+- **Tailwind v4** (4.3.0), **no `tailwind.config.ts`**. Design tokens live in
+  `app/globals.css` via `@theme` (not a JS config); component classes under
+  `@layer components`.
+- **Fonts** load through `next/font/google` exposed as `@theme inline` variables on
+  `<html>`: `--font-serif` (Crimson Pro), `--font-sans` (Inter), `--font-mono` (JetBrains Mono).
+- **Content width**: `max-w-public` (768px) for public page content; `max-w-admin` (1200px)
+  for the header wrapper.
+- **Header** (`app/[locale]/layout.tsx`): sticky, `bg-white`, `border-b-2 border-primary-500/90`,
+  `h-[72px]`, inner wrapper `max-w-admin`, `justify-end`, no nav links.
+- **`LanguageSwitcher`** lives only in the locale layout — right-aligned under the logo,
+  just below the header's crimson rule (never duplicated in page bodies); pill style,
+  active locale = `bg-primary-500 text-white`.
+- **B5 registration form is NOT implemented yet** — the registration placeholder div must
+  stay untouched.
+- **Do NOT modify**: `prisma/schema.prisma`, `lib/validation/*`, `app/api/*`.
+  (`lib/mock/events.ts` is presentation scaffolding and may evolve with the public UI.)
+- **Event mock data carries a `center`** (`{ name, city, email, phone }`) and bilingual
+  `description_cs` / `description_en`. Event `title_*` holds the clean name only — no
+  embedded season/year (that lives in the dates).
+- **Composed first line** (homepage cards + event detail heading):
+  `{center.name} — {title} — {date range}`. Homepage card then shows the short subtitle +
+  status badge; the event detail shows the admin description + status badge + pricing button.
+- **No registration button or center-contact card on the event detail yet** — those arrive
+  with the B5 form / richer description. Registration placeholder div stays untouched.

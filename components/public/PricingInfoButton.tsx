@@ -4,15 +4,20 @@ import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import PricingModal from './PricingModal'
 
-export default function PricingInfoButton() {
+type Props = {
+  className?: string
+}
+
+export default function PricingInfoButton({ className }: Props) {
   const [open, setOpen] = useState(false)
   const t = useTranslations('event')
 
   return (
     <>
       <button
+        type="button"
         onClick={() => setOpen(true)}
-        className="text-sm text-blue-600 hover:text-blue-800 underline"
+        className={`btn-secondary ${className ?? ''}`.trim()}
       >
         {t('pricingInfo')}
       </button>
