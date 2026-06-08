@@ -95,8 +95,8 @@
         "age47": "Denní sazba věk 4–7",
         "age814": "Denní sazba věk 8–14",
         "age15standard": "Denní sazba 15+ standardní",
-        "age15supported": "Denní sazba 15+ podpora",
-        "age15surplus": "Denní sazba 15+ přebytek"
+        "age15supported": "Denní sazba 15+ podporovaná",
+        "age15surplus": "Denní sazba 15+ nadbytek"
       },
       "eveningArrivalDiscount": "Sleva za večerní příjezd (15+)",
       "earlyDepartureDiscount": "Sleva za brzký odjezd (15+)",
