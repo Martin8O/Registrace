@@ -3,6 +3,26 @@
 ## What this project is
 Bilingual (CZ/EN) web application for registration to meditation and community events.
 
+## Session Start Protocol
+At the start of every new session:
+
+1. Read `local/SESSION_BOOTSTRAP.md` fully before any other action
+2. Check if the user has left any notes or updated the bootstrap since last session
+3. Confirm the current active prompt with the user before executing it
+4. Consult other files in `local/` only when you need deeper detail on a specific topic
+
+## `local/` directory
+This directory is Claude Code's internal workspace — notes, wiki, session state. It is in
+`.gitignore` and must never be pushed to GitHub.
+
+Contents:
+- `SESSION_BOOTSTRAP.md` — read every session (current state, invariants, progress)
+- `architecture.md` — data model, API route map, auth/roles (read before schema/API work)
+- `visual-identity.md` — BDC design tokens, fonts, component classes (read before UI work)
+- `CLAUDE - ALL PROMPTS.md` — full canonical build guide B1–B8 + P1–P8 (source of the next prompt)
+- `Prompts requirements.md` — how prompts must be structured (5 blocks, definition-of-done)
+- `Step B4.5 - prompt 1-3.md` — design prompts + full B4.5 spec with all token values
+
 ## Tech stack
 - Next.js App Router, TypeScript strict
 - Prisma ORM (schema manager + ORM for all DB operations)

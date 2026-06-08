@@ -43,3 +43,6 @@ next-env.d.ts
 
 # prisma generated client
 /generated
+
+# Claude Code internal workspace (notes, wiki, session state — never push)
+local/
