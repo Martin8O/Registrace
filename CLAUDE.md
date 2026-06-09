@@ -1,40 +1,39 @@
 # REGISTRACE — Project Memory for Claude Code
 
-## What this project is
-Bilingual (CZ/EN) web application for registration to meditation and community events.
+Bilingual (CZ/EN) web app for registering to meditation / community events run by
+Buddhismus Diamantové cesty (BDC) centres. Public users register themselves + fellow
+participants; the app prices the stay and emails a confirmation. Admins manage events,
+registrations, and exports.
+
+> This file is the always-loaded **constitution**: stable rules + navigation only.
+> Point-in-time status, milestone logs, and deep reference live in `local/` and
+> `DEVELOPMENT_HISTORY*.md` (see below). Do not paste build status into this file.
 
 ## Session Start Protocol
-At the start of every new session:
+At the start of every new session, before any other action:
+1. Read `local/SESSION_BOOTSTRAP.md` fully (current state, phase, invariants, progress).
+2. Check whether the user has left notes or updated the bootstrap since last session.
+3. Confirm the current active prompt with the user before executing it.
+4. Consult other `local/` files only when you need deeper detail (index below).
 
-1. Read `local/SESSION_BOOTSTRAP.md` fully before any other action
-2. Check if the user has left any notes or updated the bootstrap since last session
-3. Confirm the current active prompt with the user before executing it
-4. Consult other files in `local/` only when you need deeper detail on a specific topic
+## Where things live (`local/` — gitignored, never pushed)
+`local/` is Claude Code's internal workspace (notes, wiki, session state).
+- `SESSION_BOOTSTRAP.md` — **read every session**: current state, invariants, build progress.
+- `architecture.md` — data model, API route map, auth/roles (read before schema/API work).
+- `visual-identity.md` — BDC design tokens, fonts, component classes (read before UI work).
+- `CLAUDE - ALL PROMPTS.md` — canonical build guide B1–B8 + P1–P8 (source of the next prompt).
+- `Prompts requirements.md` — how prompts must be structured (5 blocks, definition-of-done).
+- `Step B*.md` — finalized, ready-to-run prompts per phase (incl. full B4.5 token spec).
 
-## `local/` directory
-This directory is Claude Code's internal workspace — notes, wiki, session state. It is in
-`.gitignore` and must never be pushed to GitHub.
-
-Contents:
-- `SESSION_BOOTSTRAP.md` — read every session (current state, invariants, progress)
-- `architecture.md` — data model, API route map, auth/roles (read before schema/API work)
-- `visual-identity.md` — BDC design tokens, fonts, component classes (read before UI work)
-- `CLAUDE - ALL PROMPTS.md` — full canonical build guide B1–B8 + P1–P8 (source of the next prompt)
-- `Prompts requirements.md` — how prompts must be structured (5 blocks, definition-of-done)
-- `Step B4.5 - prompt 1-3.md` — design prompts + full B4.5 spec with all token values
+Build history (committed, repo root): `DEVELOPMENT_HISTORY.md` (CZ) + `DEVELOPMENT_HISTORY_en.md`
+(EN) — full chronological per-milestone log.
 
 ## Tech stack
-- Next.js App Router, TypeScript strict
-- Prisma ORM (schema manager + ORM for all DB operations)
-- Supabase (PostgreSQL hosting only + Supabase Auth for admin login)
-- next-intl (i18n for static UI texts)
-- Zod (validation — only library used)
-- React Hook Form (forms)
-- Resend (email)
-- Vercel (hosting, serverless)
-- No Docker
+Next.js 16 App Router · TypeScript strict · Prisma 7 ORM · Supabase (Postgres hosting + Auth) ·
+next-intl 4 (i18n) · Zod 4 (validation — only lib) · React Hook Form · Resend (email) · Vercel.
+**No Docker.** Exact versions → `package.json`; deeper stack notes → SESSION_BOOTSTRAP §A.
 
-## Mandatory architecture rules
+## Mandatory architecture rules (non-negotiable)
 1. Auth = Supabase Auth. Data = Prisma. Never mix.
 2. Pricing engine = /modules/pricing, pure functions, server-only, no DB access.
 3. Frontend prices are informational only. Backend prices are authoritative.
@@ -55,178 +54,35 @@ Contents:
 18. Honeypot field on registration form, validated server-side.
 19. Max 10 participants per registration.
 20. SUPER_ADMIN sees all. ADMIN is scoped to their center(s) only.
+- Fields named `*Discount` are **subtracted** from the total, not added
+  (morningArrivalDiscount, afternoonArrivalDiscount, eveningArrivalDiscount, earlyDepartureDiscount).
 
 ## Roles
-- SUPER_ADMIN: full access to everything (Martin only)
-- ADMIN: center-scoped; can only create and manage events where `Event.createdBy = their userId`
+- **SUPER_ADMIN** (Martin) — full access to everything; assigns center admins via User
+  Management; can manage events for any center.
+- **ADMIN** — center-scoped; can only create/manage events where `Event.createdBy = their userId`.
 
-Super-admin assigns center admins via User Management in admin panel.
-Super-admin can manage events for any center.
+Deeper detail (session vs. body, ownership 403): architecture.md §Auth/roles.
 
 ## Folder structure
-/app/[locale]/ — public pages (CZ/EN routing)
-/app/api/ — API routes
-/components/public/ + /admin/ + /shared/
-/locales/cs.json + en.json
-/modules/events/ + registrations/ + pricing/ + auth/
-/lib/db/ + validation/ + utils/ + email/
-/prisma/schema.prisma + seed.ts + migrations/
-/prisma.config.ts — Prisma 7 CLI config (root level)
-/generated/prisma — generated Prisma client (gitignored)
-
-## Pricing discount field naming
-Fields named *Discount are subtracted from total (not added).
-morningArrivalDiscount, afternoonArrivalDiscount, eveningArrivalDiscount, earlyDepartureDiscount
+```
+app/[locale]/        public pages (CZ/EN)        app/api/           API routes
+components/{public,admin,shared}                 locales/{cs,en}.json
+modules/{events,registrations,pricing,auth}      lib/{db,validation,utils,email}
+prisma/{schema.prisma,seed.ts,migrations}        prisma.config.ts   generated/prisma (gitignored)
+proxy.ts (i18n)      i18n/request.ts             lib/mock/events.ts (presentation scaffold)
+```
+Full map with model relations: architecture.md.
 
 ## Translation key conventions
-All keys are nested — no flat root-level keys.
-Namespaces: `form` (registration form), `home` (homepage),
-`event` (event detail page), `badge` (status badges)
+All keys are nested — no flat root-level keys. Namespaces: `form` (registration form),
+`home` (homepage), `event` (event detail page), `badge` (status badges).
+Keep these distinct — different UI elements, never merge one into the other:
+- `form.pricing_info` — section label **inside** the registration form
+- `event.pricingInfo` — button label on the event **detail page**
 
-Key distinction to preserve:
-- `form.pricing_info` — section label inside the registration form
-- `event.pricingInfo` — button label on the event detail page
-These are different UI elements; do not merge or replace one with the other.
-
-## Current build status
-
-### Milestones complete (2026-06-03 – 2026-06-05)
-
-**Database foundation**
-- Prisma schema: 8 enums, 11 models, migration `20260603120610_init` applied (Supabase, eu-west-1)
-- `UserRole` enum: `SUPER_ADMIN` + `ADMIN` (default remains `ADMIN`)
-- `UserCenter` join table: links users to their assigned centres; `@@unique([userId, centerId])`
-- `Event.createdBy` — nullable UUID FK to `User`; scopes each event to its creator (ADMIN sees only their own events; SUPER_ADMIN sees all)
-- Generator `output = "../generated/prisma"` (required in Prisma 7); datasource has no url/directUrl
-- `prisma.config.ts` — CLI config; loads `.env.local` via dotenv, passes `DIRECT_URL` for migrate
-- `lib/db/index.ts` — singleton via `@prisma/adapter-pg` with pooled `DATABASE_URL`
-- Center table seeded with 25 records
-
-**Validation layer** (`lib/validation/`)
-- `registrations.ts` — `calculatePriceSchema`, `registrationSubmitSchema`
-- `events.ts` — `eventCreateSchema` (status required), `eventUpdateSchema`, `eventStatusSchema`
-- Refinements: honeypot must be empty, participants min 1 / max 10, pricingType rejected for non-AGE_15_PLUS
-- `index.ts` — barrel re-export only
-- No Prisma imports; enum values declared as local `as const` tuples
-
-**API route stubs** (`app/api/`)
-- Public: `GET /events`, `GET /events/[id]`, `POST /registration/calculate-price`, `POST /registration/submit`
-- Admin: events (GET list, POST create, GET/PUT by id, PATCH status), registrations (GET list, GET/PUT by id, POST export, POST resend-confirmation), centers (GET/POST), audit-log (GET)
-- Auth: `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`
-- Stub auth guard: `app/api/_lib/guard.ts` — checks Authorization header; TODO: swap for Supabase session
-- Stubs only: no DB writes, no pricing logic, no email sending
-
-**Installed libraries**
-- @prisma/client 7.8.0 + prisma 7.8.0
-- @prisma/adapter-pg 7.8.0 + pg 8.21.0 + @types/pg 8.20.0
-- @supabase/supabase-js 2.106.2 + @supabase/ssr 0.10.3
-- next-intl 4.13.0
-- zod 4.4.3
-- react-hook-form 7.77.0 + @hookform/resolvers 5.4.0
-- resend 6.12.4
-- tsx 4.22.4 (dev) + dotenv 17.4.2 (dev)
-
-**i18n routing**
-- Locale routing via proxy.ts (Next.js 16 convention, named `proxy` export)
-- Locales: cs (default) and en, prefix-always mode
-- `X-NEXT-INTL-LOCALE` header read in root layout for correct `<html lang>`
-- Translation keys: 39 keys in 4 namespaces — `form` (20), `home` (2), `badge` (1), `event` (16)
-
-**Env files**
-- .env.local — real values, gitignored
-- .env.example — empty values, committed (safe)
-
-**Public-facing pages** (`app/[locale]/`, `components/`)
-- `lib/mock/events.ts` — typed `MockEvent[]` with 4 statuses; DRAFT never shown publicly
-- `components/shared/LanguageSwitcher.tsx` — client component; segment-split pathname, preserves path on switch
-- `components/public/PricingModal.tsx` — full-screen overlay, 12 hardcoded pricing rows, closes on button or overlay click
-- `components/public/PricingInfoButton.tsx` — client island that owns modal `useState`, usable from server-component pages
-- `app/[locale]/page.tsx` — lists PUBLISHED events only (DRAFT/CLOSED/ARCHIVED all hidden)
-- `app/[locale]/events/[id]/page.tsx` — localized title/subtitle, PricingInfoButton, registration placeholder; `notFound()` on unknown id
-- `app/[locale]/layout.tsx` — extended with `min-h-screen bg-white` wrapper
-
-**Translation key refactor**
-- All 20 original flat root-level keys moved under `form` namespace
-- No flat string keys remain at root level; all keys are nested
-- Total: 39 keys across 4 namespaces (`form`, `home`, `badge`, `event`)
-
-**Schema addendum — Event.createdBy** (`prisma/schema.prisma`)
-- `Event.createdBy String? @db.Uuid` — FK to `User`, nullable (existing events → NULL)
-- `Event.creator User?` — relation field; `@@index([createdBy])` added
-- `User.createdEvents Event[]` — back-relation
-- Migration not yet applied (pending with UserRole/UserCenter in B7)
-
-**Admin panel (B6 / Milestone 12)**
-- Locale layout is now **provider-only**; public chrome lives in
-  `app/[locale]/(public)/layout.tsx`; admin uses its own `(panel)` shell
-  (`components/admin/AdminSidebar.tsx`). Login is standalone (outside the shell).
-  Public URLs unchanged (route groups are URL-invisible).
-- **Real Supabase Auth**: `lib/supabase/{client,server,middleware}.ts` (public env
-  vars only). `proxy.ts` composes next-intl + a **session-presence** guard:
-  `/[locale]/admin/**` → login redirect, `/api/admin/**` → 401. **No second
-  `middleware.ts`.** Role lookup + center-ownership 403 are `// TODO(B7):`.
-- All admin screens use **mock data**; the 7-step event form (`EventStepper.tsx`)
-  **validates `eventCreateSchema` only — never POSTs/persists** (like B5).
-  `Event.createdBy` from session is parked for B7 (memory `b7-createdby-from-session`).
-- **Do NOT modify** (still frozen): `prisma/schema.prisma`, `lib/validation/*`,
-  `app/api/*`. Migration still pending (B7).
-
-**B6 finalized — product/UX decisions baked in (after iteration rounds, 2026-06-09):**
-- **Registration status = REGISTERED / CANCELLED** only (everyone registered unless an admin
-  cancels; PAID is an easy additive change later). Admin status term unified to
-  **Published/Publikováno** (public badge keeps "open/otevřeno").
-- **Centre = the event's hosting centre** (`Event.centerId`, added to the mock) for the
-  registrations list filter + "Event centre" column; the registrant's **home centre** is a
-  separate editable field in the detail. Events→*Registrace* opens `?event=<id>` (centre filter
-  hidden when scoped; status filter kept).
-- **Event form:** centre select → title → **Description** (2-line, bound to `subtitle_*` until
-  B7 adds a real column) → contact; schedule **auto-derives days** (no manual add), blocks past
-  start; meals auto-list B/L/D per day (default 80/120/120) with an **exclude** toggle; **Save /
-  Save-and-Publish** with a publish-confirm modal. **Edit** route exists (Draft/Published only).
-- New: **Profile** page, **meal-stats** panel (`lib/utils/mealStats.ts` — per-day cook counts
-  from participant `mealIds`), `lib/utils/eventDays.ts`. Centres = 25 from seed (alphabetical,
-  admin-email column). Users: Edit (role/centres/reset password). All persistence/email/roles
-  still `// TODO(B7)`.
-- **B7 carry-forward** also includes the lifecycle auto-transitions (Published→Closed 20:00 of
-  end day; Closed→Archived +3 days after end; manual by creator/super-admin — scheduled job).
-
-**Last verified** (2026-06-09, after B6 finalized)
-- `npx tsc --noEmit` → 0 errors · `npm run build` → clean, no warnings (Next.js 16.2.7)
-- `npx eslint .` → only pre-existing warnings (frozen `app/api/*` stubs, generated Prisma)
-- In-browser (CZ+EN): all admin screens, event-scoped registrations + meal stats, 7-step form
-  (auto-days, publish modal), edit route, profile, 375px mobile — verified; no console errors.
-
-### Design system (B4.5) — standing rules
-
-(Full implementation log in `DEVELOPMENT_HISTORY.md`, Milestone 9.)
-
-- **Tailwind v4** (4.3.0), **no `tailwind.config.ts`**. Design tokens live in
-  `app/globals.css` via `@theme` (not a JS config); component classes under
-  `@layer components`.
-- **Fonts** load through `next/font/google` exposed as `@theme inline` variables on
-  `<html>`: `--font-serif` (Crimson Pro), `--font-sans` (Inter), `--font-mono` (JetBrains Mono).
-- **Content width**: `max-w-public` (768px) for public page content; `max-w-admin` (1200px)
-  for the header wrapper.
-- **Header** (`app/[locale]/layout.tsx`): sticky, `bg-white`, `border-b-2 border-primary-500/90`,
-  `h-[72px]`, inner wrapper `max-w-admin`, `justify-end`, no nav links.
-- **`LanguageSwitcher`** lives only in the locale layout — right-aligned under the logo,
-  just below the header's crimson rule (never duplicated in page bodies); pill style,
-  active locale = `bg-primary-500 text-white`.
-- **B5 registration form is implemented** (M10, refined M11) — `components/public/RegistrationForm.tsx`
-  replaced the old placeholder on the event detail page; do not reintroduce a placeholder.
-  Helpers: `lib/utils/{mealAvailability,useDebounce,formatDate}.ts`; the consent link opens
-  `components/public/GdprModal.tsx` (content under `form.gdprModal.*`, contact `info@bdc.cz`).
-  Even participant cards use `bg-gold-50` (alternating). The grand total is the B3 stub (0 CZK)
-  until the `/modules/pricing` engine lands in B7 — not a bug; never compute prices client-side.
-- **Do NOT modify**: `prisma/schema.prisma`, `lib/validation/*`, `app/api/*`.
-  (`lib/mock/events.ts` is presentation scaffolding and may evolve with the public UI.)
-- **Event mock data carries a `center`** (`{ name, city, email, phone }`) and bilingual
-  `description_cs` / `description_en`. Event `title_*` holds the clean name only — no
-  embedded season/year (that lives in the dates).
-- **Composed first line** (homepage cards + event detail heading):
-  `{center.name} — {title}` then the date range after a small left-margin gap (no dash before
-  the date; short format like `5.9.–12.9.` via `lib/utils/formatDate.ts`). Homepage card adds the
-  short subtitle + status badge; event detail puts the status badge + "Informace o cenách" button
-  on one right-aligned (`justify-between`) row below the description.
-- **Event detail now renders the B5 registration form** below the pricing button (replacing the
-  old placeholder). A center-contact card / richer description can still arrive later.
+## Current status & frozen files
+- Build phase, progress, and the milestone log are owned by `local/SESSION_BOOTSTRAP.md` (§B)
+  and `DEVELOPMENT_HISTORY*.md`. Read them for current state — **do not restate status here.**
+- **Frozen until B7 — do NOT modify:** `prisma/schema.prisma`, `lib/validation/*`, `app/api/*`.
+  (`lib/mock/*` is presentation scaffolding and may evolve with the UI.)
