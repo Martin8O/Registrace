@@ -171,11 +171,30 @@ These are different UI elements; do not merge or replace one with the other.
 - **Do NOT modify** (still frozen): `prisma/schema.prisma`, `lib/validation/*`,
   `app/api/*`. Migration still pending (B7).
 
-**Last verified** (2026-06-08, after Milestone 12 / B6 admin panel)
-- `npx tsc --noEmit` → 0 errors
-- `npm run build` → clean, no warnings (Next.js 16.2.7 Turbopack)
-- In-browser: public pages unchanged; admin login/redirect/logout, `/api/admin` 401,
-  7-step form validation, all admin screens, and 375px mobile all verified.
+**B6 finalized — product/UX decisions baked in (after iteration rounds, 2026-06-09):**
+- **Registration status = REGISTERED / CANCELLED** only (everyone registered unless an admin
+  cancels; PAID is an easy additive change later). Admin status term unified to
+  **Published/Publikováno** (public badge keeps "open/otevřeno").
+- **Centre = the event's hosting centre** (`Event.centerId`, added to the mock) for the
+  registrations list filter + "Event centre" column; the registrant's **home centre** is a
+  separate editable field in the detail. Events→*Registrace* opens `?event=<id>` (centre filter
+  hidden when scoped; status filter kept).
+- **Event form:** centre select → title → **Description** (2-line, bound to `subtitle_*` until
+  B7 adds a real column) → contact; schedule **auto-derives days** (no manual add), blocks past
+  start; meals auto-list B/L/D per day (default 80/120/120) with an **exclude** toggle; **Save /
+  Save-and-Publish** with a publish-confirm modal. **Edit** route exists (Draft/Published only).
+- New: **Profile** page, **meal-stats** panel (`lib/utils/mealStats.ts` — per-day cook counts
+  from participant `mealIds`), `lib/utils/eventDays.ts`. Centres = 25 from seed (alphabetical,
+  admin-email column). Users: Edit (role/centres/reset password). All persistence/email/roles
+  still `// TODO(B7)`.
+- **B7 carry-forward** also includes the lifecycle auto-transitions (Published→Closed 20:00 of
+  end day; Closed→Archived +3 days after end; manual by creator/super-admin — scheduled job).
+
+**Last verified** (2026-06-09, after B6 finalized)
+- `npx tsc --noEmit` → 0 errors · `npm run build` → clean, no warnings (Next.js 16.2.7)
+- `npx eslint .` → only pre-existing warnings (frozen `app/api/*` stubs, generated Prisma)
+- In-browser (CZ+EN): all admin screens, event-scoped registrations + meal stats, 7-step form
+  (auto-days, publish modal), edit route, profile, 375px mobile — verified; no console errors.
 
 ### Design system (B4.5) — standing rules
 

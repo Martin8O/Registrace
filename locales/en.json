@@ -112,6 +112,7 @@
       "registrations": "Registrations",
       "centers": "Centers",
       "users": "Users",
+      "profile": "Profile",
       "logout": "Log out"
     },
     "common": {
@@ -155,10 +156,8 @@
       "ARCHIVED": "Archived"
     },
     "regStatus": {
-      "PENDING": "Pending",
-      "CONFIRMED": "Confirmed",
-      "CANCELLED": "Cancelled",
-      "WAITLIST": "Waitlist"
+      "REGISTERED": "Registered",
+      "CANCELLED": "Cancelled"
     },
     "age": {
       "AGE_0_3": "0–3 years",
@@ -198,13 +197,20 @@
     },
     "eventForm": {
       "newTitle": "New event",
+      "editTitle": "Edit event",
       "stepLabel": "Step {current} of {total}",
       "next": "Next",
       "prev": "Back",
       "save": "Save event",
+      "saveAndPublish": "Save and publish",
       "saveSuccess": "Event validated — saving wired in B7.",
+      "publishSuccess": "Event validated and ready to publish — saving wired in B7.",
       "validationError": "Please fix the highlighted fields.",
       "errorsTitle": "The form has errors:",
+      "publishConfirmTitle": "Publish event?",
+      "publishConfirmBody": "The event will be set to published and visible to the public. Continue?",
+      "publishConfirm": "Yes, publish",
+      "publishCancel": "Back",
       "steps": {
         "basic": "Basic info",
         "schedule": "Schedule",
@@ -215,10 +221,11 @@
         "save": "Save"
       },
       "fields": {
+        "center": "Center",
         "title_cs": "Title (CZ)",
         "title_en": "Title (EN)",
-        "subtitle_cs": "Subtitle (CZ)",
-        "subtitle_en": "Subtitle (EN)",
+        "description_cs": "Description (CZ)",
+        "description_en": "Description (EN)",
         "contactName": "Contact name",
         "contactPhone": "Phone",
         "contactEmail": "Contact email",
@@ -241,9 +248,9 @@
         "isClosed": "Closed"
       },
       "schedule": {
-        "eventDates": "Event days",
-        "addDate": "Add day",
-        "noDates": "No days added yet."
+        "eventDays": "Event days",
+        "derivedNote": "Event days are derived from the date range; edit each day's meals in the Meals step.",
+        "selectDates": "First choose a start and end date."
       },
       "pricing": {
         "intro": "Pricing rules are collected as UI state (saved in B7).",
@@ -252,10 +259,12 @@
         "lockedZeroNote": "Children 0–14 always have a daily rate of 0 (fixed rule)."
       },
       "meals": {
-        "intro": "Meals are entered per event day (UI state).",
-        "addMeal": "Add meal",
-        "noDates": "First add event days in the Schedule step.",
-        "forDate": "Day"
+        "intro": "Each event day offers breakfast, lunch and dinner. Edit the price; exclude any meal that isn't offered — this sets the event's starting and ending meal.",
+        "noDates": "First choose a start and end date in the Schedule step.",
+        "forDate": "Day",
+        "exclude": "Exclude",
+        "include": "Include again",
+        "excluded": "Not offered"
       },
       "preview": {
         "intro": "Review the entered data. Saving will be wired in B7.",
@@ -272,6 +281,7 @@
         "required": "Required",
         "email": "Invalid email",
         "endDate": "End date must be on or after the start date",
+        "startInPast": "Start date cannot be in the past",
         "date": "Invalid date",
         "maxRegistrations": "Must be a positive whole number"
       }
@@ -279,13 +289,16 @@
     "registrations": {
       "title": "Registrations",
       "empty": "No registrations match the filter.",
-      "filterEvent": "Event",
+      "filterCenter": "Event centre",
       "filterStatus": "Status",
-      "allEvents": "All events",
+      "allCenters": "All centres",
+      "showingEvent": "Event: {event}",
+      "clearEvent": "Clear event filter",
+      "mealStatsTitle": "Meals to prepare",
       "table": {
         "id": "ID",
         "email": "Email",
-        "center": "Center",
+        "center": "Event centre",
         "date": "Created",
         "participants": "Participants",
         "total": "Total",
@@ -297,17 +310,15 @@
       "notFound": "Registration not found.",
       "email": "Email",
       "event": "Event",
-      "center": "Center",
+      "homeCenter": "Home centre",
       "arrival": "Arrival",
       "departure": "Departure",
-      "arrivalTime": "Arrival time",
+      "afterBreakfast": "After breakfast",
+      "untilEnd": "Until end of event",
       "accommodation": "Accommodation",
       "status": "Status",
       "participants": "Participants",
-      "fullName": "Full name",
-      "age": "Age",
-      "pricingType": "Price type",
-      "total": "Total price",
+      "meals": "Meals",
       "save": "Save changes",
       "saved": "Changes saved (wired in B7).",
       "resend": "Resend confirmation",
@@ -315,20 +326,17 @@
     },
     "centers": {
       "title": "Centers",
-      "add": "Add center",
       "edit": "Edit",
       "empty": "No centers.",
       "nameCs": "Name (CZ)",
       "nameEn": "Name (EN)",
-      "active": "Active",
-      "inactive": "Inactive",
-      "sortOrder": "Sort order",
       "saved": "Saved (wired in B7).",
+      "superAdminOnlyNote": "Only SUPER_ADMIN sees and edits centers (wired in B7).",
+      "noAdmins": "—",
       "table": {
         "nameCs": "Name (CZ)",
         "nameEn": "Name (EN)",
-        "active": "Active",
-        "sortOrder": "Sort order",
+        "adminEmail": "Center admins",
         "actions": "Actions"
       }
     },
@@ -341,7 +349,15 @@
       "inviteCenters": "Assigned centers",
       "send": "Send invite",
       "invited": "Invite prepared (wired in B7).",
-      "deactivate": "Deactivate",
+      "edit": "Edit",
+      "editTitle": "Edit user",
+      "role": "Role",
+      "centers": "Assigned centers",
+      "resetPassword": "Reset password",
+      "resetDone": "New password generated (wired in B7).",
+      "sendResetEmail": "Send password-reset email",
+      "sentResetEmail": "Password-reset email sent (wired in B7).",
+      "saved": "Saved (wired in B7).",
       "empty": "No users.",
       "noCenters": "—",
       "allCenters": "All centers",
@@ -352,6 +368,19 @@
         "createdAt": "Created",
         "actions": "Actions"
       }
+    },
+    "profile": {
+      "title": "Profile",
+      "subtitle": "Manage your sign-in email and password.",
+      "currentEmail": "Sign-in email",
+      "newEmail": "New email",
+      "changeEmail": "Change email",
+      "emailSaved": "Email updated (wired in B7).",
+      "newPassword": "New password",
+      "confirmPassword": "Confirm password",
+      "changePassword": "Change password",
+      "passwordSaved": "Password changed (wired in B7).",
+      "passwordMismatch": "Passwords do not match."
     }
   }
 }

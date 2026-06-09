@@ -25,8 +25,6 @@ export type MockCenter = {
   id: string
   name_cs: string
   name_en: string
-  isActive: boolean
-  sortOrder: number
 }
 
 // Three consecutive days (Fri / Sat / Sun, 4–6 Sep 2026) within evt-001's range.
@@ -52,12 +50,33 @@ export const mockMealSlots: MockMealSlot[] = [
   { id: 'meal-sun-dinner', eventDateId: 'date-sun', mealType: 'DINNER', price: 120, isClosed: false },
 ]
 
-// A handful of BDC centres (subset of the 25 seeded). Bilingual names — most are
-// identical across locales, a couple differ (Praha/Prague, Plzeň/Pilsen).
+// All 25 BDC centres, mirrored from prisma/seed.ts (presentation scaffolding —
+// B7 reads these from the DB). All centres are active; ordering is done in the
+// UI by alphabetical name. Bilingual names — only a few differ across locales.
 export const mockCenters: MockCenter[] = [
-  { id: 'ctr-tenovice', name_cs: 'Těnovice', name_en: 'Tenovice', isActive: true, sortOrder: 10 },
-  { id: 'ctr-praha', name_cs: 'Praha', name_en: 'Prague', isActive: true, sortOrder: 20 },
-  { id: 'ctr-brno', name_cs: 'Brno', name_en: 'Brno', isActive: true, sortOrder: 30 },
-  { id: 'ctr-plzen', name_cs: 'Plzeň', name_en: 'Pilsen', isActive: true, sortOrder: 40 },
-  { id: 'ctr-olomouc', name_cs: 'Olomouc', name_en: 'Olomouc', isActive: false, sortOrder: 50 },
+  { id: 'ctr-brno', name_cs: 'Brno', name_en: 'Brno' },
+  { id: 'ctr-cesky-tesin', name_cs: 'Český Těšín', name_en: 'Český Těšín' },
+  { id: 'ctr-jihlava', name_cs: 'Jihlava', name_en: 'Jihlava' },
+  { id: 'ctr-jilemnice', name_cs: 'Jilemnice', name_en: 'Jilemnice' },
+  { id: 'ctr-karlovy-vary', name_cs: 'Karlovy Vary', name_en: 'Karlovy Vary' },
+  { id: 'ctr-kladno', name_cs: 'Kladno', name_en: 'Kladno' },
+  { id: 'ctr-klatovy', name_cs: 'Klatovy', name_en: 'Klatovy' },
+  { id: 'ctr-kolin', name_cs: 'Kolín', name_en: 'Kolín' },
+  { id: 'ctr-liberec', name_cs: 'Liberec', name_en: 'Liberec' },
+  { id: 'ctr-olomouc', name_cs: 'Olomouc', name_en: 'Olomouc' },
+  { id: 'ctr-ostrava', name_cs: 'Ostrava', name_en: 'Ostrava' },
+  { id: 'ctr-pardubice', name_cs: 'Pardubice', name_en: 'Pardubice' },
+  { id: 'ctr-pisek', name_cs: 'Písek', name_en: 'Písek' },
+  { id: 'ctr-plzen', name_cs: 'Plzeň', name_en: 'Plzeň' },
+  { id: 'ctr-praha', name_cs: 'Praha', name_en: 'Prague' },
+  { id: 'ctr-roznov', name_cs: 'Rožnov pod Radhoštěm', name_en: 'Rožnov pod Radhoštěm' },
+  { id: 'ctr-sumperk', name_cs: 'Šumperk', name_en: 'Šumperk' },
+  { id: 'ctr-tenovice', name_cs: 'Těnovice', name_en: 'Těnovice' },
+  { id: 'ctr-trojak', name_cs: 'Troják', name_en: 'Troják' },
+  { id: 'ctr-trutnov', name_cs: 'Trutnov', name_en: 'Trutnov' },
+  { id: 'ctr-usti-nad-labem', name_cs: 'Ústí nad Labem', name_en: 'Ústí nad Labem' },
+  { id: 'ctr-vyhlidky', name_cs: 'Vyhlídky / České Budějovice', name_en: 'Vyhlídky / České Budějovice' },
+  { id: 'ctr-zlin', name_cs: 'Zlín', name_en: 'Zlín' },
+  { id: 'ctr-jine', name_cs: 'Jiné', name_en: 'Other' },
+  { id: 'ctr-mimo-cr', name_cs: 'Mimo ČR', name_en: 'Not from Czechia' },
 ]

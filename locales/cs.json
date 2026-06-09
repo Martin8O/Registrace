@@ -112,6 +112,7 @@
       "registrations": "Registrace",
       "centers": "Centra",
       "users": "Uživatelé",
+      "profile": "Profil",
       "logout": "Odhlásit se"
     },
     "common": {
@@ -155,10 +156,8 @@
       "ARCHIVED": "Archivováno"
     },
     "regStatus": {
-      "PENDING": "Čeká",
-      "CONFIRMED": "Potvrzeno",
-      "CANCELLED": "Zrušeno",
-      "WAITLIST": "Náhradník"
+      "REGISTERED": "Registrován/a",
+      "CANCELLED": "Zrušeno"
     },
     "age": {
       "AGE_0_3": "0–3 roky",
@@ -198,13 +197,20 @@
     },
     "eventForm": {
       "newTitle": "Nová akce",
+      "editTitle": "Upravit akci",
       "stepLabel": "Krok {current} z {total}",
       "next": "Další",
       "prev": "Zpět",
       "save": "Uložit akci",
+      "saveAndPublish": "Uložit a publikovat",
       "saveSuccess": "Akce ověřena — ukládání bude propojeno v B7.",
+      "publishSuccess": "Akce ověřena a připravena k publikaci — ukládání bude propojeno v B7.",
       "validationError": "Opravte prosím označená pole.",
       "errorsTitle": "Formulář obsahuje chyby:",
+      "publishConfirmTitle": "Publikovat akci?",
+      "publishConfirmBody": "Akce bude nastavena jako publikovaná a viditelná pro veřejnost. Chcete pokračovat?",
+      "publishConfirm": "Ano, publikovat",
+      "publishCancel": "Zpět",
       "steps": {
         "basic": "Základní údaje",
         "schedule": "Termín",
@@ -215,10 +221,11 @@
         "save": "Uložení"
       },
       "fields": {
+        "center": "Centrum",
         "title_cs": "Název (CZ)",
         "title_en": "Název (EN)",
-        "subtitle_cs": "Podtitul (CZ)",
-        "subtitle_en": "Podtitul (EN)",
+        "description_cs": "Popis (CZ)",
+        "description_en": "Popis (EN)",
         "contactName": "Kontaktní osoba",
         "contactPhone": "Telefon",
         "contactEmail": "Kontaktní e-mail",
@@ -241,9 +248,9 @@
         "isClosed": "Uzavřeno"
       },
       "schedule": {
-        "eventDates": "Dny akce",
-        "addDate": "Přidat den",
-        "noDates": "Zatím nebyly přidány žádné dny."
+        "eventDays": "Dny akce",
+        "derivedNote": "Dny akce se odvodí z období; jídla u jednotlivých dnů upravíte v kroku Strava.",
+        "selectDates": "Nejprve zvolte datum začátku a konce."
       },
       "pricing": {
         "intro": "Cenová pravidla se sbírají jako UI stav (ukládání v B7).",
@@ -252,10 +259,12 @@
         "lockedZeroNote": "Děti 0–14 mají denní sazbu vždy 0 (neměnné pravidlo)."
       },
       "meals": {
-        "intro": "Strava se zadává pro každý den akce (UI stav).",
-        "addMeal": "Přidat jídlo",
-        "noDates": "Nejprve přidejte dny akce v kroku Termín.",
-        "forDate": "Den"
+        "intro": "Každý den akce nabízí snídani, oběd a večeři. Cenu lze upravit; jídlo, které není v nabídce, vyřaďte — tím se určí počáteční a koncové jídlo akce.",
+        "noDates": "Nejprve zvolte datum začátku a konce v kroku Termín.",
+        "forDate": "Den",
+        "exclude": "Vyřadit",
+        "include": "Zařadit zpět",
+        "excluded": "Není v nabídce"
       },
       "preview": {
         "intro": "Zkontrolujte zadané údaje. Ukládání bude propojeno v B7.",
@@ -272,6 +281,7 @@
         "required": "Povinné pole",
         "email": "Neplatný e-mail",
         "endDate": "Datum konce musí být po datu začátku",
+        "startInPast": "Datum začátku nemůže být v minulosti",
         "date": "Neplatné datum",
         "maxRegistrations": "Musí být kladné celé číslo"
       }
@@ -279,13 +289,16 @@
     "registrations": {
       "title": "Registrace",
       "empty": "Žádné registrace neodpovídají filtru.",
-      "filterEvent": "Akce",
+      "filterCenter": "Centrum akce",
       "filterStatus": "Stav",
-      "allEvents": "Všechny akce",
+      "allCenters": "Všechna centra",
+      "showingEvent": "Akce: {event}",
+      "clearEvent": "Zrušit filtr akce",
+      "mealStatsTitle": "Počty jídel k přípravě",
       "table": {
         "id": "ID",
         "email": "E-mail",
-        "center": "Centrum",
+        "center": "Centrum akce",
         "date": "Vytvořeno",
         "participants": "Účastníci",
         "total": "Celkem",
@@ -297,17 +310,15 @@
       "notFound": "Registrace nebyla nalezena.",
       "email": "E-mail",
       "event": "Akce",
-      "center": "Centrum",
+      "homeCenter": "Domovské centrum",
       "arrival": "Příjezd",
       "departure": "Odjezd",
-      "arrivalTime": "Čas příjezdu",
+      "afterBreakfast": "Po snídani",
+      "untilEnd": "Do konce akce",
       "accommodation": "Ubytování",
       "status": "Stav",
       "participants": "Účastníci",
-      "fullName": "Jméno a příjmení",
-      "age": "Věk",
-      "pricingType": "Typ ceny",
-      "total": "Celková cena",
+      "meals": "Strava",
       "save": "Uložit změny",
       "saved": "Změny uloženy (propojení v B7).",
       "resend": "Znovu odeslat potvrzení",
@@ -315,20 +326,17 @@
     },
     "centers": {
       "title": "Centra",
-      "add": "Přidat centrum",
       "edit": "Upravit",
       "empty": "Žádná centra.",
       "nameCs": "Název (CZ)",
       "nameEn": "Název (EN)",
-      "active": "Aktivní",
-      "inactive": "Neaktivní",
-      "sortOrder": "Pořadí",
       "saved": "Uloženo (propojení v B7).",
+      "superAdminOnlyNote": "Centra vidí a upravuje pouze SUPER_ADMIN (propojení v B7).",
+      "noAdmins": "—",
       "table": {
         "nameCs": "Název (CZ)",
         "nameEn": "Název (EN)",
-        "active": "Aktivní",
-        "sortOrder": "Pořadí",
+        "adminEmail": "Správci centra",
         "actions": "Akce"
       }
     },
@@ -341,7 +349,15 @@
       "inviteCenters": "Přiřazená centra",
       "send": "Odeslat pozvánku",
       "invited": "Pozvánka připravena (propojení v B7).",
-      "deactivate": "Deaktivovat",
+      "edit": "Upravit",
+      "editTitle": "Upravit uživatele",
+      "role": "Role",
+      "centers": "Přiřazená centra",
+      "resetPassword": "Resetovat heslo",
+      "resetDone": "Nové heslo vygenerováno (propojení v B7).",
+      "sendResetEmail": "Odeslat e-mail s resetem hesla",
+      "sentResetEmail": "E-mail s resetem hesla odeslán (propojení v B7).",
+      "saved": "Uloženo (propojení v B7).",
       "empty": "Žádní uživatelé.",
       "noCenters": "—",
       "allCenters": "Všechna centra",
@@ -352,6 +368,19 @@
         "createdAt": "Vytvořeno",
         "actions": "Akce"
       }
+    },
+    "profile": {
+      "title": "Profil",
+      "subtitle": "Spravujte svůj přihlašovací e-mail a heslo.",
+      "currentEmail": "Přihlašovací e-mail",
+      "newEmail": "Nový e-mail",
+      "changeEmail": "Změnit e-mail",
+      "emailSaved": "E-mail aktualizován (propojení v B7).",
+      "newPassword": "Nové heslo",
+      "confirmPassword": "Potvrzení hesla",
+      "changePassword": "Změnit heslo",
+      "passwordSaved": "Heslo změněno (propojení v B7).",
+      "passwordMismatch": "Hesla se neshodují."
     }
   }
 }

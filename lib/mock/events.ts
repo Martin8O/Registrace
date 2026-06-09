@@ -7,6 +7,7 @@ export type EventCenter = {
 
 export type MockEvent = {
   id: string
+  centerId: string // → mockCenters[].id — the centre hosting this event
   title_cs: string
   title_en: string
   subtitle_cs: string | null
@@ -22,6 +23,7 @@ export type MockEvent = {
 export const mockEvents: MockEvent[] = [
   {
     id: 'evt-001',
+    centerId: 'ctr-tenovice',
     title_cs: 'Meditační retreat',
     title_en: 'Meditation Retreat',
     subtitle_cs: 'Otevřený pro všechny',
@@ -34,7 +36,7 @@ export const mockEvents: MockEvent[] = [
     endDate: '2026-09-12',
     status: 'PUBLISHED',
     center: {
-      name: 'Tenovice',
+      name: 'Těnovice',
       city: 'Spálené Poříčí',
       email: 'tenovice@bdc.cz',
       phone: '+420 377 123 456',
@@ -42,6 +44,7 @@ export const mockEvents: MockEvent[] = [
   },
   {
     id: 'evt-002',
+    centerId: 'ctr-praha',
     title_cs: 'Víkendová praxe',
     title_en: 'Weekend Practice',
     subtitle_cs: null,
@@ -62,6 +65,7 @@ export const mockEvents: MockEvent[] = [
   },
   {
     id: 'evt-003',
+    centerId: 'ctr-brno',
     title_cs: 'Roční kurz meditace',
     title_en: 'Annual Meditation Course',
     subtitle_cs: 'Archivní záznam',
@@ -82,6 +86,7 @@ export const mockEvents: MockEvent[] = [
   },
   {
     id: 'evt-004',
+    centerId: 'ctr-olomouc',
     title_cs: 'Letní soustředění',
     title_en: 'Summer Intensive',
     subtitle_cs: null,

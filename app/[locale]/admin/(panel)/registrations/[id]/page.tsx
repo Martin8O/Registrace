@@ -5,19 +5,18 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { mockEvents } from '@/lib/mock/events'
-import { mockCenters, mockEventDates } from '@/lib/mock/registrationOptions'
+import {
+  mockCenters,
+  mockEventDates,
+  mockMealSlots,
+} from '@/lib/mock/registrationOptions'
 import {
   mockRegistrations,
   type MockRegistrationStatus,
 } from '@/lib/mock/registrations'
 import { RegStatusBadge } from '@/components/admin/StatusBadge'
 
-const REG_STATUSES: MockRegistrationStatus[] = [
-  'PENDING',
-  'CONFIRMED',
-  'CANCELLED',
-  'WAITLIST',
-]
+const REG_STATUSES: MockRegistrationStatus[] = ['REGISTERED', 'CANCELLED']
 
 export default function RegistrationDetailPage() {
   const params = useParams()
@@ -34,7 +33,7 @@ export default function RegistrationDetailPage() {
     registration?.hasAccommodation ?? false,
   )
   const [status, setStatus] = useState<MockRegistrationStatus>(
-    registration?.status ?? 'PENDING',
+    registration?.status ?? 'REGISTERED',
   )
   const [toast, setToast] = useState<string | null>(null)
 
@@ -61,6 +60,15 @@ export default function RegistrationDetailPage() {
     const d = mockEventDates.find((d) => d.id === dateId)
     if (!d) return dateId
     return locale === 'cs' ? d.label_cs : d.label_en
+  }
+
+  // A booked meal → "day · meal type" (e.g. "Sobota 5. 9. · Snídaně").
+  const mealLabel = (mealId: string): string | null => {
+    const slot = mockMealSlots.find((s) => s.id === mealId)
+    if (!slot) return null
+    const day = mockEventDates.find((d) => d.id === slot.eventDateId)
+    const dayLabel = day ? (locale === 'cs' ? day.label_cs : day.label_en) : ''
+    return `${dayLabel} · ${t(`mealType.${slot.mealType}`)}`
   }
 
   // TODO(B7): real PUT /api/admin/registrations/[id] + resend-confirmation.
@@ -97,17 +105,20 @@ export default function RegistrationDetailPage() {
         <ReadOnlyRow label={t('registrationDetail.event')} value={eventTitle} />
         <ReadOnlyRow
           label={t('registrationDetail.arrival')}
-          value={`${dateLabel(registration.arrivalDateId)} · ${t(`arrivalTime.${registration.arrivalTime}`)}`}
+          value={`${dateLabel(registration.arrivalDateId)} - ${t(`arrivalTime.${registration.arrivalTime}`).toLowerCase()}`}
         />
         <ReadOnlyRow
           label={t('registrationDetail.departure')}
-          value={dateLabel(registration.departureDateId)}
+          value={`${dateLabel(registration.departureDateId)} - ${(registration.earlyDeparture === 'AFTER_BREAKFAST'
+            ? t('registrationDetail.afterBreakfast')
+            : t('registrationDetail.untilEnd')
+          ).toLowerCase()}`}
         />
 
         <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2">
           <div>
             <label htmlFor="center" className="form-label">
-              {t('registrationDetail.center')}
+              {t('registrationDetail.homeCenter')}
             </label>
             <select
               id="center"
@@ -181,40 +192,53 @@ export default function RegistrationDetailPage() {
         </div>
       </section>
 
-      {/* Participants (read-only) */}
+      {/* Participants (read-only) — incl. each person's booked meals */}
       <section className="section-card">
         <h2 className="mb-4 font-serif text-xl font-semibold text-neutral-900">
           {t('registrationDetail.participants')}
         </h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                <th className="px-3 py-2 font-medium">{t('registrationDetail.fullName')}</th>
-                <th className="px-3 py-2 font-medium">{t('registrationDetail.age')}</th>
-                <th className="px-3 py-2 font-medium">
-                  {t('registrationDetail.pricingType')}
-                </th>
-                <th className="px-3 py-2 text-right font-medium">
-                  {t('registrationDetail.total')}
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {registration.participants.map((p, i) => (
-                <tr key={i} className="border-b border-neutral-100 last:border-0">
-                  <td className="px-3 py-2 font-medium text-neutral-900">{p.fullName}</td>
-                  <td className="px-3 py-2 text-neutral-700">{t(`age.${p.ageCategory}`)}</td>
-                  <td className="px-3 py-2 text-neutral-700">
-                    {p.pricingType ? t(`pricingType.${p.pricingType}`) : '—'}
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono tabular-nums text-neutral-900">
+        <div className="space-y-4">
+          {registration.participants.map((p, i) => {
+            const meals = p.mealIds
+              .map(mealLabel)
+              .filter((m): m is string => m !== null)
+            return (
+              <div
+                key={i}
+                className={`participant-card ${i % 2 === 1 ? 'bg-gold-50' : ''}`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-medium text-neutral-900">{p.fullName}</p>
+                  <p className="font-mono text-sm tabular-nums text-neutral-900">
                     {p.totalPrice} CZK
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </p>
+                </div>
+                <p className="mt-1 text-sm text-neutral-600">
+                  {t(`age.${p.ageCategory}`)}
+                  {p.pricingType && ` · ${t(`pricingType.${p.pricingType}`)}`}
+                </p>
+                <div className="mt-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+                    {t('registrationDetail.meals')}
+                  </p>
+                  {meals.length > 0 ? (
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {meals.map((m, j) => (
+                        <span
+                          key={j}
+                          className="rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700"
+                        >
+                          {m}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-sm text-neutral-400">—</p>
+                  )}
+                </div>
+              </div>
+            )
+          })}
         </div>
       </section>
     </div>

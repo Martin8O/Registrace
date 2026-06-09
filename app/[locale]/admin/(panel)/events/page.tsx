@@ -102,18 +102,22 @@ export default function AdminEventsPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-3 whitespace-nowrap">
-                        {/* TODO(B7): open the stepper pre-filled for this event id
-                            (no edit route in B6 — only create exists). */}
-                        <button
-                          type="button"
-                          disabled
-                          title={t('eventForm.saveSuccess')}
-                          className="text-sm font-medium text-neutral-400 cursor-not-allowed"
-                        >
-                          {t('events.edit')}
-                        </button>
+                        {/* Edit only for DRAFT / PUBLISHED (not CLOSED / ARCHIVED).
+                            TODO(B7): ADMIN may edit only events they created. */}
+                        {event.status === 'DRAFT' || event.status === 'PUBLISHED' ? (
+                          <Link
+                            href={`${base}/events/${event.id}/edit`}
+                            className="text-sm font-medium text-primary-600 hover:text-primary-700"
+                          >
+                            {t('events.edit')}
+                          </Link>
+                        ) : (
+                          <span className="text-sm font-medium text-neutral-300">
+                            {t('events.edit')}
+                          </span>
+                        )}
                         <Link
-                          href={`${base}/registrations`}
+                          href={`${base}/registrations?event=${event.id}`}
                           className="text-sm font-medium text-primary-600 hover:text-primary-700"
                         >
                           {t('events.viewRegistrations')}

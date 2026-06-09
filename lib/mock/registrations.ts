@@ -5,11 +5,15 @@
 
 export type MockAgeCategory = 'AGE_0_3' | 'AGE_4_7' | 'AGE_8_14' | 'AGE_15_PLUS'
 export type MockPricingType = 'STANDARD' | 'SUPPORTED' | 'SURPLUS'
-export type MockRegistrationStatus =
-  | 'PENDING'
-  | 'CONFIRMED'
-  | 'CANCELLED'
-  | 'WAITLIST'
+// Product decision (B6): only two registration statuses. Everyone is REGISTERED
+// on submit (no payment system — this is paperwork); an admin may CANCEL. The
+// Prisma RegistrationStatus enum (PENDING/CONFIRMED/CANCELLED/WAITLIST) is
+// reconciled to this in B7 (schema change). See SESSION_BOOTSTRAP parking lot.
+export type MockRegistrationStatus = 'REGISTERED' | 'CANCELLED'
+
+// NONE = stays until the end of the event (event's ending meal);
+// AFTER_BREAKFAST = leaves after breakfast on the departure day.
+export type MockEarlyDeparture = 'NONE' | 'AFTER_BREAKFAST'
 
 export type MockRegistrationParticipant = {
   fullName: string
@@ -18,6 +22,7 @@ export type MockRegistrationParticipant = {
   participationPrice: number
   mealPrice: number
   totalPrice: number
+  mealIds: string[] // → mockMealSlots[].id (which meals this person eats)
 }
 
 export type MockRegistration = {
@@ -28,6 +33,7 @@ export type MockRegistration = {
   arrivalDateId: string // → mockEventDates[].id
   departureDateId: string // → mockEventDates[].id
   arrivalTime: 'MORNING' | 'AFTERNOON' | 'EVENING'
+  earlyDeparture: MockEarlyDeparture
   hasAccommodation: boolean
   participants: MockRegistrationParticipant[]
   totalPrice: number // whole CZK
@@ -44,6 +50,7 @@ export const mockRegistrations: MockRegistration[] = [
     arrivalDateId: 'date-fri',
     departureDateId: 'date-sun',
     arrivalTime: 'AFTERNOON',
+    earlyDeparture: 'NONE',
     hasAccommodation: true,
     participants: [
       {
@@ -53,6 +60,7 @@ export const mockRegistrations: MockRegistration[] = [
         participationPrice: 360,
         mealPrice: 320,
         totalPrice: 680,
+        mealIds: ['meal-fri-dinner', 'meal-sat-breakfast', 'meal-sat-dinner', 'meal-sun-breakfast', 'meal-sun-lunch'],
       },
       {
         fullName: 'Petr Novák',
@@ -61,10 +69,11 @@ export const mockRegistrations: MockRegistration[] = [
         participationPrice: 240,
         mealPrice: 320,
         totalPrice: 560,
+        mealIds: ['meal-fri-dinner', 'meal-sat-breakfast', 'meal-sat-dinner', 'meal-sun-breakfast', 'meal-sun-lunch'],
       },
     ],
     totalPrice: 1240,
-    status: 'CONFIRMED',
+    status: 'REGISTERED',
     createdAt: '2026-06-01T08:24:00.000Z',
   },
   {
@@ -75,6 +84,7 @@ export const mockRegistrations: MockRegistration[] = [
     arrivalDateId: 'date-sat',
     departureDateId: 'date-sun',
     arrivalTime: 'MORNING',
+    earlyDeparture: 'AFTER_BREAKFAST',
     hasAccommodation: false,
     participants: [
       {
@@ -84,10 +94,11 @@ export const mockRegistrations: MockRegistration[] = [
         participationPrice: 240,
         mealPrice: 200,
         totalPrice: 440,
+        mealIds: ['meal-sat-breakfast', 'meal-sat-dinner', 'meal-sun-breakfast'],
       },
     ],
     totalPrice: 440,
-    status: 'PENDING',
+    status: 'REGISTERED',
     createdAt: '2026-06-02T14:05:00.000Z',
   },
   {
@@ -98,6 +109,7 @@ export const mockRegistrations: MockRegistration[] = [
     arrivalDateId: 'date-fri',
     departureDateId: 'date-sun',
     arrivalTime: 'EVENING',
+    earlyDeparture: 'NONE',
     hasAccommodation: true,
     participants: [
       {
@@ -107,6 +119,7 @@ export const mockRegistrations: MockRegistration[] = [
         participationPrice: 360,
         mealPrice: 320,
         totalPrice: 680,
+        mealIds: ['meal-fri-dinner', 'meal-sat-breakfast', 'meal-sat-dinner', 'meal-sun-breakfast', 'meal-sun-lunch'],
       },
       {
         fullName: 'Anna Králová',
@@ -115,6 +128,7 @@ export const mockRegistrations: MockRegistration[] = [
         participationPrice: 0,
         mealPrice: 240,
         totalPrice: 240,
+        mealIds: ['meal-sat-breakfast', 'meal-sat-dinner', 'meal-sun-breakfast'],
       },
       {
         fullName: 'Marek Král',
@@ -123,10 +137,11 @@ export const mockRegistrations: MockRegistration[] = [
         participationPrice: 0,
         mealPrice: 160,
         totalPrice: 160,
+        mealIds: ['meal-sat-breakfast', 'meal-sun-breakfast'],
       },
     ],
     totalPrice: 1080,
-    status: 'WAITLIST',
+    status: 'REGISTERED',
     createdAt: '2026-06-03T09:47:00.000Z',
   },
   {
@@ -137,6 +152,7 @@ export const mockRegistrations: MockRegistration[] = [
     arrivalDateId: 'date-fri',
     departureDateId: 'date-sat',
     arrivalTime: 'MORNING',
+    earlyDeparture: 'AFTER_BREAKFAST',
     hasAccommodation: false,
     participants: [
       {
@@ -146,6 +162,7 @@ export const mockRegistrations: MockRegistration[] = [
         participationPrice: 120,
         mealPrice: 120,
         totalPrice: 240,
+        mealIds: [],
       },
     ],
     totalPrice: 240,
@@ -160,6 +177,7 @@ export const mockRegistrations: MockRegistration[] = [
     arrivalDateId: 'date-fri',
     departureDateId: 'date-sun',
     arrivalTime: 'AFTERNOON',
+    earlyDeparture: 'NONE',
     hasAccommodation: true,
     participants: [
       {
@@ -169,10 +187,11 @@ export const mockRegistrations: MockRegistration[] = [
         participationPrice: 240,
         mealPrice: 320,
         totalPrice: 560,
+        mealIds: ['meal-fri-dinner', 'meal-sat-breakfast', 'meal-sat-dinner', 'meal-sun-breakfast', 'meal-sun-lunch'],
       },
     ],
     totalPrice: 560,
-    status: 'CONFIRMED',
+    status: 'REGISTERED',
     createdAt: '2026-06-04T16:38:00.000Z',
   },
 ]

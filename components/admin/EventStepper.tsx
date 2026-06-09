@@ -1,23 +1,31 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useForm, type FieldErrors, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import { eventCreateSchema, type EventCreateInput } from '@/lib/validation'
-import type { MealType } from '@/lib/mock/registrationOptions'
+import { mockCenters } from '@/lib/mock/registrationOptions'
 import type {
   MockAgeCategory,
   MockPricingType,
 } from '@/lib/mock/registrations'
+import {
+  DEFAULT_MEAL_PRICE,
+  MEAL_TYPES,
+  enumerateEventDays,
+  todayISO,
+  type MealType,
+} from '@/lib/utils/eventDays'
 
-// ── Scalar fields covered by eventCreateSchema (the only schema-bound part). ──
-// Dates / pricing / meals (steps 2–4) are UI-only state for B7 and never touch
-// the schema (constraint: never redefine/extend a validation schema).
+// Scalar fields covered by eventCreateSchema (the only schema-bound part). The
+// schema is frozen, so the UI "Popis/Description" is bound to subtitle_cs/_en
+// (relabelled). Center, derived event days, pricing, and meals are UI-only
+// state for B7 — they never touch the schema.
 type EventFormValues = {
   title_cs: string
   title_en: string
-  subtitle_cs: string
+  subtitle_cs: string // rendered as "Popis / Description"
   subtitle_en: string
   contactName: string
   contactPhone: string
@@ -28,8 +36,8 @@ type EventFormValues = {
   status: 'DRAFT' | 'PUBLISHED' | 'CLOSED' | 'ARCHIVED'
 }
 
-// ── UI-only drafts (step 2–4) — collected for B7, not validated/persisted. ──
-type EventDateDraft = { id: string; label_cs: string; label_en: string }
+export type EventStepperInitial = Partial<EventFormValues> & { centerId?: string }
+
 type Pricing15 = {
   dailyRate: number
   nightRate: number
@@ -38,15 +46,7 @@ type Pricing15 = {
   eveningArrivalDiscount: number
   earlyDepartureDiscount: number
 }
-type MealDraft = {
-  id: string
-  eventDateId: string
-  mealType: MealType
-  price: number
-  label_cs: string
-  label_en: string
-  isClosed: boolean
-}
+type MealEdit = { price: number; excluded: boolean }
 
 const STEP_KEYS = [
   'basic',
@@ -66,7 +66,6 @@ const STATUSES: EventFormValues['status'][] = [
 ]
 const CHILD_AGES: MockAgeCategory[] = ['AGE_0_3', 'AGE_4_7', 'AGE_8_14']
 const PRICING_TYPES: MockPricingType[] = ['STANDARD', 'SUPPORTED', 'SURPLUS']
-const MEAL_TYPES: MealType[] = ['BREAKFAST', 'LUNCH', 'DINNER']
 const PRICING15_FIELDS: (keyof Pricing15)[] = [
   'dailyRate',
   'nightRate',
@@ -76,8 +75,6 @@ const PRICING15_FIELDS: (keyof Pricing15)[] = [
   'earlyDepartureDiscount',
 ]
 
-// Which step a schema field lives on — so a failed final validation can jump
-// back to the earliest offending step.
 const FIELD_STEP: Record<keyof EventFormValues, number> = {
   title_cs: 0,
   title_en: 0,
@@ -101,51 +98,87 @@ const emptyPricing15 = (): Pricing15 => ({
   earlyDepartureDiscount: 0,
 })
 
-export default function EventStepper() {
+const mealKey = (date: string, meal: MealType) => `${date}|${meal}`
+
+export default function EventStepper({
+  initial,
+}: {
+  initial?: EventStepperInitial
+}) {
   const t = useTranslations('admin')
+  const locale = useLocale()
 
   const [step, setStep] = useState(0)
   const [saved, setSaved] = useState(false)
+  const [didPublish, setDidPublish] = useState(false)
+  const [publishModal, setPublishModal] = useState(false)
 
-  // UI-only state (steps 2–4)
-  const [dates, setDates] = useState<EventDateDraft[]>([])
+  // UI-only state
+  const [centerId, setCenterId] = useState(initial?.centerId ?? '')
   const [pricing15, setPricing15] = useState<Record<MockPricingType, Pricing15>>({
     STANDARD: emptyPricing15(),
     SUPPORTED: emptyPricing15(),
     SURPLUS: emptyPricing15(),
   })
-  const [meals, setMeals] = useState<MealDraft[]>([])
+  const [mealEdits, setMealEdits] = useState<Record<string, MealEdit>>({})
 
   const {
     register,
     handleSubmit,
     watch,
+    getValues,
+    setValue,
     formState: { errors },
   } = useForm<EventFormValues, unknown, EventCreateInput>({
-    // Boundary cast (mirrors RegistrationForm): the schema input pins coerced
-    // dates / optional email, but the inputs are plain strings; the resolver
-    // still enforces eventCreateSchema and yields EventCreateInput on submit.
     resolver: zodResolver(eventCreateSchema) as unknown as Resolver<
       EventFormValues,
       unknown,
       EventCreateInput
     >,
     defaultValues: {
-      title_cs: '',
-      title_en: '',
-      subtitle_cs: '',
-      subtitle_en: '',
-      contactName: '',
-      contactPhone: '',
-      contactEmail: '',
-      startDate: '',
-      endDate: '',
-      maxRegistrations: undefined,
-      status: 'DRAFT',
+      title_cs: initial?.title_cs ?? '',
+      title_en: initial?.title_en ?? '',
+      subtitle_cs: initial?.subtitle_cs ?? '',
+      subtitle_en: initial?.subtitle_en ?? '',
+      contactName: initial?.contactName ?? '',
+      contactPhone: initial?.contactPhone ?? '',
+      contactEmail: initial?.contactEmail ?? '',
+      startDate: initial?.startDate ?? '',
+      endDate: initial?.endDate ?? '',
+      maxRegistrations: initial?.maxRegistrations,
+      status: initial?.status ?? 'DRAFT',
     },
   })
 
-  // Localised inline error per schema field.
+  const startDate = watch('startDate')
+  const endDate = watch('endDate')
+
+  // Event days are derived from the date range (admin picks only start + end).
+  const days = useMemo(
+    () => enumerateEventDays(startDate, endDate),
+    [startDate, endDate],
+  )
+
+  const sortedCenters = useMemo(
+    () => [...mockCenters].sort((a, b) => a.name_cs.localeCompare(b.name_cs, 'cs')),
+    [],
+  )
+
+  // Start date cannot be in the past (not expressible in the frozen schema, so
+  // enforced here + via the input's min).
+  const startInPast = startDate !== '' && startDate < todayISO()
+
+  function getMeal(date: string, meal: MealType): MealEdit {
+    return mealEdits[mealKey(date, meal)] ?? { price: DEFAULT_MEAL_PRICE[meal], excluded: false }
+  }
+  function patchMeal(date: string, meal: MealType, patch: Partial<MealEdit>) {
+    const key = mealKey(date, meal)
+    const current = getMeal(date, meal)
+    setMealEdits((prev) => ({ ...prev, [key]: { ...current, ...patch } }))
+  }
+  const updatePricing15 = (type: MockPricingType, patch: Partial<Pricing15>) =>
+    setPricing15((prev) => ({ ...prev, [type]: { ...prev[type], ...patch } }))
+
   function fieldError(name: keyof EventFormValues): string | null {
     const err = errors[name]
     if (!err) return null
@@ -162,11 +195,9 @@ export default function EventStepper() {
   const onValid = () => {
     // B6 scope: validate only — do NOT POST and do NOT persist (mirrors B5).
     // TODO(B7): POST to /api/admin/events; set Event.createdBy from the session
-    // (never the request body); persist dates/pricing/meals drafts too.
+    // (never the request body); persist center, days, pricing and meal drafts.
     setSaved(true)
   }
-  // Use the errors RHF passes in — formState.errors hasn't re-rendered yet at
-  // the moment this fires, so reading the closure would see stale (empty) data.
   const onInvalid = (errs: FieldErrors<EventFormValues>) => {
     const steps = Object.keys(errs).map(
       (k) => FIELD_STEP[k as keyof EventFormValues] ?? 0,
@@ -174,39 +205,26 @@ export default function EventStepper() {
     if (steps.length > 0) setStep(Math.min(...steps))
   }
 
-  // ── Date / meal draft helpers ──
-  const addDate = () =>
-    setDates((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), label_cs: '', label_en: '' },
-    ])
-  const removeDate = (id: string) => {
-    setDates((prev) => prev.filter((d) => d.id !== id))
-    setMeals((prev) => prev.filter((m) => m.eventDateId !== id))
+  // Save flow. "Save and Publish" forces status=PUBLISHED. Publishing (either
+  // way) asks for confirmation first.
+  function attemptSave(forcePublish: boolean) {
+    if (forcePublish) setValue('status', 'PUBLISHED')
+    if (getValues('startDate') && getValues('startDate') < todayISO()) {
+      setStep(1)
+      return
+    }
+    const willPublish = forcePublish || getValues('status') === 'PUBLISHED'
+    setDidPublish(willPublish)
+    if (willPublish) {
+      setPublishModal(true)
+    } else {
+      void handleSubmit(onValid, onInvalid)()
+    }
   }
-  const updateDate = (id: string, patch: Partial<EventDateDraft>) =>
-    setDates((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)))
-
-  const addMeal = (dateId: string) =>
-    setMeals((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        eventDateId: dateId,
-        mealType: 'BREAKFAST',
-        price: 0,
-        label_cs: '',
-        label_en: '',
-        isClosed: false,
-      },
-    ])
-  const removeMeal = (id: string) =>
-    setMeals((prev) => prev.filter((m) => m.id !== id))
-  const updateMeal = (id: string, patch: Partial<MealDraft>) =>
-    setMeals((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)))
-
-  const updatePricing15 = (type: MockPricingType, patch: Partial<Pricing15>) =>
-    setPricing15((prev) => ({ ...prev, [type]: { ...prev[type], ...patch } }))
+  function confirmPublish() {
+    setPublishModal(false)
+    void handleSubmit(onValid, onInvalid)()
+  }
 
   if (saved) {
     return (
@@ -215,7 +233,7 @@ export default function EventStepper() {
           ✓
         </div>
         <p className="mt-4 font-serif text-xl font-semibold text-neutral-900">
-          {t('eventForm.saveSuccess')}
+          {didPublish ? t('eventForm.publishSuccess') : t('eventForm.saveSuccess')}
         </p>
       </div>
     )
@@ -248,10 +266,30 @@ export default function EventStepper() {
         </div>
       </div>
 
-      {/* ── Step bodies ── */}
+      {/* ── Step 1 · Basic info ── */}
       {step === 0 && (
         <section className="section-card space-y-5">
           <StepHeading>{t('eventForm.steps.basic')}</StepHeading>
+
+          <div>
+            <label htmlFor="ev-center" className="form-label">
+              {t('eventForm.fields.center')}
+            </label>
+            <select
+              id="ev-center"
+              className="bdc-input"
+              value={centerId}
+              onChange={(e) => setCenterId(e.target.value)}
+            >
+              <option value="">—</option>
+              {sortedCenters.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {locale === 'cs' ? c.name_cs : c.name_en}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2">
             <TextField label={t('eventForm.fields.title_cs')} error={fieldError('title_cs')}>
               <input className="bdc-input" {...register('title_cs')} />
@@ -259,11 +297,11 @@ export default function EventStepper() {
             <TextField label={t('eventForm.fields.title_en')} error={fieldError('title_en')}>
               <input className="bdc-input" {...register('title_en')} />
             </TextField>
-            <TextField label={t('eventForm.fields.subtitle_cs')}>
-              <input className="bdc-input" {...register('subtitle_cs')} />
+            <TextField label={t('eventForm.fields.description_cs')}>
+              <textarea rows={2} className="bdc-input" {...register('subtitle_cs')} />
             </TextField>
-            <TextField label={t('eventForm.fields.subtitle_en')}>
-              <input className="bdc-input" {...register('subtitle_en')} />
+            <TextField label={t('eventForm.fields.description_en')}>
+              <textarea rows={2} className="bdc-input" {...register('subtitle_en')} />
             </TextField>
             <TextField label={t('eventForm.fields.contactName')}>
               <input className="bdc-input" {...register('contactName')} />
@@ -287,73 +325,69 @@ export default function EventStepper() {
         </section>
       )}
 
+      {/* ── Step 2 · Schedule (auto-derived days) ── */}
       {step === 1 && (
         <section className="section-card space-y-5">
           <StepHeading>{t('eventForm.steps.schedule')}</StepHeading>
           <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2">
-            <TextField label={t('eventForm.fields.startDate')} error={fieldError('startDate')}>
-              <input type="date" className="bdc-input" {...register('startDate')} />
+            <TextField
+              label={t('eventForm.fields.startDate')}
+              error={
+                startInPast
+                  ? t('eventForm.errors.startInPast')
+                  : fieldError('startDate')
+              }
+            >
+              <input
+                type="date"
+                min={todayISO()}
+                className="bdc-input"
+                {...register('startDate')}
+              />
             </TextField>
             <TextField label={t('eventForm.fields.endDate')} error={fieldError('endDate')}>
-              <input type="date" className="bdc-input" {...register('endDate')} />
+              <input
+                type="date"
+                min={startDate || todayISO()}
+                className="bdc-input"
+                {...register('endDate')}
+              />
             </TextField>
           </div>
 
           <div>
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-neutral-900">
-                {t('eventForm.schedule.eventDates')}
-              </h3>
-              <button type="button" onClick={addDate} className="btn-secondary">
-                {t('eventForm.schedule.addDate')}
-              </button>
-            </div>
-            {dates.length === 0 ? (
+            <h3 className="text-sm font-semibold text-neutral-900">
+              {t('eventForm.schedule.eventDays')}
+            </h3>
+            <p className="mt-1 text-sm text-neutral-500">
+              {t('eventForm.schedule.derivedNote')}
+            </p>
+            {days.length === 0 ? (
               <p className="mt-3 text-sm text-neutral-500">
-                {t('eventForm.schedule.noDates')}
+                {t('eventForm.schedule.selectDates')}
               </p>
             ) : (
-              <div className="mt-3 space-y-3">
-                {dates.map((d) => (
-                  <div
-                    key={d.id}
-                    className="flex flex-col gap-3 rounded-xl border border-neutral-200 bg-stone-50 p-4 sm:flex-row sm:items-end"
+              <ul className="mt-3 flex flex-wrap gap-2">
+                {days.map((d) => (
+                  <li
+                    key={d.date}
+                    className="rounded-lg border border-neutral-200 bg-stone-50 px-3 py-1.5 text-sm text-neutral-700"
                   >
-                    <TextField label={t('eventForm.fields.dateLabelCs')} className="flex-1">
-                      <input
-                        className="bdc-input"
-                        value={d.label_cs}
-                        onChange={(e) => updateDate(d.id, { label_cs: e.target.value })}
-                      />
-                    </TextField>
-                    <TextField label={t('eventForm.fields.dateLabelEn')} className="flex-1">
-                      <input
-                        className="bdc-input"
-                        value={d.label_en}
-                        onChange={(e) => updateDate(d.id, { label_en: e.target.value })}
-                      />
-                    </TextField>
-                    <button
-                      type="button"
-                      onClick={() => removeDate(d.id)}
-                      className="btn-secondary shrink-0"
-                    >
-                      {t('common.remove')}
-                    </button>
-                  </div>
+                    {locale === 'cs' ? d.label_cs : d.label_en}
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
           </div>
         </section>
       )}
 
+      {/* ── Step 3 · Pricing (UI state; engine + defaults in B7) ── */}
       {step === 2 && (
         <section className="section-card space-y-6">
           <StepHeading>{t('eventForm.steps.pricing')}</StepHeading>
           <p className="text-sm text-neutral-500">{t('eventForm.pricing.intro')}</p>
 
-          {/* Children 0–14: dailyRate locked at 0, no pricingType (invariant 15) */}
           <div className="space-y-2">
             {CHILD_AGES.map((age) => (
               <div
@@ -363,9 +397,7 @@ export default function EventStepper() {
                 <span className="text-sm font-medium text-neutral-700">
                   {t(`age.${age}`)}
                 </span>
-                <span className="price-amount">
-                  {t('eventForm.fields.dailyRate')}: 0
-                </span>
+                <span className="price-amount">{t('eventForm.fields.dailyRate')}: 0</span>
               </div>
             ))}
             <p className="text-xs text-neutral-500">
@@ -373,7 +405,6 @@ export default function EventStepper() {
             </p>
           </div>
 
-          {/* 15+: three pricingType rows, each with rate + discount fields */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-neutral-900">
               {t('age.AGE_15_PLUS')}
@@ -395,9 +426,7 @@ export default function EventStepper() {
                         className="bdc-input"
                         value={pricing15[type][f]}
                         onChange={(e) =>
-                          updatePricing15(type, {
-                            [f]: Number(e.target.value) || 0,
-                          })
+                          updatePricing15(type, { [f]: Number(e.target.value) || 0 })
                         }
                       />
                     </TextField>
@@ -409,123 +438,84 @@ export default function EventStepper() {
         </section>
       )}
 
+      {/* ── Step 4 · Meals (all days × B/L/D, default prices, excludable) ── */}
       {step === 3 && (
         <section className="section-card space-y-5">
           <StepHeading>{t('eventForm.steps.meals')}</StepHeading>
           <p className="text-sm text-neutral-500">{t('eventForm.meals.intro')}</p>
 
-          {dates.length === 0 ? (
+          {days.length === 0 ? (
             <p className="text-sm text-neutral-500">{t('eventForm.meals.noDates')}</p>
           ) : (
-            <div className="space-y-5">
-              {dates.map((d) => {
-                const dayMeals = meals.filter((m) => m.eventDateId === d.id)
-                return (
-                  <div
-                    key={d.id}
-                    className="rounded-xl border border-neutral-200 bg-stone-50 p-4"
-                  >
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-neutral-900">
-                        {t('eventForm.meals.forDate')}:{' '}
-                        {d.label_cs || d.label_en || d.id.slice(0, 8)}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => addMeal(d.id)}
-                        className="btn-secondary"
-                      >
-                        {t('eventForm.meals.addMeal')}
-                      </button>
-                    </div>
-
-                    {dayMeals.length > 0 && (
-                      <div className="mt-3 space-y-3">
-                        {dayMeals.map((m) => (
-                          <div
-                            key={m.id}
-                            className="grid grid-cols-1 gap-3 rounded-lg border border-neutral-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-5 lg:items-end"
-                          >
-                            <TextField label={t('eventForm.fields.mealType')}>
-                              <select
-                                className="bdc-input"
-                                value={m.mealType}
-                                onChange={(e) =>
-                                  updateMeal(m.id, {
-                                    mealType: e.target.value as MealType,
-                                  })
-                                }
-                              >
-                                {MEAL_TYPES.map((mt) => (
-                                  <option key={mt} value={mt}>
-                                    {t(`mealType.${mt}`)}
-                                  </option>
-                                ))}
-                              </select>
-                            </TextField>
-                            <TextField label={t('eventForm.fields.price')}>
-                              <input
-                                type="number"
-                                min={0}
-                                className="bdc-input"
-                                value={m.price}
-                                onChange={(e) =>
-                                  updateMeal(m.id, {
-                                    price: Number(e.target.value) || 0,
-                                  })
-                                }
-                              />
-                            </TextField>
-                            <TextField label={t('eventForm.fields.mealLabelCs')}>
-                              <input
-                                className="bdc-input"
-                                value={m.label_cs}
-                                onChange={(e) =>
-                                  updateMeal(m.id, { label_cs: e.target.value })
-                                }
-                              />
-                            </TextField>
-                            <TextField label={t('eventForm.fields.mealLabelEn')}>
-                              <input
-                                className="bdc-input"
-                                value={m.label_en}
-                                onChange={(e) =>
-                                  updateMeal(m.id, { label_en: e.target.value })
-                                }
-                              />
-                            </TextField>
-                            <div className="flex items-center justify-between gap-3">
-                              <label className="flex items-center gap-2 text-sm text-neutral-700">
-                                <input
-                                  type="checkbox"
-                                  className="h-4 w-4 accent-primary-500"
-                                  checked={m.isClosed}
-                                  onChange={(e) =>
-                                    updateMeal(m.id, { isClosed: e.target.checked })
-                                  }
-                                />
-                                {t('eventForm.fields.isClosed')}
-                              </label>
-                              <button
-                                type="button"
-                                onClick={() => removeMeal(m.id)}
-                                className="text-sm font-medium text-danger-600 hover:text-danger-700"
-                              >
-                                {t('common.remove')}
-                              </button>
-                            </div>
+            <div className="space-y-4">
+              {days.map((d) => (
+                <div
+                  key={d.date}
+                  className="rounded-xl border border-neutral-200 bg-stone-50 p-4"
+                >
+                  <p className="text-sm font-semibold text-neutral-900">
+                    {t('eventForm.meals.forDate')}:{' '}
+                    {locale === 'cs' ? d.label_cs : d.label_en}
+                  </p>
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    {MEAL_TYPES.map((meal) => {
+                      const m = getMeal(d.date, meal)
+                      return (
+                        <div
+                          key={meal}
+                          className={`rounded-lg border bg-white p-3 ${
+                            m.excluded ? 'border-neutral-200 opacity-60' : 'border-neutral-200'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-neutral-800">
+                              {t(`mealType.${meal}`)}
+                            </span>
+                            {m.excluded && (
+                              <span className="badge bg-neutral-200 text-neutral-600 border border-neutral-300">
+                                {t('eventForm.meals.excluded')}
+                              </span>
+                            )}
                           </div>
-                        ))}
-                      </div>
-                    )}
+                          <input
+                            type="number"
+                            min={0}
+                            disabled={m.excluded}
+                            className="bdc-input mt-2"
+                            value={m.price}
+                            onChange={(e) =>
+                              patchMeal(d.date, meal, {
+                                price: Number(e.target.value) || 0,
+                              })
+                            }
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              patchMeal(d.date, meal, { excluded: !m.excluded })
+                            }
+                            className={`mt-2 text-sm font-medium ${
+                              m.excluded
+                                ? 'text-primary-600 hover:text-primary-700'
+                                : 'text-danger-600 hover:text-danger-700'
+                            }`}
+                          >
+                            {m.excluded
+                              ? t('eventForm.meals.include')
+                              : t('eventForm.meals.exclude')}
+                          </button>
+                        </div>
+                      )
+                    })}
                   </div>
-                )
-              })}
+                </div>
+              ))}
             </div>
           )}
         </section>
       )}
 
+      {/* ── Step 5 · Settings ── */}
       {step === 4 && (
         <section className="section-card space-y-5">
           <StepHeading>{t('eventForm.steps.settings')}</StepHeading>
@@ -539,8 +529,7 @@ export default function EventStepper() {
                 min={1}
                 className="bdc-input"
                 {...register('maxRegistrations', {
-                  setValueAs: (v) =>
-                    v === '' || v == null ? undefined : Number(v),
+                  setValueAs: (v) => (v === '' || v == null ? undefined : Number(v)),
                 })}
               />
             </TextField>
@@ -557,16 +546,27 @@ export default function EventStepper() {
         </section>
       )}
 
+      {/* ── Step 6 · Preview ── */}
       {step === 5 && (
         <section className="section-card space-y-5">
           <StepHeading>{t('eventForm.steps.preview')}</StepHeading>
           <p className="text-sm text-neutral-500">{t('eventForm.preview.intro')}</p>
 
           <PreviewBlock title={t('eventForm.preview.basic')}>
+            <PreviewRow
+              label={t('eventForm.fields.center')}
+              value={
+                sortedCenters.find((c) => c.id === centerId)
+                  ? locale === 'cs'
+                    ? sortedCenters.find((c) => c.id === centerId)!.name_cs
+                    : sortedCenters.find((c) => c.id === centerId)!.name_en
+                  : ''
+              }
+            />
             <PreviewRow label={t('eventForm.fields.title_cs')} value={values.title_cs} />
             <PreviewRow label={t('eventForm.fields.title_en')} value={values.title_en} />
-            <PreviewRow label={t('eventForm.fields.subtitle_cs')} value={values.subtitle_cs} />
-            <PreviewRow label={t('eventForm.fields.subtitle_en')} value={values.subtitle_en} />
+            <PreviewRow label={t('eventForm.fields.description_cs')} value={values.subtitle_cs} />
+            <PreviewRow label={t('eventForm.fields.description_en')} value={values.subtitle_en} />
             <PreviewRow label={t('eventForm.fields.contactName')} value={values.contactName} />
             <PreviewRow label={t('eventForm.fields.contactPhone')} value={values.contactPhone} />
             <PreviewRow label={t('eventForm.fields.contactEmail')} value={values.contactEmail} />
@@ -575,16 +575,13 @@ export default function EventStepper() {
           <PreviewBlock title={t('eventForm.preview.schedule')}>
             <PreviewRow label={t('eventForm.fields.startDate')} value={values.startDate} />
             <PreviewRow label={t('eventForm.fields.endDate')} value={values.endDate} />
-            {dates.length === 0 ? (
-              <p className="text-sm text-neutral-500">{t('eventForm.schedule.noDates')}</p>
-            ) : (
-              dates.map((d) => (
-                <PreviewRow
-                  key={d.id}
-                  label={t('eventForm.schedule.eventDates')}
-                  value={`${d.label_cs} / ${d.label_en}`}
-                />
-              ))
+            {days.length > 0 && (
+              <PreviewRow
+                label={t('eventForm.schedule.eventDays')}
+                value={days
+                  .map((d) => (locale === 'cs' ? d.label_cs : d.label_en))
+                  .join(' · ')}
+              />
             )}
           </PreviewBlock>
 
@@ -601,14 +598,19 @@ export default function EventStepper() {
           </PreviewBlock>
 
           <PreviewBlock title={t('eventForm.preview.meals')}>
-            {meals.length === 0 ? (
+            {days.length === 0 ? (
               <p className="text-sm text-neutral-500">{t('eventForm.preview.noMeals')}</p>
             ) : (
-              meals.map((m) => (
+              days.map((d) => (
                 <PreviewRow
-                  key={m.id}
-                  label={t(`mealType.${m.mealType}`)}
-                  value={`${m.price} CZK${m.isClosed ? ` · ${t('eventForm.fields.isClosed')}` : ''}`}
+                  key={d.date}
+                  label={locale === 'cs' ? d.label_cs : d.label_en}
+                  value={MEAL_TYPES.map((meal) => {
+                    const m = getMeal(d.date, meal)
+                    return m.excluded
+                      ? `${t(`mealType.${meal}`)} —`
+                      : `${t(`mealType.${meal}`)} ${m.price}`
+                  }).join(' · ')}
                 />
               ))
             )}
@@ -627,6 +629,7 @@ export default function EventStepper() {
         </section>
       )}
 
+      {/* ── Step 7 · Save ── */}
       {step === 6 && (
         <section className="section-card space-y-4">
           <StepHeading>{t('eventForm.steps.save')}</StepHeading>
@@ -644,13 +647,22 @@ export default function EventStepper() {
               </ul>
             </div>
           )}
-          <button
-            type="button"
-            onClick={handleSubmit(onValid, onInvalid)}
-            className="btn-primary w-full"
-          >
-            {t('eventForm.save')}
-          </button>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => attemptSave(false)}
+              className="btn-secondary"
+            >
+              {t('eventForm.save')}
+            </button>
+            <button
+              type="button"
+              onClick={() => attemptSave(true)}
+              className="btn-primary"
+            >
+              {t('eventForm.saveAndPublish')}
+            </button>
+          </div>
         </section>
       )}
 
@@ -674,6 +686,37 @@ export default function EventStepper() {
           </button>
         )}
       </div>
+
+      {/* Publish confirmation (status PUBLISHED or "Save and Publish") */}
+      {publishModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/60 p-4 backdrop-blur-sm"
+          onClick={() => setPublishModal(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="font-serif text-xl font-semibold text-neutral-900">
+              {t('eventForm.publishConfirmTitle')}
+            </h2>
+            <div className="mt-2 mb-4 h-0.5 w-10 rounded bg-primary-500" />
+            <p className="text-sm text-neutral-600">{t('eventForm.publishConfirmBody')}</p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setPublishModal(false)}
+                className="btn-secondary"
+              >
+                {t('eventForm.publishCancel')}
+              </button>
+              <button type="button" onClick={confirmPublish} className="btn-primary">
+                {t('eventForm.publishConfirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -692,16 +735,14 @@ function StepHeading({ children }: { children: React.ReactNode }) {
 function TextField({
   label,
   error,
-  className = '',
   children,
 }: {
   label: string
   error?: string | null
-  className?: string
   children: React.ReactNode
 }) {
   return (
-    <div className={className}>
+    <div>
       <span className="form-label">{label}</span>
       {children}
       {error && <p className="mt-1 text-sm text-danger-600">{error}</p>}
