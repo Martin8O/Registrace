@@ -51,7 +51,9 @@
       "email": "Zadejte platný e-mail",
       "fullName": "Jméno musí mít alespoň 2 znaky",
       "gdpr": "Pro pokračování je nutný souhlas se zpracováním osobních údajů",
-      "required": "Toto pole je povinné"
+      "required": "Toto pole je povinné",
+      "submit": "Registraci se nepodařilo odeslat. Zkuste to prosím znovu.",
+      "capacity": "Kapacita akce je již naplněna."
     },
     "gdprModal": {
       "title": "Ochrana osobních údajů",
@@ -74,6 +76,7 @@
   "home": {
     "heading": "Registrace na akce BDC",
     "subheading": "Klikněte na název akce pro otevření registrace.",
+    "homeButton": "Domů",
     "openRegistration": "Registrovat"
   },
   "badge": {
@@ -222,6 +225,7 @@
       },
       "fields": {
         "center": "Centrum",
+        "centerId": "Centrum",
         "title_cs": "Název (CZ)",
         "title_en": "Název (EN)",
         "description_cs": "Popis (CZ)",
@@ -283,7 +287,9 @@
         "endDate": "Datum konce musí být po datu začátku",
         "startInPast": "Datum začátku nemůže být v minulosti",
         "date": "Neplatné datum",
-        "maxRegistrations": "Musí být kladné celé číslo"
+        "maxRegistrations": "Musí být kladné celé číslo",
+        "forbidden": "Nemáte oprávnění vytvářet akce pro toto centrum.",
+        "submitFailed": "Uložení se nezdařilo. Zkuste to prosím znovu."
       }
     },
     "registrations": {

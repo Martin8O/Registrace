@@ -1,10 +1,13 @@
 import { getTranslations } from 'next-intl/server'
 import EventStepper from '@/components/admin/EventStepper'
+import { getCentersForSelect } from '@/modules/events'
 
-// 7-step event create form. Validates the scalar fields with eventCreateSchema
-// on the final step and shows success — it does NOT POST or persist in B6.
+// 7-step event create form. The stepper validates with eventCreateSchema and on
+// the final step POSTs the full payload to /api/admin/events (createdBy is set
+// from the session server-side, never the body).
 export default async function NewEventPage() {
   const t = await getTranslations('admin.eventForm')
+  const centers = await getCentersForSelect()
 
   return (
     <div>
@@ -14,7 +17,7 @@ export default async function NewEventPage() {
         </h1>
         <div className="mt-2 h-0.5 w-12 rounded bg-primary-500" />
       </header>
-      <EventStepper />
+      <EventStepper centers={centers} />
     </div>
   )
 }

@@ -1,11 +1,11 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useForm, type FieldErrors, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useLocale, useTranslations } from 'next-intl'
 import { eventCreateSchema, type EventCreateInput } from '@/lib/validation'
-import { mockCenters } from '@/lib/mock/registrationOptions'
 import type {
   MockAgeCategory,
   MockPricingType,
@@ -18,15 +18,15 @@ import {
   type MealType,
 } from '@/lib/utils/eventDays'
 
-// Scalar fields covered by eventCreateSchema (the only schema-bound part). The
-// schema is frozen, so the UI "Popis/Description" is bound to subtitle_cs/_en
-// (relabelled). Center, derived event days, pricing, and meals are UI-only
-// state for B7 — they never touch the schema.
+// Scalar fields covered by eventCreateSchema. centerId + description_* are now
+// real schema fields (B7c). Pricing and meals stay UI-only state (assembled into
+// the POST payload on save); event days are derived from the date range.
 type EventFormValues = {
+  centerId: string
   title_cs: string
   title_en: string
-  subtitle_cs: string // rendered as "Popis / Description"
-  subtitle_en: string
+  description_cs: string
+  description_en: string
   contactName: string
   contactPhone: string
   contactEmail: string
@@ -36,7 +36,9 @@ type EventFormValues = {
   status: 'DRAFT' | 'PUBLISHED' | 'CLOSED' | 'ARCHIVED'
 }
 
-export type EventStepperInitial = Partial<EventFormValues> & { centerId?: string }
+export type EventStepperInitial = Partial<EventFormValues>
+
+type CenterOption = { id: string; name_cs: string; name_en: string }
 
 type Pricing15 = {
   dailyRate: number
@@ -76,10 +78,11 @@ const PRICING15_FIELDS: (keyof Pricing15)[] = [
 ]
 
 const FIELD_STEP: Record<keyof EventFormValues, number> = {
+  centerId: 0,
   title_cs: 0,
   title_en: 0,
-  subtitle_cs: 0,
-  subtitle_en: 0,
+  description_cs: 0,
+  description_en: 0,
   contactName: 0,
   contactPhone: 0,
   contactEmail: 0,
@@ -89,36 +92,63 @@ const FIELD_STEP: Record<keyof EventFormValues, number> = {
   status: 4,
 }
 
-const emptyPricing15 = (): Pricing15 => ({
-  dailyRate: 0,
-  nightRate: 0,
-  morningArrivalDiscount: 0,
-  afternoonArrivalDiscount: 0,
-  eveningArrivalDiscount: 0,
-  earlyDepartureDiscount: 0,
-})
+// Default catalogue 15+ prices — prefill only, editable per event. Mirrors the
+// sample values shown in the public "Informace o cenách" (and the seed event),
+// same pattern as DEFAULT_MEAL_PRICE for meals. Real engine defaults are P5.
+const DEFAULT_PRICING_15: Record<MockPricingType, Pricing15> = {
+  STANDARD: {
+    dailyRate: 200,
+    nightRate: 150,
+    morningArrivalDiscount: 50,
+    afternoonArrivalDiscount: 30,
+    eveningArrivalDiscount: 80,
+    earlyDepartureDiscount: 50,
+  },
+  SUPPORTED: {
+    dailyRate: 100,
+    nightRate: 100,
+    morningArrivalDiscount: 30,
+    afternoonArrivalDiscount: 20,
+    eveningArrivalDiscount: 50,
+    earlyDepartureDiscount: 30,
+  },
+  SURPLUS: {
+    dailyRate: 300,
+    nightRate: 200,
+    morningArrivalDiscount: 50,
+    afternoonArrivalDiscount: 30,
+    eveningArrivalDiscount: 80,
+    earlyDepartureDiscount: 50,
+  },
+}
 
 const mealKey = (date: string, meal: MealType) => `${date}|${meal}`
 
 export default function EventStepper({
+  centers,
+  mode = 'create',
   initial,
 }: {
+  centers: CenterOption[]
+  mode?: 'create' | 'edit'
   initial?: EventStepperInitial
 }) {
   const t = useTranslations('admin')
   const locale = useLocale()
+  const router = useRouter()
 
   const [step, setStep] = useState(0)
   const [saved, setSaved] = useState(false)
   const [didPublish, setDidPublish] = useState(false)
   const [publishModal, setPublishModal] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
-  // UI-only state
-  const [centerId, setCenterId] = useState(initial?.centerId ?? '')
+  // UI-only state (assembled into the POST payload on save).
   const [pricing15, setPricing15] = useState<Record<MockPricingType, Pricing15>>({
-    STANDARD: emptyPricing15(),
-    SUPPORTED: emptyPricing15(),
-    SURPLUS: emptyPricing15(),
+    STANDARD: { ...DEFAULT_PRICING_15.STANDARD },
+    SUPPORTED: { ...DEFAULT_PRICING_15.SUPPORTED },
+    SURPLUS: { ...DEFAULT_PRICING_15.SURPLUS },
   })
   const [mealEdits, setMealEdits] = useState<Record<string, MealEdit>>({})
 
@@ -136,10 +166,11 @@ export default function EventStepper({
       EventCreateInput
     >,
     defaultValues: {
+      centerId: initial?.centerId ?? '',
       title_cs: initial?.title_cs ?? '',
       title_en: initial?.title_en ?? '',
-      subtitle_cs: initial?.subtitle_cs ?? '',
-      subtitle_en: initial?.subtitle_en ?? '',
+      description_cs: initial?.description_cs ?? '',
+      description_en: initial?.description_en ?? '',
       contactName: initial?.contactName ?? '',
       contactPhone: initial?.contactPhone ?? '',
       contactEmail: initial?.contactEmail ?? '',
@@ -160,12 +191,12 @@ export default function EventStepper({
   )
 
   const sortedCenters = useMemo(
-    () => [...mockCenters].sort((a, b) => a.name_cs.localeCompare(b.name_cs, 'cs')),
-    [],
+    () => [...centers].sort((a, b) => a.name_cs.localeCompare(b.name_cs, 'cs')),
+    [centers],
   )
 
-  // Start date cannot be in the past (not expressible in the frozen schema, so
-  // enforced here + via the input's min).
+  // Start date cannot be in the past (not expressible in the schema, so enforced
+  // here + via the input's min).
   const startInPast = startDate !== '' && startDate < todayISO()
 
   function getMeal(date: string, meal: MealType): MealEdit {
@@ -192,11 +223,77 @@ export default function EventStepper({
     return t('eventForm.errors.required')
   }
 
-  const onValid = () => {
-    // B6 scope: validate only — do NOT POST and do NOT persist (mirrors B5).
-    // TODO(B7): POST to /api/admin/events; set Event.createdBy from the session
-    // (never the request body); persist center, days, pricing and meal drafts.
-    setSaved(true)
+  // Assemble the full create payload: validated scalars + derived dates + the
+  // 15+ pricing rows (plus the locked STANDARD/0 child rows) + per-day meals.
+  function buildPayload(data: EventCreateInput) {
+    return {
+      ...data,
+      dates: days.map((d, i) => ({
+        date: d.date,
+        label_cs: d.label_cs,
+        label_en: d.label_en,
+        sortOrder: i + 1,
+      })),
+      pricingRules: [
+        ...CHILD_AGES.map((age) => ({
+          ageCategory: age,
+          pricingType: 'STANDARD' as const,
+          dailyRate: 0,
+          nightRate: 0,
+          morningArrivalDiscount: 0,
+          afternoonArrivalDiscount: 0,
+          eveningArrivalDiscount: 0,
+          earlyDepartureDiscount: 0,
+        })),
+        ...PRICING_TYPES.map((type) => ({
+          ageCategory: 'AGE_15_PLUS' as const,
+          pricingType: type,
+          ...pricing15[type],
+        })),
+      ],
+      meals: days.flatMap((d) =>
+        MEAL_TYPES.map((meal) => {
+          const m = getMeal(d.date, meal)
+          return { date: d.date, mealType: meal, price: m.price, isClosed: m.excluded }
+        }),
+      ),
+    }
+  }
+
+  const onValid = async (data: EventCreateInput) => {
+    if (mode === 'edit') {
+      // Edit persistence (PUT) is deferred — validate only (no POST). The list
+      // links here only for DRAFT/PUBLISHED; real update lands in a later phase.
+      setSaved(true)
+      return
+    }
+
+    setSubmitError(null)
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/admin/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildPayload(data)),
+      })
+      if (res.status === 201) {
+        router.push(`/${locale}/admin/events`)
+        router.refresh()
+        return
+      }
+      if (res.status === 403) {
+        setSubmitError(t('eventForm.errors.forbidden'))
+        setStep(0)
+      } else if (res.status === 422) {
+        setSubmitError(t('eventForm.validationError'))
+      } else {
+        setSubmitError(t('eventForm.errors.submitFailed'))
+      }
+    } catch {
+      setSubmitError(t('eventForm.errors.submitFailed'))
+    } finally {
+      setSubmitting(false)
+    }
   }
   const onInvalid = (errs: FieldErrors<EventFormValues>) => {
     const steps = Object.keys(errs).map(
@@ -240,6 +337,7 @@ export default function EventStepper({
   }
 
   const values = watch()
+  const selectedCenter = sortedCenters.find((c) => c.id === values.centerId)
 
   return (
     <div className="space-y-6">
@@ -271,16 +369,8 @@ export default function EventStepper({
         <section className="section-card space-y-5">
           <StepHeading>{t('eventForm.steps.basic')}</StepHeading>
 
-          <div>
-            <label htmlFor="ev-center" className="form-label">
-              {t('eventForm.fields.center')}
-            </label>
-            <select
-              id="ev-center"
-              className="bdc-input"
-              value={centerId}
-              onChange={(e) => setCenterId(e.target.value)}
-            >
+          <TextField label={t('eventForm.fields.center')} error={fieldError('centerId')}>
+            <select className="bdc-input" {...register('centerId')}>
               <option value="">—</option>
               {sortedCenters.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -288,7 +378,7 @@ export default function EventStepper({
                 </option>
               ))}
             </select>
-          </div>
+          </TextField>
 
           <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2">
             <TextField label={t('eventForm.fields.title_cs')} error={fieldError('title_cs')}>
@@ -298,10 +388,10 @@ export default function EventStepper({
               <input className="bdc-input" {...register('title_en')} />
             </TextField>
             <TextField label={t('eventForm.fields.description_cs')}>
-              <textarea rows={2} className="bdc-input" {...register('subtitle_cs')} />
+              <textarea rows={2} className="bdc-input" {...register('description_cs')} />
             </TextField>
             <TextField label={t('eventForm.fields.description_en')}>
-              <textarea rows={2} className="bdc-input" {...register('subtitle_en')} />
+              <textarea rows={2} className="bdc-input" {...register('description_en')} />
             </TextField>
             <TextField label={t('eventForm.fields.contactName')}>
               <input className="bdc-input" {...register('contactName')} />
@@ -382,7 +472,7 @@ export default function EventStepper({
         </section>
       )}
 
-      {/* ── Step 3 · Pricing (UI state; engine + defaults in B7) ── */}
+      {/* ── Step 3 · Pricing (UI state; engine + defaults in P5) ── */}
       {step === 2 && (
         <section className="section-card space-y-6">
           <StepHeading>{t('eventForm.steps.pricing')}</StepHeading>
@@ -555,18 +645,12 @@ export default function EventStepper({
           <PreviewBlock title={t('eventForm.preview.basic')}>
             <PreviewRow
               label={t('eventForm.fields.center')}
-              value={
-                sortedCenters.find((c) => c.id === centerId)
-                  ? locale === 'cs'
-                    ? sortedCenters.find((c) => c.id === centerId)!.name_cs
-                    : sortedCenters.find((c) => c.id === centerId)!.name_en
-                  : ''
-              }
+              value={selectedCenter ? (locale === 'cs' ? selectedCenter.name_cs : selectedCenter.name_en) : ''}
             />
             <PreviewRow label={t('eventForm.fields.title_cs')} value={values.title_cs} />
             <PreviewRow label={t('eventForm.fields.title_en')} value={values.title_en} />
-            <PreviewRow label={t('eventForm.fields.description_cs')} value={values.subtitle_cs} />
-            <PreviewRow label={t('eventForm.fields.description_en')} value={values.subtitle_en} />
+            <PreviewRow label={t('eventForm.fields.description_cs')} value={values.description_cs} />
+            <PreviewRow label={t('eventForm.fields.description_en')} value={values.description_en} />
             <PreviewRow label={t('eventForm.fields.contactName')} value={values.contactName} />
             <PreviewRow label={t('eventForm.fields.contactPhone')} value={values.contactPhone} />
             <PreviewRow label={t('eventForm.fields.contactEmail')} value={values.contactEmail} />
@@ -647,18 +731,25 @@ export default function EventStepper({
               </ul>
             </div>
           )}
+          {submitError && (
+            <div className="rounded-lg border border-danger-500/40 bg-danger-50 p-4">
+              <p className="text-sm font-semibold text-danger-700">{submitError}</p>
+            </div>
+          )}
           <div className="flex flex-col gap-3 sm:flex-row">
             <button
               type="button"
               onClick={() => attemptSave(false)}
-              className="btn-secondary"
+              disabled={submitting}
+              className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t('eventForm.save')}
             </button>
             <button
               type="button"
               onClick={() => attemptSave(true)}
-              className="btn-primary"
+              disabled={submitting}
+              className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t('eventForm.saveAndPublish')}
             </button>

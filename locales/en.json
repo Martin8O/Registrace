@@ -51,7 +51,9 @@
       "email": "Enter a valid email address",
       "fullName": "Name must be at least 2 characters",
       "gdpr": "Consent is required to continue",
-      "required": "This field is required"
+      "required": "This field is required",
+      "submit": "The registration could not be submitted. Please try again.",
+      "capacity": "The event is already at full capacity."
     },
     "gdprModal": {
       "title": "Personal data protection",
@@ -74,6 +76,7 @@
   "home": {
     "heading": "DWB Event Registration",
     "subheading": "Click on the event name to open registration.",
+    "homeButton": "Home",
     "openRegistration": "Register"
   },
   "badge": {
@@ -222,6 +225,7 @@
       },
       "fields": {
         "center": "Center",
+        "centerId": "Center",
         "title_cs": "Title (CZ)",
         "title_en": "Title (EN)",
         "description_cs": "Description (CZ)",
@@ -283,7 +287,9 @@
         "endDate": "End date must be on or after the start date",
         "startInPast": "Start date cannot be in the past",
         "date": "Invalid date",
-        "maxRegistrations": "Must be a positive whole number"
+        "maxRegistrations": "Must be a positive whole number",
+        "forbidden": "You are not allowed to create events for this centre.",
+        "submitFailed": "Saving failed. Please try again."
       }
     },
     "registrations": {

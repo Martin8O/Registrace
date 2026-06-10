@@ -16,6 +16,16 @@ At the start of every new session, before any other action:
 3. Confirm the current active prompt with the user before executing it.
 4. Consult other `local/` files only when you need deeper detail (index below).
 
+## Memory directory (OVERRIDE — project-local, not user-profile)
+All memory files for this project live in **`local/wiki/`** (gitignored, copied manually
+when moving to a new machine). This overrides the default Claude Code auto-memory path
+(`C:\Users\…\.claude\projects\…\memory\`).
+
+- **Index:** `local/wiki/MEMORY.md` — one-line pointer per memory file.
+- **Reads:** always look up memories from `local/wiki/`.
+- **Writes:** always write new memory files to `local/wiki/` and update `local/wiki/MEMORY.md`.
+- Never write project memory to the user-profile path (`C:\Users\svobo\.claude\…`).
+
 ## Where things live (`local/` — gitignored, never pushed)
 `local/` is Claude Code's internal workspace (notes, wiki, session state).
 - `SESSION_BOOTSTRAP.md` — **read every session**: current state, invariants, build progress.
@@ -24,6 +34,7 @@ At the start of every new session, before any other action:
 - `CLAUDE - ALL PROMPTS.md` — canonical build guide B1–B8 + P1–P8 (source of the next prompt).
 - `Prompts requirements.md` — how prompts must be structured (5 blocks, definition-of-done).
 - `Step B*.md` — finalized, ready-to-run prompts per phase (incl. full B4.5 token spec).
+- `wiki/` — project memory files (MEMORY.md index + individual memory files).
 
 Build history (committed, repo root): `DEVELOPMENT_HISTORY.md` (CZ) + `DEVELOPMENT_HISTORY_en.md`
 (EN) — full chronological per-milestone log.
@@ -84,5 +95,7 @@ Keep these distinct — different UI elements, never merge one into the other:
 ## Current status & frozen files
 - Build phase, progress, and the milestone log are owned by `local/SESSION_BOOTSTRAP.md` (§B)
   and `DEVELOPMENT_HISTORY*.md`. Read them for current state — **do not restate status here.**
-- **Frozen until B7 — do NOT modify:** `prisma/schema.prisma`, `lib/validation/*`, `app/api/*`.
-  (`lib/mock/*` is presentation scaffolding and may evolve with the UI.)
+- **Schema/validation/API unfrozen as of B7** — `prisma/schema.prisma`, `lib/validation/*`,
+  and `app/api/*` are now live and editable. Change the schema only via a Prisma migration
+  (driver-adapter pattern; `DIRECT_URL` for migrate). (`lib/mock/*` is presentation scaffolding
+  still imported by the not-yet-wired admin pages — left until their P-phase wiring.)

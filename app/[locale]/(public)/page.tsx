@@ -1,16 +1,16 @@
 import Link from 'next/link'
 import { getTranslations } from 'next-intl/server'
-import { mockEvents, type MockEvent } from '@/lib/mock/events'
+import { getPublishedEvents, type EventStatusValue } from '@/modules/events'
 import { formatDateRangeShort } from '@/lib/utils/formatDate'
 
-const badgeVariants: Record<MockEvent['status'], string> = {
+const badgeVariants: Record<EventStatusValue, string> = {
   PUBLISHED: 'bg-gold-100 text-gold-800 border border-gold-300',
   DRAFT: 'bg-muted-bg text-muted-fg border border-muted-border',
   CLOSED: 'bg-neutral-200 text-neutral-600 border border-neutral-300',
   ARCHIVED: 'bg-neutral-200 text-neutral-600 border border-neutral-300',
 }
 
-const badgeLabelKey: Record<MockEvent['status'], string> = {
+const badgeLabelKey: Record<EventStatusValue, string> = {
   PUBLISHED: 'published',
   DRAFT: 'draft',
   CLOSED: 'closed',
@@ -26,7 +26,7 @@ export default async function HomePage({
   const t = await getTranslations('home')
   const tBadge = await getTranslations('badge')
 
-  const publishedEvents = mockEvents.filter((e) => e.status === 'PUBLISHED')
+  const publishedEvents = await getPublishedEvents()
 
   return (
     <div className="max-w-public mx-auto px-5 md:px-8 pt-4 md:pt-6 pb-10 md:pb-14">
@@ -42,6 +42,7 @@ export default async function HomePage({
         {publishedEvents.map((event) => {
           const title = locale === 'cs' ? event.title_cs : event.title_en
           const subtitle = locale === 'cs' ? event.subtitle_cs : event.subtitle_en
+          const centerName = locale === 'cs' ? event.center.name_cs : event.center.name_en
           const dateRange = formatDateRangeShort(event.startDate, event.endDate)
 
           return (
@@ -51,7 +52,7 @@ export default async function HomePage({
                   href={`/${locale}/events/${event.id}`}
                   className="font-serif text-2xl font-semibold text-neutral-900 hover:text-primary-600 transition"
                 >
-                  {event.center.name} — {title}
+                  {centerName} — {title}
                   <span className="ml-2.5">{dateRange}</span>
                 </Link>
                 <div className="h-0.5 w-10 bg-primary-500 mt-2 rounded" />

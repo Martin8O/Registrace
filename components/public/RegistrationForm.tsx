@@ -105,9 +105,6 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
     return map
   }, [dates, locale])
 
-  const firstDateId = sortedDates[0]?.id ?? ''
-  const lastDateId = sortedDates[sortedDates.length - 1]?.id ?? ''
-
   const {
     register,
     control,
@@ -127,10 +124,12 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
       RegistrationSubmitInput
     >,
     defaultValues: {
+      // Stay fields start unselected — the user must actively choose them
+      // (earlyDeparture keeps NONE: "no early departure" is a true default).
       eventId,
-      arrivalDateId: firstDateId,
-      arrivalTime: 'MORNING',
-      departureDateId: lastDateId,
+      arrivalDateId: '',
+      arrivalTime: undefined,
+      departureDateId: '',
       earlyDeparture: 'NONE',
       hasAccommodation: false,
       honeypot: '',
@@ -147,6 +146,7 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
   const [price, setPrice] = useState<PriceResponse | null>(null)
   const [priceLoading, setPriceLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [submitError, setSubmitError] = useState<'submit' | 'capacity' | null>(null)
   const [gdprOpen, setGdprOpen] = useState(false)
 
   // idempotencyKey (invariant 14): generated client-side on mount to avoid an
@@ -170,6 +170,34 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
       ),
     [arrivalDateId, arrivalTime, departureDateId, earlyDeparture, dates, meals],
   )
+
+  // ─── Stay-order constraints ───
+  // Departure can never precede arrival; a same-day visit cannot arrive in the
+  // evening; "after breakfast" departure on a same-day visit needs a morning
+  // arrival. Impossible pills are disabled below, and this effect clears a
+  // selection that a later change invalidated. The server re-checks all of it.
+  const orderById = useMemo(() => new Map(dates.map((d) => [d.id, d.sortOrder])), [dates])
+  const arrivalOrder = orderById.get(arrivalDateId)
+  const departureOrder = orderById.get(departureDateId)
+  const sameDay = arrivalOrder !== undefined && arrivalOrder === departureOrder
+
+  useEffect(() => {
+    if (arrivalOrder === undefined || departureOrder === undefined) return
+    if (
+      departureOrder < arrivalOrder ||
+      (departureOrder === arrivalOrder && arrivalTime === 'EVENING')
+    ) {
+      setValue('departureDateId', '', { shouldDirty: true })
+      return
+    }
+    if (
+      departureOrder === arrivalOrder &&
+      earlyDeparture === 'AFTER_BREAKFAST' &&
+      arrivalTime !== 'MORNING'
+    ) {
+      setValue('earlyDeparture', 'NONE', { shouldDirty: true })
+    }
+  }, [arrivalOrder, departureOrder, arrivalTime, earlyDeparture, setValue])
 
   // When the stay changes, drop any now-unavailable meal from every participant
   // so form state never holds a meal the person isn't present for.
@@ -241,9 +269,24 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
     )
   }
 
-  const onSubmit = () => {
-    // B5 scope: do NOT POST to /api/registration/submit (wired in B7).
-    setSubmitted(true)
+  // POST the resolver's validated output (incl. idempotencyKey + honeypot) —
+  // the server recomputes all prices; nothing price-related is sent (inv. 3–4).
+  const onSubmit = async (data: RegistrationSubmitInput) => {
+    setSubmitError(null)
+    try {
+      const res = await fetch('/api/registration/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (res.ok) {
+        setSubmitted(true)
+        return
+      }
+      setSubmitError(res.status === 409 ? 'capacity' : 'submit')
+    } catch {
+      setSubmitError('submit')
+    }
   }
 
   const totalPrice = price?.totalPrice ?? 0
@@ -274,6 +317,9 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
               labelFor={(id) => dateLabelById[id] ?? id}
               register={register}
             />
+            {errors.arrivalDateId && (
+              <p className="mt-1 text-sm text-danger-600">{t('errors.required')}</p>
+            )}
           </Field>
           <Field label={t('arrival_time')}>
             <PillRadioGroup
@@ -281,7 +327,11 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
               options={ARRIVAL_TIMES}
               labelFor={(v) => t(arrivalLabelKey[v] ?? v)}
               register={register}
+              isDisabled={(v) => v === 'EVENING' && sameDay}
             />
+            {errors.arrivalTime && (
+              <p className="mt-1 text-sm text-danger-600">{t('errors.required')}</p>
+            )}
           </Field>
           <Field label={t('departure_date')}>
             <PillRadioGroup
@@ -289,7 +339,17 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
               options={sortedDates.map((d) => d.id)}
               labelFor={(id) => dateLabelById[id] ?? id}
               register={register}
+              isDisabled={(id) => {
+                if (arrivalOrder === undefined) return false
+                const order = orderById.get(id)
+                if (order === undefined) return false
+                if (order < arrivalOrder) return true
+                return order === arrivalOrder && arrivalTime === 'EVENING'
+              }}
             />
+            {errors.departureDateId && (
+              <p className="mt-1 text-sm text-danger-600">{t('errors.required')}</p>
+            )}
           </Field>
           <Field label={t('early_departure')}>
             <PillRadioGroup
@@ -297,6 +357,9 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
               options={EARLY_DEPARTURE}
               labelFor={(v) => t(earlyLabelKey[v] ?? v)}
               register={register}
+              isDisabled={(v) =>
+                v === 'AFTER_BREAKFAST' && sameDay && arrivalTime !== 'MORNING'
+              }
             />
           </Field>
           <Field label={t('accommodation')}>
@@ -552,6 +615,9 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
         >
           {t('register')}
         </button>
+        {submitError && (
+          <p className="mt-3 text-sm text-danger-600">{t(`errors.${submitError}`)}</p>
+        )}
       </section>
 
       {/* Sticky running total on mobile */}
@@ -634,24 +700,28 @@ function PillRadioGroup({
   labelFor,
   register,
   onPick,
+  isDisabled,
 }: {
   name: FieldPath<RegistrationFormValues>
   options: readonly string[]
   labelFor: (value: string) => string
   register: UseFormRegister<RegistrationFormValues>
   onPick?: (value: string) => void
+  isDisabled?: (value: string) => boolean
 }) {
   return (
     <div className="flex flex-wrap gap-2">
       {options.map((opt) => {
         const domId = `${name}-${opt}`
         const reg = register(name)
+        const disabled = isDisabled?.(opt) ?? false
         return (
           <div key={opt}>
             <input
               type="radio"
               id={domId}
               value={opt}
+              disabled={disabled}
               className="peer sr-only"
               {...reg}
               onChange={(e) => {
@@ -659,7 +729,12 @@ function PillRadioGroup({
                 onPick?.(opt)
               }}
             />
-            <label htmlFor={domId} className="pill-label cursor-pointer">
+            <label
+              htmlFor={domId}
+              className={`pill-label ${
+                disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+              }`}
+            >
               {labelFor(opt)}
             </label>
           </div>

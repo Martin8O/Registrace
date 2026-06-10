@@ -45,10 +45,8 @@ enum MealType {
 }
 
 enum RegistrationStatus {
-  PENDING
-  CONFIRMED
+  REGISTERED
   CANCELLED
-  WAITLIST
 }
 
 enum UserRole {
@@ -91,6 +89,7 @@ model Center {
 
   registrations Registration[]
   admins        UserCenter[]
+  events        Event[]
 }
 
 model Event {
@@ -99,11 +98,14 @@ model Event {
   title_en         String
   subtitle_cs      String?
   subtitle_en      String?
+  description_cs   String?
+  description_en   String?
   contactName      String?
   contactPhone     String?
   contactEmail     String?
   status           EventStatus @default(DRAFT)
   maxRegistrations Int?
+  centerId         String
   startDate        DateTime
   endDate          DateTime
   createdBy        String?     @db.Uuid
@@ -112,6 +114,7 @@ model Event {
   deletedAt        DateTime?
 
   creator       User?          @relation(fields: [createdBy], references: [id])
+  center        Center         @relation(fields: [centerId], references: [id])
   dates         EventDate[]
   pricingRules  PricingRule[]
   meals         EventMeal[]
@@ -120,6 +123,7 @@ model Event {
   @@index([status])
   @@index([startDate])
   @@index([createdBy])
+  @@index([centerId])
 }
 
 model EventDate {
@@ -188,7 +192,7 @@ model Registration {
   email              String
   gdprConsent        Boolean            @default(false)
   totalPrice         Int                @default(0)
-  status             RegistrationStatus @default(PENDING)
+  status             RegistrationStatus @default(REGISTERED)
   idempotencyKey     String?            @unique
   confirmationSentAt DateTime?
   createdAt          DateTime           @default(now())
