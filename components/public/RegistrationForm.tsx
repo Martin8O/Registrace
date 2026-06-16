@@ -281,6 +281,8 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
       })
       if (res.ok) {
         setSubmitted(true)
+        // The success panel is much shorter than the form — bring it into view.
+        window.scrollTo({ top: 0, behavior: 'smooth' })
         return
       }
       setSubmitError(res.status === 409 ? 'capacity' : 'submit')

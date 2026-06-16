@@ -190,10 +190,9 @@ export default function EventStepper({
     [startDate, endDate],
   )
 
-  const sortedCenters = useMemo(
-    () => [...centers].sort((a, b) => a.name_cs.localeCompare(b.name_cs, 'cs')),
-    [centers],
-  )
+  // Keep the server's sortOrder (same as the public form's centre dropdown):
+  // alphabetical with the special entries "Jiné" / "Mimo ČR" pinned last.
+  const sortedCenters = centers
 
   // Start date cannot be in the past (not expressible in the schema, so enforced
   // here + via the input's min).

@@ -3,12 +3,15 @@
 import { useState } from 'react'
 import { useTranslations } from 'next-intl'
 import PricingModal from './PricingModal'
+import type { EventMealDTO, PricingRuleDTO } from '@/modules/events'
 
 type Props = {
   className?: string
+  meals: EventMealDTO[]
+  pricingRules: PricingRuleDTO[]
 }
 
-export default function PricingInfoButton({ className }: Props) {
+export default function PricingInfoButton({ className, meals, pricingRules }: Props) {
   const [open, setOpen] = useState(false)
   const t = useTranslations('event')
 
@@ -21,7 +24,12 @@ export default function PricingInfoButton({ className }: Props) {
       >
         {t('pricingInfo')}
       </button>
-      <PricingModal isOpen={open} onClose={() => setOpen(false)} />
+      <PricingModal
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        meals={meals}
+        pricingRules={pricingRules}
+      />
     </>
   )
 }

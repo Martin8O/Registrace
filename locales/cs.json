@@ -206,8 +206,8 @@
       "prev": "Zpět",
       "save": "Uložit akci",
       "saveAndPublish": "Uložit a publikovat",
-      "saveSuccess": "Akce ověřena — ukládání bude propojeno v B7.",
-      "publishSuccess": "Akce ověřena a připravena k publikaci — ukládání bude propojeno v B7.",
+      "saveSuccess": "Akce ověřena — ukládání úprav bude propojeno v další fázi.",
+      "publishSuccess": "Akce ověřena a připravena k publikaci — ukládání úprav bude propojeno v další fázi.",
       "validationError": "Opravte prosím označená pole.",
       "errorsTitle": "Formulář obsahuje chyby:",
       "publishConfirmTitle": "Publikovat akci?",
@@ -257,7 +257,7 @@
         "selectDates": "Nejprve zvolte datum začátku a konce."
       },
       "pricing": {
-        "intro": "Cenová pravidla se sbírají jako UI stav (ukládání v B7).",
+        "intro": "Cenová pravidla se uloží spolu s akcí.",
         "ageCategory": "Věková kategorie",
         "pricingType": "Typ ceny",
         "lockedZeroNote": "Děti 0–14 mají denní sazbu vždy 0 (neměnné pravidlo)."
@@ -271,7 +271,7 @@
         "excluded": "Není v nabídce"
       },
       "preview": {
-        "intro": "Zkontrolujte zadané údaje. Ukládání bude propojeno v B7.",
+        "intro": "Zkontrolujte zadané údaje.",
         "basic": "Základní údaje",
         "schedule": "Termín",
         "pricing": "Ceník",
@@ -326,9 +326,9 @@
       "participants": "Účastníci",
       "meals": "Strava",
       "save": "Uložit změny",
-      "saved": "Změny uloženy (propojení v B7).",
+      "saved": "Změny uloženy (propojení v další fázi).",
       "resend": "Znovu odeslat potvrzení",
-      "resent": "Potvrzení znovu odesláno (propojení v B7)."
+      "resent": "Potvrzení znovu odesláno (propojení v další fázi)."
     },
     "centers": {
       "title": "Centra",
@@ -336,8 +336,8 @@
       "empty": "Žádná centra.",
       "nameCs": "Název (CZ)",
       "nameEn": "Název (EN)",
-      "saved": "Uloženo (propojení v B7).",
-      "superAdminOnlyNote": "Centra vidí a upravuje pouze SUPER_ADMIN (propojení v B7).",
+      "saved": "Uloženo (propojení v další fázi).",
+      "superAdminOnlyNote": "Centra vidí a upravuje pouze SUPER_ADMIN (propojení v další fázi).",
       "noAdmins": "—",
       "table": {
         "nameCs": "Název (CZ)",
@@ -348,22 +348,22 @@
     },
     "users": {
       "title": "Uživatelé",
-      "superAdminOnlyNote": "Tuto stránku uvidí pouze SUPER_ADMIN (propojení v B7).",
+      "superAdminOnlyNote": "Tuto stránku uvidí pouze SUPER_ADMIN (propojení v další fázi).",
       "invite": "Pozvat správce",
       "inviteEmail": "E-mail",
       "inviteRole": "Role",
       "inviteCenters": "Přiřazená centra",
       "send": "Odeslat pozvánku",
-      "invited": "Pozvánka připravena (propojení v B7).",
+      "invited": "Pozvánka připravena (propojení v další fázi).",
       "edit": "Upravit",
       "editTitle": "Upravit uživatele",
       "role": "Role",
       "centers": "Přiřazená centra",
       "resetPassword": "Resetovat heslo",
-      "resetDone": "Nové heslo vygenerováno (propojení v B7).",
+      "resetDone": "Nové heslo vygenerováno (propojení v další fázi).",
       "sendResetEmail": "Odeslat e-mail s resetem hesla",
-      "sentResetEmail": "E-mail s resetem hesla odeslán (propojení v B7).",
-      "saved": "Uloženo (propojení v B7).",
+      "sentResetEmail": "E-mail s resetem hesla odeslán (propojení v další fázi).",
+      "saved": "Uloženo (propojení v další fázi).",
       "empty": "Žádní uživatelé.",
       "noCenters": "—",
       "allCenters": "Všechna centra",
@@ -381,11 +381,11 @@
       "currentEmail": "Přihlašovací e-mail",
       "newEmail": "Nový e-mail",
       "changeEmail": "Změnit e-mail",
-      "emailSaved": "E-mail aktualizován (propojení v B7).",
+      "emailSaved": "E-mail aktualizován (propojení v další fázi).",
       "newPassword": "Nové heslo",
       "confirmPassword": "Potvrzení hesla",
       "changePassword": "Změnit heslo",
-      "passwordSaved": "Heslo změněno (propojení v B7).",
+      "passwordSaved": "Heslo změněno (propojení v další fázi).",
       "passwordMismatch": "Hesla se neshodují."
     }
   }

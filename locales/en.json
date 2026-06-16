@@ -206,8 +206,8 @@
       "prev": "Back",
       "save": "Save event",
       "saveAndPublish": "Save and publish",
-      "saveSuccess": "Event validated — saving wired in B7.",
-      "publishSuccess": "Event validated and ready to publish — saving wired in B7.",
+      "saveSuccess": "Event validated — saving edits will be wired in a later phase.",
+      "publishSuccess": "Event validated and ready to publish — saving edits will be wired in a later phase.",
       "validationError": "Please fix the highlighted fields.",
       "errorsTitle": "The form has errors:",
       "publishConfirmTitle": "Publish event?",
@@ -257,7 +257,7 @@
         "selectDates": "First choose a start and end date."
       },
       "pricing": {
-        "intro": "Pricing rules are collected as UI state (saved in B7).",
+        "intro": "Pricing rules are saved with the event.",
         "ageCategory": "Age category",
         "pricingType": "Price type",
         "lockedZeroNote": "Children 0–14 always have a daily rate of 0 (fixed rule)."
@@ -271,7 +271,7 @@
         "excluded": "Not offered"
       },
       "preview": {
-        "intro": "Review the entered data. Saving will be wired in B7.",
+        "intro": "Review the entered data.",
         "basic": "Basic info",
         "schedule": "Schedule",
         "pricing": "Pricing",
@@ -326,9 +326,9 @@
       "participants": "Participants",
       "meals": "Meals",
       "save": "Save changes",
-      "saved": "Changes saved (wired in B7).",
+      "saved": "Changes saved (wired in a later phase).",
       "resend": "Resend confirmation",
-      "resent": "Confirmation resent (wired in B7)."
+      "resent": "Confirmation resent (wired in a later phase)."
     },
     "centers": {
       "title": "Centers",
@@ -336,8 +336,8 @@
       "empty": "No centers.",
       "nameCs": "Name (CZ)",
       "nameEn": "Name (EN)",
-      "saved": "Saved (wired in B7).",
-      "superAdminOnlyNote": "Only SUPER_ADMIN sees and edits centers (wired in B7).",
+      "saved": "Saved (wired in a later phase).",
+      "superAdminOnlyNote": "Only SUPER_ADMIN sees and edits centers (wired in a later phase).",
       "noAdmins": "—",
       "table": {
         "nameCs": "Name (CZ)",
@@ -348,22 +348,22 @@
     },
     "users": {
       "title": "Users",
-      "superAdminOnlyNote": "Only SUPER_ADMIN will see this page (wired in B7).",
+      "superAdminOnlyNote": "Only SUPER_ADMIN will see this page (wired in a later phase).",
       "invite": "Invite admin",
       "inviteEmail": "Email",
       "inviteRole": "Role",
       "inviteCenters": "Assigned centers",
       "send": "Send invite",
-      "invited": "Invite prepared (wired in B7).",
+      "invited": "Invite prepared (wired in a later phase).",
       "edit": "Edit",
       "editTitle": "Edit user",
       "role": "Role",
       "centers": "Assigned centers",
       "resetPassword": "Reset password",
-      "resetDone": "New password generated (wired in B7).",
+      "resetDone": "New password generated (wired in a later phase).",
       "sendResetEmail": "Send password-reset email",
-      "sentResetEmail": "Password-reset email sent (wired in B7).",
-      "saved": "Saved (wired in B7).",
+      "sentResetEmail": "Password-reset email sent (wired in a later phase).",
+      "saved": "Saved (wired in a later phase).",
       "empty": "No users.",
       "noCenters": "—",
       "allCenters": "All centers",
@@ -381,11 +381,11 @@
       "currentEmail": "Sign-in email",
       "newEmail": "New email",
       "changeEmail": "Change email",
-      "emailSaved": "Email updated (wired in B7).",
+      "emailSaved": "Email updated (wired in a later phase).",
       "newPassword": "New password",
       "confirmPassword": "Confirm password",
       "changePassword": "Change password",
-      "passwordSaved": "Password changed (wired in B7).",
+      "passwordSaved": "Password changed (wired in a later phase).",
       "passwordMismatch": "Passwords do not match."
     }
   }

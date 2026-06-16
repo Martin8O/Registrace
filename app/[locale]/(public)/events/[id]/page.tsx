@@ -59,7 +59,7 @@ export default async function EventPage({
         <span className={`badge ${badgeVariants[event.status]}`}>
           {tBadge(badgeLabelKey[event.status])}
         </span>
-        <PricingInfoButton />
+        <PricingInfoButton meals={event.meals} pricingRules={event.pricingRules} />
       </div>
 
       <RegistrationForm

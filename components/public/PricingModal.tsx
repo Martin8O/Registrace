@@ -1,10 +1,13 @@
 'use client'
 
 import { useTranslations } from 'next-intl'
+import type { EventMealDTO, PricingRuleDTO } from '@/modules/events'
 
 type Props = {
   isOpen: boolean
   onClose: () => void
+  meals: EventMealDTO[]
+  pricingRules: PricingRuleDTO[]
 }
 
 type PricingRow = {
@@ -12,25 +15,39 @@ type PricingRow = {
   value: string
 }
 
-export default function PricingModal({ isOpen, onClose }: Props) {
+export default function PricingModal({ isOpen, onClose, meals, pricingRules }: Props) {
   const t = useTranslations('event.pricingModal')
 
   if (!isOpen) return null
 
-  const rows: PricingRow[] = [
-    { label: t('breakfast'), value: '80 CZK' },
-    { label: t('lunch'), value: '120 CZK' },
-    { label: t('dinner'), value: '120 CZK' },
-    { label: t('dailyRate.age03'), value: '0 CZK' },
-    { label: t('dailyRate.age47'), value: '0 CZK' },
-    { label: t('dailyRate.age814'), value: '0 CZK' },
-    { label: t('dailyRate.age15standard'), value: '100 CZK' },
-    { label: t('dailyRate.age15supported'), value: '30 CZK' },
-    { label: t('dailyRate.age15surplus'), value: '200 CZK' },
-    { label: t('eveningArrivalDiscount'), value: '100 CZK' },
-    { label: t('earlyDepartureDiscount'), value: '100 CZK' },
-    { label: t('pricePerNight'), value: '0 CZK' },
-  ]
+  // Informational overview only (invariant 3) — one representative price per
+  // meal type (first open slot), discounts/night from the 15+ STANDARD rule.
+  const mealPrice = (type: string): number | undefined => {
+    const slot =
+      meals.find((m) => m.mealType === type && !m.isClosed) ??
+      meals.find((m) => m.mealType === type)
+    return slot?.price
+  }
+  const rule = (age: string, type = 'STANDARD'): PricingRuleDTO | undefined =>
+    pricingRules.find((r) => r.ageCategory === age && r.pricingType === type)
+  const std15 = rule('AGE_15_PLUS')
+
+  const rows: PricingRow[] = []
+  const push = (label: string, value: number | undefined): void => {
+    if (value !== undefined) rows.push({ label, value: `${value} CZK` })
+  }
+  push(t('breakfast'), mealPrice('BREAKFAST'))
+  push(t('lunch'), mealPrice('LUNCH'))
+  push(t('dinner'), mealPrice('DINNER'))
+  push(t('dailyRate.age03'), rule('AGE_0_3')?.dailyRate)
+  push(t('dailyRate.age47'), rule('AGE_4_7')?.dailyRate)
+  push(t('dailyRate.age814'), rule('AGE_8_14')?.dailyRate)
+  push(t('dailyRate.age15standard'), std15?.dailyRate)
+  push(t('dailyRate.age15supported'), rule('AGE_15_PLUS', 'SUPPORTED')?.dailyRate)
+  push(t('dailyRate.age15surplus'), rule('AGE_15_PLUS', 'SURPLUS')?.dailyRate)
+  push(t('eveningArrivalDiscount'), std15?.eveningArrivalDiscount)
+  push(t('earlyDepartureDiscount'), std15?.earlyDepartureDiscount)
+  push(t('pricePerNight'), std15?.nightRate)
 
   return (
     <div
