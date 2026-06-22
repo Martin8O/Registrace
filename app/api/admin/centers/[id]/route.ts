@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSuperAdmin } from "@/app/api/_lib/guard";
+import { validationError } from "@/app/api/_lib/http";
 import { centerUpdateSchema } from "@/lib/validation";
 import { updateCenter, setCenterActive } from "@/modules/centers";
 
-// PUT — rename a centre (name_cs/_en). SUPER_ADMIN only. 422 invalid.
+// PUT — rename a centre (name_cs/_en). SUPER_ADMIN only. 400 invalid.
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -15,7 +16,7 @@ export async function PUT(
   const body: unknown = await req.json();
   const result = centerUpdateSchema.safeParse(body);
   if (!result.success) {
-    return NextResponse.json({ errors: result.error.flatten() }, { status: 422 });
+    return validationError(result.error);
   }
 
   await updateCenter(id, result.data, guard.ctx);

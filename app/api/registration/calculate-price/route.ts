@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { validationError } from "@/app/api/_lib/http";
 import { calculatePriceSchema } from "@/lib/validation";
 import { getPublicEventForDetail } from "@/modules/events";
 import { calculatePricing } from "@/modules/pricing";
@@ -11,7 +12,7 @@ export async function POST(req: NextRequest) {
   const body: unknown = await req.json();
   const result = calculatePriceSchema.safeParse(body);
   if (!result.success) {
-    return NextResponse.json({ errors: result.error.flatten() }, { status: 422 });
+    return validationError(result.error);
   }
 
   const event = await getPublicEventForDetail(result.data.eventId);

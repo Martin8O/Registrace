@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { validationError } from "@/app/api/_lib/http";
 import { registrationSubmitSchema, type RegistrationSubmitInput } from "@/lib/validation";
 import {
   submitRegistration,
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
 
   const result = registrationSubmitSchema.safeParse(body);
   if (!result.success) {
-    return NextResponse.json({ errors: result.error.flatten() }, { status: 422 });
+    return validationError(result.error);
   }
 
   // Extract only known fields (anti-tampering) — never spread the raw body.
@@ -98,7 +99,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Event capacity reached" }, { status: 409 });
     }
     if (err instanceof RegistrationStayMismatchError) {
-      return NextResponse.json({ error: err.message }, { status: 422 });
+      // Invalid request data (ids not on this event) → 400, not 422 (P3: 422 no
+      // longer signifies anything validation-related).
+      return NextResponse.json({ error: err.message }, { status: 400 });
     }
     throw err;
   }

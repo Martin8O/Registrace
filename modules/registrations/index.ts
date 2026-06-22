@@ -30,7 +30,7 @@ export class RegistrationCapacityError extends Error {
   }
 }
 
-// Client-sent ids that don't belong to the event (tampered payload) → 422.
+// Client-sent ids that don't belong to the event (tampered payload) → 400.
 export class RegistrationStayMismatchError extends Error {
   constructor(message = "Stay dates do not belong to this event") {
     super(message);

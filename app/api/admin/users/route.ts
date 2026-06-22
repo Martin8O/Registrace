@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSuperAdmin } from "@/app/api/_lib/guard";
+import { validationError } from "@/app/api/_lib/http";
 import { userInviteSchema } from "@/lib/validation";
 import { listUsers, inviteUser, UserManagementError } from "@/modules/users";
 
@@ -13,7 +14,8 @@ export async function GET() {
 }
 
 // POST — invite a new admin (Supabase auth user + invite email + Prisma row).
-// SUPER_ADMIN only. 422 invalid payload or Supabase rejection.
+// SUPER_ADMIN only. 400 invalid payload; 422 Supabase rejection (admin-ops
+// error taxonomy is P4's to refine — see UserManagementError).
 export async function POST(req: NextRequest) {
   const guard = await requireSuperAdmin();
   if ("response" in guard) return guard.response;
@@ -21,7 +23,7 @@ export async function POST(req: NextRequest) {
   const body: unknown = await req.json();
   const result = userInviteSchema.safeParse(body);
   if (!result.success) {
-    return NextResponse.json({ errors: result.error.flatten() }, { status: 422 });
+    return validationError(result.error);
   }
 
   try {

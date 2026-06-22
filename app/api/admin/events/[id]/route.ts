@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminContext } from "@/app/api/_lib/guard";
+import { validationError } from "@/app/api/_lib/http";
 import { eventUpdateSchema } from "@/lib/validation";
 import {
   getEventForEdit,
@@ -36,7 +37,7 @@ export async function PUT(
   const body: unknown = await req.json();
   const result = eventUpdateSchema.safeParse(body);
   if (!result.success) {
-    return NextResponse.json({ errors: result.error.flatten() }, { status: 422 });
+    return validationError(result.error);
   }
 
   try {

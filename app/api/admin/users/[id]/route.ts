@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSuperAdmin } from "@/app/api/_lib/guard";
+import { validationError } from "@/app/api/_lib/http";
 import { userUpdateSchema } from "@/lib/validation";
 import { updateUser, removeUser, UserManagementError } from "@/modules/users";
 
@@ -15,7 +16,7 @@ export async function PUT(
   const body: unknown = await req.json();
   const result = userUpdateSchema.safeParse(body);
   if (!result.success) {
-    return NextResponse.json({ errors: result.error.flatten() }, { status: 422 });
+    return validationError(result.error);
   }
 
   try {

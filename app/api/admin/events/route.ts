@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminContext } from "@/app/api/_lib/guard";
+import { validationError } from "@/app/api/_lib/http";
 import { eventCreateWithRelationsSchema } from "@/lib/validation";
 import { createEvent, listAdminEvents, EventOwnershipError } from "@/modules/events";
 
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
   const body: unknown = await req.json();
   const result = eventCreateWithRelationsSchema.safeParse(body);
   if (!result.success) {
-    return NextResponse.json({ errors: result.error.flatten() }, { status: 422 });
+    return validationError(result.error);
   }
 
   try {
