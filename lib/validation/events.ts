@@ -106,6 +106,13 @@ export const centerCreateSchema = z.object({
   sortOrder: z.number().int().optional(),
 });
 
+// Centre rename (P2.5) — SUPER_ADMIN only. Names are the only editable fields
+// (isActive/sortOrder are not exposed in the admin UI).
+export const centerUpdateSchema = z.object({
+  name_cs: z.string().min(1),
+  name_en: z.string().min(1),
+});
+
 // ─── Inferred types ───────────────────────────────────────────────────────────
 
 export type EventCreateInput = z.infer<typeof eventCreateSchema>;
@@ -113,3 +120,4 @@ export type EventCreateWithRelationsInput = z.infer<typeof eventCreateWithRelati
 export type EventUpdateInput = z.infer<typeof eventUpdateSchema>;
 export type EventStatusInput = z.infer<typeof eventStatusSchema>;
 export type CenterCreateInput = z.infer<typeof centerCreateSchema>;
+export type CenterUpdateInput = z.infer<typeof centerUpdateSchema>;

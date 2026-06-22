@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireAdminContext } from "@/app/api/_lib/guard";
+import { listRegistrations } from "@/modules/registrations";
 
-// GET — admin registrations list. Stub until P2.5 (DB wiring + role/ownership
-// scoping via guard.ctx). P2 (audit H2) migrated the guard from the legacy
-// header-presence check to the real Supabase session context.
+// GET — admin registrations list, role/ownership-scoped (ADMIN: registrations on
+// their own events; SUPER_ADMIN: all). Thin handler (invariant 8).
 export async function GET() {
   const guard = await requireAdminContext();
   if ("response" in guard) return guard.response;
 
-  // TODO(P2.5): list registrations from the DB, scoped by guard.ctx (role/ownership).
-  return NextResponse.json({ data: [] });
+  const registrations = await listRegistrations(guard.ctx);
+  return NextResponse.json({ data: registrations });
 }

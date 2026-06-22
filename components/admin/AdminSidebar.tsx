@@ -6,13 +6,16 @@ import { usePathname } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import LanguageSwitcher from '@/components/shared/LanguageSwitcher'
 import LogoutButton from './LogoutButton'
+import type { AdminRole } from '@/modules/auth'
 
 type NavItem = { key: string; href: string; exact?: boolean }
 
 // Authenticated admin shell navigation. Desktop = fixed left column; mobile =
 // top bar with a hamburger that toggles a stacked drawer (keeps everything
-// inside the viewport — no horizontal scroll at 375px).
-export default function AdminSidebar() {
+// inside the viewport — no horizontal scroll at 375px). The centres + users
+// links show only for SUPER_ADMIN (role resolved server-side in the layout);
+// the pages/handlers enforce the boundary regardless, so this is UX only.
+export default function AdminSidebar({ role }: { role: AdminRole | null }) {
   const pathname = usePathname()
   const locale = useLocale()
   const t = useTranslations('admin')
@@ -23,9 +26,13 @@ export default function AdminSidebar() {
     { key: 'dashboard', href: base, exact: true },
     { key: 'events', href: `${base}/events` },
     { key: 'registrations', href: `${base}/registrations` },
-    // TODO(B7): show "centers" + "users" only to SUPER_ADMIN once role lookup exists.
-    { key: 'centers', href: `${base}/centers` },
-    { key: 'users', href: `${base}/users` },
+    // SUPER_ADMIN-only sections.
+    ...(role === 'SUPER_ADMIN'
+      ? [
+          { key: 'centers', href: `${base}/centers` },
+          { key: 'users', href: `${base}/users` },
+        ]
+      : []),
   ]
   const profileItem: NavItem = { key: 'profile', href: `${base}/profile` }
 

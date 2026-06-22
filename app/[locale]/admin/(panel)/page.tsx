@@ -1,15 +1,24 @@
 import Link from 'next/link'
-import { getLocale, getTranslations } from 'next-intl/server'
-import { mockEvents } from '@/lib/mock/events'
-import { mockRegistrations } from '@/lib/mock/registrations'
+import { redirect } from 'next/navigation'
+import { getTranslations } from 'next-intl/server'
+import { getAdminContext } from '@/modules/auth'
+import { getAdminDashboardCounts } from '@/modules/events'
 
-// Dashboard at /[locale]/admin — simple stat cards from mock data + quick links.
-export default async function AdminDashboardPage() {
+// Dashboard at /[locale]/admin — stat cards from live DB counts, scoped by role
+// (ADMIN: own events + their registrations; SUPER_ADMIN: all). Server component;
+// unauthenticated → login (also guarded at the edge by proxy.ts).
+export default async function AdminDashboardPage({
+  params,
+}: {
+  params: Promise<{ locale: string }>
+}) {
+  const { locale } = await params
+  const ctx = await getAdminContext()
+  if (!ctx) redirect(`/${locale}/admin/login`)
+
   const t = await getTranslations('admin.dashboard')
-  const locale = await getLocale()
-
-  const totalEvents = mockEvents.length
-  const totalRegistrations = mockRegistrations.length
+  const { events: totalEvents, registrations: totalRegistrations } =
+    await getAdminDashboardCounts(ctx)
   const base = `/${locale}/admin`
 
   return (

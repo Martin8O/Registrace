@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminContext } from "@/app/api/_lib/guard";
 import { eventStatusSchema } from "@/lib/validation";
+import { setEventStatus, EventNotFoundError, EventOwnershipError } from "@/modules/events";
 
-// Stub until P2.5 (DB wiring + ownership via guard.ctx). Guard migrated to the
-// real session context in P2 (audit H2).
+// PATCH — change an event's lifecycle status, ownership-scoped. 422 invalid,
+// 403 not-owner, 404 missing. Manual transition only (cron = deploy concern).
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -18,6 +19,16 @@ export async function PATCH(
     return NextResponse.json({ errors: result.error.flatten() }, { status: 422 });
   }
 
-  // TODO(P2.5): persist the status change for event `id`, enforce ownership via guard.ctx.
-  return NextResponse.json({ data: null });
+  try {
+    await setEventStatus(id, result.data.status, guard.ctx);
+    return NextResponse.json({ data: { id } });
+  } catch (err) {
+    if (err instanceof EventOwnershipError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (err instanceof EventNotFoundError) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    throw err;
+  }
 }

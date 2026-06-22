@@ -78,7 +78,20 @@ export const registrationSubmitSchema = z
   })
   .superRefine((data, ctx) => applySharedRefinements(data, ctx));
 
+// ─── Admin registration edit (P2.5) ──────────────────────────────────────────
+// Editable fields only (decision 2): registrant home centre, accommodation, and
+// status. Price is never recomputed here (P5 owns pricing); the stay days/meals
+// are immutable because existing Participant/ParticipantMeal rows reference them.
+const registrationStatusValues = ["REGISTERED", "CANCELLED"] as const;
+
+export const registrationUpdateSchema = z.object({
+  centerId: z.string().min(1),
+  hasAccommodation: z.boolean(),
+  status: z.enum(registrationStatusValues),
+});
+
 // ─── Inferred types ───────────────────────────────────────────────────────────
 
 export type CalculatePriceInput = z.infer<typeof calculatePriceSchema>;
 export type RegistrationSubmitInput = z.infer<typeof registrationSubmitSchema>;
+export type RegistrationUpdateInput = z.infer<typeof registrationUpdateSchema>;

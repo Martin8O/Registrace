@@ -4,8 +4,9 @@
 // RegistrationForm needs no changes when the pages switch from mock to DB.
 
 import { prisma } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma";
 import type { AdminContext } from "@/modules/auth";
-import type { EventCreateWithRelationsInput } from "@/lib/validation";
+import type { EventCreateWithRelationsInput, EventUpdateInput } from "@/lib/validation";
 
 // ─── DTO types (kept structurally identical to the mock scaffolding) ──────────
 
@@ -152,18 +153,19 @@ export async function getPublishedEvents(now: Date = new Date()): Promise<Publis
     }));
 }
 
-export async function getEventForDetail(id: string): Promise<EventDetailDTO | null> {
-  const event = await prisma.event.findFirst({
-    where: { id, deletedAt: null },
-    include: {
-      center: true,
-      dates: { orderBy: { sortOrder: "asc" } },
-      meals: true,
-      pricingRules: true,
-    },
-  });
-  if (!event) return null;
+// One include shape reused by the public detail read and the admin edit load,
+// so both map identically (the edit DTO just adds a couple of admin-only fields).
+const eventDetailInclude = {
+  center: true,
+  dates: { orderBy: { sortOrder: "asc" } },
+  meals: true,
+  pricingRules: true,
+} satisfies Prisma.EventInclude;
 
+type EventDetailRow = Prisma.EventGetPayload<{ include: typeof eventDetailInclude }>;
+
+// Prisma row → EventDetailDTO (the shared mapper for both reads).
+function toEventDetailDTO(event: EventDetailRow): EventDetailDTO {
   return {
     id: event.id,
     title_cs: event.title_cs,
@@ -207,6 +209,14 @@ export async function getEventForDetail(id: string): Promise<EventDetailDTO | nu
   };
 }
 
+export async function getEventForDetail(id: string): Promise<EventDetailDTO | null> {
+  const event = await prisma.event.findFirst({
+    where: { id, deletedAt: null },
+    include: eventDetailInclude,
+  });
+  return event ? toEventDetailDTO(event) : null;
+}
+
 // PUBLIC detail read (P1 audit H1): same as getEventForDetail but enforces the
 // public-visibility rule used by the list + submit, so non-PUBLISHED / past events
 // (incl. DRAFT contact PII) never leak. Returns null when not publicly visible.
@@ -224,13 +234,28 @@ export async function getPublicEventForDetail(
   return event;
 }
 
+// "Jiné" / "Mimo ČR" are pinned to the end of every picker via a deliberately
+// high sortOrder (≥ this threshold, set in the seed). Everything else — including
+// admin-created centres, which get a normal-band sortOrder (see createCenter) —
+// is shown in Czech alphabetical order by name, so new centres slot in correctly
+// instead of landing after the specials.
+const SPECIAL_SORT_ORDER_MIN = 240;
+
 export async function getCentersForSelect(): Promise<CenterDTO[]> {
   const centers = await prisma.center.findMany({
     where: { isActive: true },
-    orderBy: { sortOrder: "asc" },
-    select: { id: true, name_cs: true, name_en: true },
+    select: { id: true, name_cs: true, name_en: true, sortOrder: true },
   });
-  return centers;
+  return centers
+    .slice()
+    .sort((a, b) => {
+      const aSpecial = a.sortOrder >= SPECIAL_SORT_ORDER_MIN;
+      const bSpecial = b.sortOrder >= SPECIAL_SORT_ORDER_MIN;
+      if (aSpecial !== bSpecial) return aSpecial ? 1 : -1; // specials last
+      if (aSpecial && bSpecial) return a.sortOrder - b.sortOrder; // keep Jiné before Mimo ČR
+      return a.name_cs.localeCompare(b.name_cs, "cs"); // normals: alphabetical
+    })
+    .map(({ id, name_cs, name_en }) => ({ id, name_cs, name_en }));
 }
 
 // ─── Admin writes / scoped reads (ownership — invariant 20) ────────────────────
@@ -241,6 +266,16 @@ export class EventOwnershipError extends Error {
   constructor(message = "Center not assigned to this admin") {
     super(message);
     this.name = "EventOwnershipError";
+  }
+}
+
+// Thrown when an edit/status write targets an event that doesn't exist (or is
+// soft-deleted). Handlers map it to HTTP 404. (Ownership failures throw
+// EventOwnershipError → 403; a not-found never reveals another admin's event.)
+export class EventNotFoundError extends Error {
+  constructor(message = "Event not found") {
+    super(message);
+    this.name = "EventNotFoundError";
   }
 }
 
@@ -342,6 +377,26 @@ export async function createEvent(
   });
 }
 
+// Dashboard counts, role-scoped (invariant 20). ADMIN: only events they created
+// + the registrations on those events; SUPER_ADMIN: all. Soft-deleted rows
+// (deletedAt) are excluded on both entities.
+export async function getAdminDashboardCounts(
+  ctx: AdminContext,
+): Promise<{ events: number; registrations: number }> {
+  const ownEvents = ctx.role === "ADMIN" ? { createdBy: ctx.userId } : {};
+  const [events, registrations] = await Promise.all([
+    prisma.event.count({ where: { deletedAt: null, ...ownEvents } }),
+    prisma.registration.count({
+      where: {
+        deletedAt: null,
+        // A registration belongs to an admin iff its event is theirs.
+        event: { deletedAt: null, ...ownEvents },
+      },
+    }),
+  ]);
+  return { events, registrations };
+}
+
 // ADMIN sees only events they created; SUPER_ADMIN sees all (invariant 20).
 export async function listAdminEvents(ctx: AdminContext): Promise<AdminEventListItem[]> {
   const events = await prisma.event.findMany({
@@ -362,4 +417,81 @@ export async function listAdminEvents(ctx: AdminContext): Promise<AdminEventList
     endDate: toIsoDay(e.endDate),
     center: { id: e.center.id, name_cs: e.center.name_cs, name_en: e.center.name_en },
   }));
+}
+
+// ─── Admin event edit (P2.5 — scalar fields + status only, §0 decision 1) ──────
+
+// The edit form needs everything the detail DTO has plus a couple of admin-only
+// scalars (centerId for the read-only display, maxRegistrations for the form).
+export type EventEditDTO = EventDetailDTO & {
+  centerId: string;
+  maxRegistrations: number | null;
+};
+
+// Load an event for editing, ownership-scoped. Returns null when the event is
+// missing OR (for an ADMIN) owned by someone else — the edit page maps null to
+// notFound(), which also avoids confirming another admin's event exists.
+export async function getEventForEdit(
+  id: string,
+  ctx: AdminContext,
+): Promise<EventEditDTO | null> {
+  const event = await prisma.event.findFirst({
+    where: { id, deletedAt: null },
+    include: eventDetailInclude,
+  });
+  if (!event) return null;
+  if (ctx.role === "ADMIN" && event.createdBy !== ctx.userId) return null;
+  return { ...toEventDetailDTO(event), centerId: event.centerId, maxRegistrations: event.maxRegistrations };
+}
+
+// Re-fetch an event for a write and assert the caller may touch it. Missing →
+// EventNotFoundError (404); ADMIN-not-owner → EventOwnershipError (403).
+async function assertEventWritable(id: string, ctx: AdminContext): Promise<void> {
+  const event = await prisma.event.findFirst({
+    where: { id, deletedAt: null },
+    select: { createdBy: true },
+  });
+  if (!event) throw new EventNotFoundError();
+  if (ctx.role === "ADMIN" && event.createdBy !== ctx.userId) throw new EventOwnershipError();
+}
+
+// Update an existing event's SCALAR fields only (§0 decision 1). centerId,
+// startDate, endDate and all relations (dates/meals/pricing) are immutable here
+// even if present in the payload — existing registrations reference those ids.
+export async function updateEvent(
+  id: string,
+  input: EventUpdateInput,
+  ctx: AdminContext,
+): Promise<{ id: string }> {
+  await assertEventWritable(id, ctx);
+
+  // Whitelist: only these scalar columns are writable. Anything else in the
+  // validated payload (centerId/startDate/endDate) is deliberately ignored.
+  const data: Prisma.EventUpdateInput = {};
+  if (input.title_cs !== undefined) data.title_cs = input.title_cs;
+  if (input.title_en !== undefined) data.title_en = input.title_en;
+  if (input.subtitle_cs !== undefined) data.subtitle_cs = input.subtitle_cs || null;
+  if (input.subtitle_en !== undefined) data.subtitle_en = input.subtitle_en || null;
+  if (input.description_cs !== undefined) data.description_cs = input.description_cs || null;
+  if (input.description_en !== undefined) data.description_en = input.description_en || null;
+  if (input.contactName !== undefined) data.contactName = input.contactName || null;
+  if (input.contactPhone !== undefined) data.contactPhone = input.contactPhone || null;
+  if (input.contactEmail !== undefined) data.contactEmail = input.contactEmail || null;
+  if (input.maxRegistrations !== undefined) data.maxRegistrations = input.maxRegistrations;
+  if (input.status !== undefined) data.status = input.status;
+
+  await prisma.event.update({ where: { id }, data });
+  return { id };
+}
+
+// Change only the event's lifecycle status (the PATCH endpoint). Same ownership
+// rules as updateEvent. Manual transition — the real cron is a deploy concern.
+export async function setEventStatus(
+  id: string,
+  status: EventStatusValue,
+  ctx: AdminContext,
+): Promise<{ id: string }> {
+  await assertEventWritable(id, ctx);
+  await prisma.event.update({ where: { id }, data: { status } });
+  return { id };
 }

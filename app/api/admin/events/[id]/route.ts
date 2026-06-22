@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminContext } from "@/app/api/_lib/guard";
 import { eventUpdateSchema } from "@/lib/validation";
+import {
+  getEventForEdit,
+  updateEvent,
+  EventNotFoundError,
+  EventOwnershipError,
+} from "@/modules/events";
 
-// Stubs until P2.5 (DB wiring + ownership via guard.ctx). Guard migrated to the
-// real session context in P2 (audit H2).
+// GET — load one event for editing, ownership-scoped (ADMIN: own only). Missing
+// or not-owned → 404 (never confirms another admin's event exists).
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -12,10 +18,13 @@ export async function GET(
   if ("response" in guard) return guard.response;
 
   const { id } = await params;
-  // TODO(P2.5): load event `id`, enforce ownership via guard.ctx.
-  return NextResponse.json({ data: null });
+  const event = await getEventForEdit(id, guard.ctx);
+  if (!event) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return NextResponse.json({ data: event });
 }
 
+// PUT — persist scalar+status edits (relations/centre/dates immutable, §0
+// decision 1). 422 invalid, 403 not-owner, 404 missing.
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -30,6 +39,16 @@ export async function PUT(
     return NextResponse.json({ errors: result.error.flatten() }, { status: 422 });
   }
 
-  // TODO(P2.5): persist the update for event `id`, enforce ownership via guard.ctx.
-  return NextResponse.json({ data: null });
+  try {
+    await updateEvent(id, result.data, guard.ctx);
+    return NextResponse.json({ data: { id } });
+  } catch (err) {
+    if (err instanceof EventOwnershipError) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (err instanceof EventNotFoundError) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    throw err;
+  }
 }

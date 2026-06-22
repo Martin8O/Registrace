@@ -5,10 +5,10 @@ import { useTranslations } from 'next-intl'
 import { createClient } from '@/lib/supabase/client'
 
 // Every admin / super-admin can view + change their own sign-in email and
-// password here. The current email is read live from the Supabase session;
-// the change forms are UI-only in B6 (a real auth.updateUser would alter the
-// logged-in credentials). TODO(B7): wire auth.updateUser({ email }) /
-// ({ password }) + the email-change confirmation flow.
+// password here, against the browser Supabase client (auth.updateUser). The
+// current email is read live from the session. Email change triggers Supabase's
+// own confirmation flow (a verification link to the new address); password
+// change applies immediately after a successful call.
 export default function ProfilePage() {
   const t = useTranslations('admin.profile')
 
@@ -18,6 +18,7 @@ export default function ProfilePage() {
   const [confirm, setConfirm] = useState('')
   const [toast, setToast] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     createClient()
@@ -27,21 +28,49 @@ export default function ProfilePage() {
       })
   }, [])
 
-  const handleChangeEmail = (e: React.FormEvent) => {
+  const handleChangeEmail = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
-    setToast(t('emailSaved'))
+    setToast(null)
+    setBusy(true)
+    try {
+      const { error: err } = await createClient().auth.updateUser({ email: newEmail })
+      if (err) {
+        setError(t('emailFailed'))
+      } else {
+        setToast(t('emailSaved'))
+        setNewEmail('')
+      }
+    } catch {
+      setError(t('emailFailed'))
+    } finally {
+      setBusy(false)
+    }
   }
 
-  const handleChangePassword = (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault()
+    setToast(null)
+    setError(null)
     if (password !== confirm) {
-      setToast(null)
       setError(t('passwordMismatch'))
       return
     }
-    setError(null)
-    setToast(t('passwordSaved'))
+    setBusy(true)
+    try {
+      const { error: err } = await createClient().auth.updateUser({ password })
+      if (err) {
+        setError(t('passwordFailed'))
+      } else {
+        setToast(t('passwordSaved'))
+        setPassword('')
+        setConfirm('')
+      }
+    } catch {
+      setError(t('passwordFailed'))
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -91,7 +120,11 @@ export default function ProfilePage() {
               onChange={(e) => setNewEmail(e.target.value)}
             />
           </div>
-          <button type="submit" className="btn-primary">
+          <button
+            type="submit"
+            disabled={busy}
+            className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+          >
             {t('changeEmail')}
           </button>
         </form>
@@ -125,7 +158,11 @@ export default function ProfilePage() {
               onChange={(e) => setConfirm(e.target.value)}
             />
           </div>
-          <button type="submit" className="btn-primary">
+          <button
+            type="submit"
+            disabled={busy}
+            className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+          >
             {t('changePassword')}
           </button>
         </form>

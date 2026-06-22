@@ -7,6 +7,11 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useLocale, useTranslations } from 'next-intl'
 import { eventCreateSchema, type EventCreateInput } from '@/lib/validation'
 import type {
+  EventDateDTO,
+  EventMealDTO,
+  PricingRuleDTO,
+} from '@/modules/events'
+import type {
   MockAgeCategory,
   MockPricingType,
 } from '@/lib/mock/registrations'
@@ -37,6 +42,15 @@ type EventFormValues = {
 }
 
 export type EventStepperInitial = Partial<EventFormValues>
+
+// Read-only relation data shown in edit mode (centre/dates/pricing/meals are
+// immutable after creation — §0 decision 1). Only present when mode="edit".
+export type EventStepperEditData = {
+  id: string
+  dates: EventDateDTO[]
+  meals: EventMealDTO[]
+  pricingRules: PricingRuleDTO[]
+}
 
 type CenterOption = { id: string; name_cs: string; name_en: string }
 
@@ -128,18 +142,19 @@ export default function EventStepper({
   centers,
   mode = 'create',
   initial,
+  editData,
 }: {
   centers: CenterOption[]
   mode?: 'create' | 'edit'
   initial?: EventStepperInitial
+  editData?: EventStepperEditData
 }) {
   const t = useTranslations('admin')
   const locale = useLocale()
   const router = useRouter()
+  const isEdit = mode === 'edit'
 
   const [step, setStep] = useState(0)
-  const [saved, setSaved] = useState(false)
-  const [didPublish, setDidPublish] = useState(false)
   const [publishModal, setPublishModal] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -195,8 +210,9 @@ export default function EventStepper({
   const sortedCenters = centers
 
   // Start date cannot be in the past (not expressible in the schema, so enforced
-  // here + via the input's min).
-  const startInPast = startDate !== '' && startDate < todayISO()
+  // here + via the input's min). Edit mode exempts it — an existing event may
+  // already have started, and its dates are read-only anyway.
+  const startInPast = !isEdit && startDate !== '' && startDate < todayISO()
 
   function getMeal(date: string, meal: MealType): MealEdit {
     return mealEdits[mealKey(date, meal)] ?? { price: DEFAULT_MEAL_PRICE[meal], excluded: false }
@@ -260,22 +276,32 @@ export default function EventStepper({
   }
 
   const onValid = async (data: EventCreateInput) => {
-    if (mode === 'edit') {
-      // Edit persistence (PUT) is deferred — validate only (no POST). The list
-      // links here only for DRAFT/PUBLISHED; real update lands in a later phase.
-      setSaved(true)
-      return
-    }
-
     setSubmitError(null)
     setSubmitting(true)
     try {
-      const res = await fetch('/api/admin/events', {
-        method: 'POST',
+      // Edit mode persists ONLY the editable scalar fields (§0 decision 1) via
+      // PUT; centre/dates/pricing/meals are immutable and never sent. Create
+      // mode POSTs the full assembled payload.
+      const url = isEdit ? `/api/admin/events/${editData?.id}` : '/api/admin/events'
+      const body = isEdit
+        ? JSON.stringify({
+            title_cs: data.title_cs,
+            title_en: data.title_en,
+            description_cs: data.description_cs ?? '',
+            description_en: data.description_en ?? '',
+            contactName: data.contactName ?? '',
+            contactPhone: data.contactPhone ?? '',
+            contactEmail: data.contactEmail,
+            maxRegistrations: data.maxRegistrations,
+            status: data.status,
+          })
+        : JSON.stringify(buildPayload(data))
+      const res = await fetch(url, {
+        method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildPayload(data)),
+        body,
       })
-      if (res.status === 201) {
+      if (isEdit ? res.ok : res.status === 201) {
         router.push(`/${locale}/admin/events`)
         router.refresh()
         return
@@ -305,12 +331,13 @@ export default function EventStepper({
   // way) asks for confirmation first.
   function attemptSave(forcePublish: boolean) {
     if (forcePublish) setValue('status', 'PUBLISHED')
-    if (getValues('startDate') && getValues('startDate') < todayISO()) {
+    // The start-date-in-the-past guard applies to NEW events only; an existing
+    // event may legitimately have already started (its dates are immutable).
+    if (!isEdit && getValues('startDate') && getValues('startDate') < todayISO()) {
       setStep(1)
       return
     }
     const willPublish = forcePublish || getValues('status') === 'PUBLISHED'
-    setDidPublish(willPublish)
     if (willPublish) {
       setPublishModal(true)
     } else {
@@ -320,19 +347,6 @@ export default function EventStepper({
   function confirmPublish() {
     setPublishModal(false)
     void handleSubmit(onValid, onInvalid)()
-  }
-
-  if (saved) {
-    return (
-      <div className="section-card text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-success-100 text-2xl text-success-700">
-          ✓
-        </div>
-        <p className="mt-4 font-serif text-xl font-semibold text-neutral-900">
-          {didPublish ? t('eventForm.publishSuccess') : t('eventForm.saveSuccess')}
-        </p>
-      </div>
-    )
   }
 
   const values = watch()
@@ -369,14 +383,29 @@ export default function EventStepper({
           <StepHeading>{t('eventForm.steps.basic')}</StepHeading>
 
           <TextField label={t('eventForm.fields.center')} error={fieldError('centerId')}>
-            <select className="bdc-input" {...register('centerId')}>
-              <option value="">—</option>
-              {sortedCenters.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {locale === 'cs' ? c.name_cs : c.name_en}
-                </option>
-              ))}
-            </select>
+            {isEdit ? (
+              // Centre is immutable after creation (§0 decision 1) — show it
+              // read-only, but keep the value registered so validation passes.
+              <>
+                <input type="hidden" {...register('centerId')} />
+                <div className="bdc-input bg-neutral-50 text-neutral-600">
+                  {selectedCenter
+                    ? locale === 'cs'
+                      ? selectedCenter.name_cs
+                      : selectedCenter.name_en
+                    : '—'}
+                </div>
+              </>
+            ) : (
+              <select className="bdc-input" {...register('centerId')}>
+                <option value="">—</option>
+                {sortedCenters.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {locale === 'cs' ? c.name_cs : c.name_en}
+                  </option>
+                ))}
+              </select>
+            )}
           </TextField>
 
           <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2">
@@ -430,7 +459,8 @@ export default function EventStepper({
               <input
                 type="date"
                 min={todayISO()}
-                className="bdc-input"
+                readOnly={isEdit}
+                className={`bdc-input ${isEdit ? 'bg-neutral-50 text-neutral-600' : ''}`}
                 {...register('startDate')}
               />
             </TextField>
@@ -438,7 +468,8 @@ export default function EventStepper({
               <input
                 type="date"
                 min={startDate || todayISO()}
-                className="bdc-input"
+                readOnly={isEdit}
+                className={`bdc-input ${isEdit ? 'bg-neutral-50 text-neutral-600' : ''}`}
                 {...register('endDate')}
               />
             </TextField>
@@ -475,7 +506,9 @@ export default function EventStepper({
       {step === 2 && (
         <section className="section-card space-y-6">
           <StepHeading>{t('eventForm.steps.pricing')}</StepHeading>
-          <p className="text-sm text-neutral-500">{t('eventForm.pricing.intro')}</p>
+          <p className="text-sm text-neutral-500">
+            {isEdit ? t('eventForm.editLockedNote') : t('eventForm.pricing.intro')}
+          </p>
 
           <div className="space-y-2">
             {CHILD_AGES.map((age) => (
@@ -498,31 +531,54 @@ export default function EventStepper({
             <h3 className="text-sm font-semibold text-neutral-900">
               {t('age.AGE_15_PLUS')}
             </h3>
-            {PRICING_TYPES.map((type) => (
-              <div
-                key={type}
-                className="rounded-xl border border-neutral-200 bg-stone-50 p-4"
-              >
-                <p className="mb-3 text-sm font-semibold text-primary-700">
-                  {t(`pricingType.${type}`)}
-                </p>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {PRICING15_FIELDS.map((f) => (
-                    <TextField key={f} label={t(`eventForm.fields.${f}`)}>
-                      <input
-                        type="number"
-                        min={0}
-                        className="bdc-input"
-                        value={pricing15[type][f]}
-                        onChange={(e) =>
-                          updatePricing15(type, { [f]: Number(e.target.value) || 0 })
-                        }
-                      />
-                    </TextField>
-                  ))}
-                </div>
-              </div>
-            ))}
+            {isEdit
+              ? // Read-only: the stored 15+ pricing rules (immutable after creation).
+                (editData?.pricingRules ?? [])
+                  .filter((r) => r.ageCategory === 'AGE_15_PLUS')
+                  .map((r) => (
+                    <div
+                      key={r.id}
+                      className="rounded-xl border border-neutral-200 bg-stone-50 p-4"
+                    >
+                      <p className="mb-3 text-sm font-semibold text-primary-700">
+                        {t(`pricingType.${r.pricingType}`)}
+                      </p>
+                      <div className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+                        {PRICING15_FIELDS.map((f) => (
+                          <PreviewRow
+                            key={f}
+                            label={t(`eventForm.fields.${f}`)}
+                            value={String(r[f])}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))
+              : PRICING_TYPES.map((type) => (
+                  <div
+                    key={type}
+                    className="rounded-xl border border-neutral-200 bg-stone-50 p-4"
+                  >
+                    <p className="mb-3 text-sm font-semibold text-primary-700">
+                      {t(`pricingType.${type}`)}
+                    </p>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {PRICING15_FIELDS.map((f) => (
+                        <TextField key={f} label={t(`eventForm.fields.${f}`)}>
+                          <input
+                            type="number"
+                            min={0}
+                            className="bdc-input"
+                            value={pricing15[type][f]}
+                            onChange={(e) =>
+                              updatePricing15(type, { [f]: Number(e.target.value) || 0 })
+                            }
+                          />
+                        </TextField>
+                      ))}
+                    </div>
+                  </div>
+                ))}
           </div>
         </section>
       )}
@@ -531,9 +587,56 @@ export default function EventStepper({
       {step === 3 && (
         <section className="section-card space-y-5">
           <StepHeading>{t('eventForm.steps.meals')}</StepHeading>
-          <p className="text-sm text-neutral-500">{t('eventForm.meals.intro')}</p>
+          <p className="text-sm text-neutral-500">
+            {isEdit ? t('eventForm.editLockedNote') : t('eventForm.meals.intro')}
+          </p>
 
-          {days.length === 0 ? (
+          {isEdit ? (
+            // Read-only: the stored per-day meals (immutable after creation —
+            // existing ParticipantMeal rows reference these EventMeal ids).
+            <div className="space-y-4">
+              {(editData?.dates ?? []).map((d) => {
+                const dayMeals = (editData?.meals ?? []).filter(
+                  (m) => m.eventDateId === d.id,
+                )
+                return (
+                  <div
+                    key={d.id}
+                    className="rounded-xl border border-neutral-200 bg-stone-50 p-4"
+                  >
+                    <p className="text-sm font-semibold text-neutral-900">
+                      {t('eventForm.meals.forDate')}:{' '}
+                      {locale === 'cs' ? d.label_cs : d.label_en}
+                    </p>
+                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      {dayMeals.map((m) => (
+                        <div
+                          key={m.id}
+                          className={`rounded-lg border border-neutral-200 bg-white p-3 ${
+                            m.isClosed ? 'opacity-60' : ''
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium text-neutral-800">
+                              {t(`mealType.${m.mealType}`)}
+                            </span>
+                            {m.isClosed && (
+                              <span className="badge bg-neutral-200 text-neutral-600 border border-neutral-300">
+                                {t('eventForm.meals.excluded')}
+                              </span>
+                            )}
+                          </div>
+                          <p className="price-amount mt-2">
+                            {m.isClosed ? '—' : m.price}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : days.length === 0 ? (
             <p className="text-sm text-neutral-500">{t('eventForm.meals.noDates')}</p>
           ) : (
             <div className="space-y-4">
