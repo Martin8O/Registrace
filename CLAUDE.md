@@ -12,9 +12,9 @@ registrations, and exports.
 ## Session Start Protocol
 At the start of every new session, before any other action:
 1. Read `local/SESSION_BOOTSTRAP.md` fully (current state, phase, invariants, progress).
-2. Check whether the user has left notes or updated the bootstrap since last session.
-3. Confirm the current active prompt with the user before executing it.
-4. Consult other `local/` files only when you need deeper detail (index below).
+3. Check whether the user has left notes or updated the bootstrap since last session.
+4. Confirm the current active prompt with the user before executing it.
+5. Consult other `local/` files only when you need deeper detail (index below).
 
 ## Memory directory (OVERRIDE — project-local, not user-profile)
 All memory files for this project live in **`local/wiki/`** (gitignored, copied manually
