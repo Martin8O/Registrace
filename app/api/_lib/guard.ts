@@ -1,12 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getAdminContext, type AdminContext } from "@/modules/auth";
 
-// Real admin guard (B7c): verifies the Supabase session, upserts the User row,
-// and loads role + assigned centres. Used by the live admin endpoints. Returns
-// either the resolved context or a 401 response to return immediately.
+// The single admin guard: verifies the Supabase session, upserts the User row,
+// and loads role + assigned centres. Used by every admin endpoint.
 //
-// TODO(P4): consolidate this with the proxy.ts session-presence guard so the
-// edge and the handler share one role/ownership check.
+// P2 (audit H2) removed the legacy header-presence `requireAdmin` — it only
+// checked that an `Authorization` header existed, which was meaningless as
+// authorization and incompatible with the real cookie-based admin login. Every
+// admin route now resolves a real session context here.
+//
+// TODO(P4): consolidate with the proxy.ts session-presence guard so the edge and
+// the handler share one role/ownership check (defence in depth).
 export type AdminGuard = { ctx: AdminContext } | { response: NextResponse };
 
 export async function requireAdminContext(): Promise<AdminGuard> {
@@ -15,16 +19,4 @@ export async function requireAdminContext(): Promise<AdminGuard> {
     return { response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
   return { ctx };
-}
-
-// Legacy header-presence guard — retained ONLY for the deferred stub admin routes
-// (registrations/*, audit-log, event PUT/PATCH) that are not wired in B7c. Those
-// routes are already session-guarded at the edge by proxy.ts (/api/admin/** → 401
-// when unauthenticated). They migrate to requireAdminContext when wired (P-phase).
-export function requireAdmin(req: NextRequest): NextResponse | null {
-  const authHeader = req.headers.get("authorization");
-  if (!authHeader) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  return null;
 }

@@ -19,11 +19,7 @@ import {
 import { getAvailableMealIds } from '@/lib/utils/mealAvailability'
 import { useDebounce } from '@/lib/utils/useDebounce'
 import GdprModal from './GdprModal'
-import type {
-  MockCenter,
-  MockEventDate,
-  MockMealSlot,
-} from '@/lib/mock/registrationOptions'
+import type { CenterDTO, EventDateDTO, EventMealDTO } from '@/lib/types'
 
 // gdprConsent is `z.literal(true)` in the schema, but the checkbox must start
 // unchecked — so the form's working type loosens just that one field to boolean.
@@ -46,9 +42,9 @@ type PriceResponse = {
 
 type Props = {
   eventId: string
-  dates: MockEventDate[]
-  meals: MockMealSlot[]
-  centers: MockCenter[]
+  dates: EventDateDTO[]
+  meals: EventMealDTO[]
+  centers: CenterDTO[]
 }
 
 const AGE_CATEGORIES = ['AGE_0_3', 'AGE_4_7', 'AGE_8_14', 'AGE_15_PLUS'] as const

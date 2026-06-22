@@ -13,8 +13,9 @@ const handleI18nRouting = createMiddleware(routing);
 // Single middleware (Next.js 16 / next-intl convention — there is no
 // middleware.ts). It composes next-intl locale routing with Supabase
 // session-presence guarding:
-//   • /api/admin/**  → 401 JSON when unauthenticated (protects the frozen stub
-//     routes at the edge; their internal requireAdmin is reconciled in P4).
+//   • /api/admin/**  → 401 JSON when unauthenticated (edge session check; the
+//     handlers resolve the real role/ownership via requireAdminContext. A role
+//     check AT the edge is still P4 — see TODO below).
 //   • /[locale]/admin/**  → redirect to /[locale]/admin/login when unauthenticated
 //     (the login route itself passes through).
 //   • everything else (public pages, other /api, static) passes through,

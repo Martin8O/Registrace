@@ -4,7 +4,7 @@ import PricingInfoButton from '@/components/public/PricingInfoButton'
 import RegistrationForm from '@/components/public/RegistrationForm'
 import {
   getCentersForSelect,
-  getEventForDetail,
+  getPublicEventForDetail,
   type EventStatusValue,
 } from '@/modules/events'
 import { formatDateRangeShort } from '@/lib/utils/formatDate'
@@ -31,7 +31,9 @@ export default async function EventPage({
   const { locale, id } = await params
   const tBadge = await getTranslations('badge')
 
-  const event = await getEventForDetail(id)
+  // PUBLIC read: only publicly-visible events resolve here (P1 audit H1).
+  // DRAFT / past events 404 instead of leaking detail + contact PII.
+  const event = await getPublicEventForDetail(id)
   if (!event) notFound()
 
   // The form's centre dropdown is the registrant's home centre — the full

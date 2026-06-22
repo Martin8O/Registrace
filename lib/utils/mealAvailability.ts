@@ -9,7 +9,9 @@
 //  - Single-day stay (arrival === departure): both gates apply (intersection).
 //  - `isClosed` is handled separately in the UI (shown but disabled) — not here.
 
-import type { MealType, MockEventDate, MockMealSlot } from '@/lib/mock/registrationOptions'
+// Domain shapes come from the shared types module (P1 audit M2 — production code
+// no longer depends on lib/mock for its types).
+import type { EventDateDTO, EventMealDTO, MealTypeValue } from '@/lib/types'
 
 export type ArrivalTime = 'MORNING' | 'AFTERNOON' | 'EVENING'
 export type EarlyDeparture = 'NONE' | 'AFTER_BREAKFAST'
@@ -21,7 +23,7 @@ export type StaySelection = {
   earlyDeparture: EarlyDeparture
 }
 
-function passesArrivalGate(time: ArrivalTime, meal: MealType): boolean {
+function passesArrivalGate(time: ArrivalTime, meal: MealTypeValue): boolean {
   switch (time) {
     case 'MORNING':
       return true
@@ -32,14 +34,14 @@ function passesArrivalGate(time: ArrivalTime, meal: MealType): boolean {
   }
 }
 
-function passesDepartureGate(early: EarlyDeparture, meal: MealType): boolean {
+function passesDepartureGate(early: EarlyDeparture, meal: MealTypeValue): boolean {
   return early === 'NONE' ? true : meal === 'BREAKFAST'
 }
 
 export function getAvailableMealIds(
   stay: StaySelection,
-  dates: MockEventDate[],
-  meals: MockMealSlot[],
+  dates: EventDateDTO[],
+  meals: EventMealDTO[],
 ): Set<string> {
   const sortOrderById = new Map(dates.map((d) => [d.id, d.sortOrder]))
 

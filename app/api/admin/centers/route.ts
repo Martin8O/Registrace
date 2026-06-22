@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { requireAdminContext } from "@/app/api/_lib/guard";
+import { centerCreateSchema } from "@/lib/validation";
 import { getCentersForSelect } from "@/modules/events";
 import { prisma } from "@/lib/db";
 
-const centerCreateSchema = z.object({
-  name_cs: z.string().min(1),
-  name_en: z.string().min(1),
-  sortOrder: z.number().int().optional(),
-});
-
-// GET — active centres for selects.
+// GET — active centres for selects. Any authenticated admin (the event-create
+// form needs the full centre list).
 export async function GET() {
   const guard = await requireAdminContext();
   if ("response" in guard) return guard.response;
@@ -19,10 +14,14 @@ export async function GET() {
   return NextResponse.json({ data: centers });
 }
 
-// POST — add a centre (minimal; the centres page may create one).
+// POST — add a centre. SUPER_ADMIN only (P1 audit C2: centre management is
+// SUPER_ADMIN-scoped; a plain ADMIN must not be able to create centres).
 export async function POST(req: NextRequest) {
   const guard = await requireAdminContext();
   if ("response" in guard) return guard.response;
+  if (guard.ctx.role !== "SUPER_ADMIN") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const body: unknown = await req.json();
   const result = centerCreateSchema.safeParse(body);

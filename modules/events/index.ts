@@ -207,6 +207,23 @@ export async function getEventForDetail(id: string): Promise<EventDetailDTO | nu
   };
 }
 
+// PUBLIC detail read (P1 audit H1): same as getEventForDetail but enforces the
+// public-visibility rule used by the list + submit, so non-PUBLISHED / past events
+// (incl. DRAFT contact PII) never leak. Returns null when not publicly visible.
+export async function getPublicEventForDetail(
+  id: string,
+  now: Date = new Date(),
+): Promise<EventDetailDTO | null> {
+  const event = await getEventForDetail(id);
+  if (!event) return null;
+  // getEventForDetail returns endDate as an ISO yyyy-mm-dd (UTC) string; rebuild a
+  // Date for the predicate (parses as UTC midnight — same calendar day, invariant 11).
+  if (!isPubliclyVisible({ status: event.status, endDate: new Date(event.endDate) }, now)) {
+    return null;
+  }
+  return event;
+}
+
 export async function getCentersForSelect(): Promise<CenterDTO[]> {
   const centers = await prisma.center.findMany({
     where: { isActive: true },
@@ -299,12 +316,14 @@ export async function createEvent(
       });
     }
 
-    for (const m of input.meals) {
+    // Batch the meals into one INSERT (P1 audit M5 — was a per-meal create loop).
+    // Meals whose date isn't an event day are skipped.
+    const mealData = input.meals.flatMap((m) => {
       const eventDateId = dateIdByIso.get(m.date);
-      if (!eventDateId) continue; // skip meals whose date isn't an event day
+      if (!eventDateId) return [];
       const label = dayLabels.get(m.date);
-      await tx.eventMeal.create({
-        data: {
+      return [
+        {
           eventId: event.id,
           eventDateId,
           mealType: m.mealType,
@@ -313,7 +332,10 @@ export async function createEvent(
           label_cs: `${label?.cs ?? ""} – ${MEAL_LABEL_CS[m.mealType] ?? m.mealType}`,
           label_en: `${label?.en ?? ""} – ${MEAL_LABEL_EN[m.mealType] ?? m.mealType}`,
         },
-      });
+      ];
+    });
+    if (mealData.length > 0) {
+      await tx.eventMeal.createMany({ data: mealData });
     }
 
     return { id: event.id };

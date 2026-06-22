@@ -98,9 +98,18 @@ export const eventStatusSchema = z.object({
   status: z.enum(eventStatusValues),
 });
 
+// ─── Centre schema (admin) — moved here from the centers route (P2 item 3: no
+// Zod schemas defined outside lib/validation) ───────────────────────────────────
+export const centerCreateSchema = z.object({
+  name_cs: z.string().min(1),
+  name_en: z.string().min(1),
+  sortOrder: z.number().int().optional(),
+});
+
 // ─── Inferred types ───────────────────────────────────────────────────────────
 
 export type EventCreateInput = z.infer<typeof eventCreateSchema>;
 export type EventCreateWithRelationsInput = z.infer<typeof eventCreateWithRelationsSchema>;
 export type EventUpdateInput = z.infer<typeof eventUpdateSchema>;
 export type EventStatusInput = z.infer<typeof eventStatusSchema>;
+export type CenterCreateInput = z.infer<typeof centerCreateSchema>;

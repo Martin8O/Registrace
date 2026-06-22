@@ -1,15 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin } from "@/app/api/_lib/guard";
+import { requireAdminContext } from "@/app/api/_lib/guard";
 import { eventUpdateSchema } from "@/lib/validation";
 
+// Stubs until P2.5 (DB wiring + ownership via guard.ctx). Guard migrated to the
+// real session context in P2 (audit H2).
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authError = requireAdmin(req);
-  if (authError) return authError;
+  const guard = await requireAdminContext();
+  if ("response" in guard) return guard.response;
 
   const { id } = await params;
+  // TODO(P2.5): load event `id`, enforce ownership via guard.ctx.
   return NextResponse.json({ data: null });
 }
 
@@ -17,8 +20,8 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authError = requireAdmin(req);
-  if (authError) return authError;
+  const guard = await requireAdminContext();
+  if ("response" in guard) return guard.response;
 
   const { id } = await params;
   const body: unknown = await req.json();
@@ -27,5 +30,6 @@ export async function PUT(
     return NextResponse.json({ errors: result.error.flatten() }, { status: 422 });
   }
 
+  // TODO(P2.5): persist the update for event `id`, enforce ownership via guard.ctx.
   return NextResponse.json({ data: null });
 }
