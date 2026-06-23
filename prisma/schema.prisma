@@ -47,6 +47,7 @@ enum MealType {
 enum RegistrationStatus {
   REGISTERED
   CANCELLED
+  PAID
 }
 
 enum UserRole {
@@ -112,6 +113,14 @@ model Event {
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
   deletedAt        DateTime?
+  // Human-readable registration-number support. `numberPrefix` = frozen YYEEE
+  // (event's year + its per-year ordinal, e.g. "26002"); `registrationSeq` is an
+  // atomically-incremented per-event registrant counter. A registration's full
+  // number = numberPrefix + 4-digit seq (e.g. "260020108"). Nullable to allow
+  // the additive migration; backfilled for pre-existing events, set at creation
+  // for new ones.
+  numberPrefix     String?     @unique
+  registrationSeq  Int         @default(0)
 
   creator       User?          @relation(fields: [createdBy], references: [id])
   center        Center         @relation(fields: [centerId], references: [id])
@@ -199,6 +208,17 @@ model Registration {
   updatedAt          DateTime           @updatedAt
   deletedAt          DateTime?
   ipAddress          String?
+  // Human-readable, unique registration number shown to registrants + searched
+  // by the on-site team (e.g. "260020108" = year 26 / event 002 / registrant 0108).
+  // Assigned at submit from the event's numberPrefix + registrationSeq. Nullable
+  // only for the additive migration; backfilled for existing rows, always set on
+  // new ones.
+  registrationNumber String?            @unique
+  // UI locale the visitor registered in ("cs"/"en"); drives the confirmation
+  // email language at submit AND on later admin resend (P6). Default "cs" keeps
+  // pre-P6 rows valid. Plain String, not an enum, mirroring the `"cs"|"en"`
+  // union used throughout the app.
+  locale             String             @default("cs")
 
   event         Event         @relation(fields: [eventId], references: [id])
   center        Center        @relation(fields: [centerId], references: [id])

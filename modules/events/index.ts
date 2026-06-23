@@ -322,8 +322,24 @@ export async function createEvent(
   const dayLabels = new Map(input.dates.map((d) => [d.date, { cs: d.label_cs, en: d.label_en }]));
 
   const created = await prisma.$transaction(async (tx) => {
+    // Freeze the registration-number prefix: YY (event's year) + its per-year
+    // ordinal (the Nth event of that year, counting all incl. soft-deleted so
+    // numbers are never reused). The @unique on numberPrefix guards the rare
+    // concurrent-create collision. Year basis = UTC, matching the backfill.
+    const year = input.startDate.getUTCFullYear();
+    const priorThisYear = await tx.event.count({
+      where: {
+        startDate: {
+          gte: new Date(Date.UTC(year, 0, 1)),
+          lt: new Date(Date.UTC(year + 1, 0, 1)),
+        },
+      },
+    });
+    const numberPrefix = `${String(year).slice(-2)}${String(priorThisYear + 1).padStart(3, "0")}`;
+
     const event = await tx.event.create({
       data: {
+        numberPrefix,
         title_cs: input.title_cs,
         title_en: input.title_en,
         subtitle_cs: input.subtitle_cs ?? null,

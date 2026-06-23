@@ -7,7 +7,7 @@ import { RegStatusBadge } from '@/components/admin/StatusBadge'
 import type { AdminRegistrationStatus } from '@/modules/registrations'
 import type { CenterDTO } from '@/modules/events'
 
-const REG_STATUSES: AdminRegistrationStatus[] = ['REGISTERED', 'CANCELLED']
+const REG_STATUSES: AdminRegistrationStatus[] = ['REGISTERED', 'PAID', 'CANCELLED']
 
 // Editable card of the registration detail (home centre / accommodation / status
 // + save + resend). Data + ownership resolved server-side; this island only
@@ -65,13 +65,11 @@ export default function RegistrationDetailEditor({
     setToast(null)
     setError(null)
     try {
+      // No body: the email language is resolved server-side from the
+      // registration's stored locale (the visitor's original language, P6).
       const res = await fetch(
         `/api/admin/registrations/${registrationId}/resend-confirmation`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lang: locale }),
-        },
+        { method: 'POST' },
       )
       const json = (await res.json().catch(() => null)) as
         | { data?: { confirmationSent?: boolean } }

@@ -15,7 +15,7 @@ const h = vi.hoisted(() => {
     create: vi.fn(),
     update: vi.fn(),
   };
-  const event = { findFirst: vi.fn() };
+  const event = { findFirst: vi.fn(), update: vi.fn() };
   const center = { findFirst: vi.fn() };
   const participant = { create: vi.fn() };
   const participantMeal = { createMany: vi.fn() };
@@ -106,6 +106,8 @@ beforeEach(() => {
   h.prisma.registration.count.mockResolvedValue(0);
   h.prisma.registration.create.mockResolvedValue({ id: "reg1" });
   h.prisma.registration.update.mockResolvedValue({ id: "reg1" });
+  // Atomic per-event registrant counter consumed by the number allocator.
+  h.prisma.event.update.mockResolvedValue({ registrationSeq: 1, numberPrefix: "26002" });
   h.prisma.participant.create.mockResolvedValue({ id: "p1" });
   h.prisma.participantMeal.createMany.mockResolvedValue({ count: 1 });
   h.prisma.$transaction.mockImplementation(async (cb: (tx: unknown) => unknown) =>
@@ -113,6 +115,7 @@ beforeEach(() => {
       registration: h.prisma.registration,
       participant: h.prisma.participant,
       participantMeal: h.prisma.participantMeal,
+      event: h.prisma.event,
     }),
   );
   h.sendRegistrationConfirmation.mockResolvedValue({ sent: true });
@@ -128,6 +131,27 @@ describe("submitRegistration", () => {
       expect.objectContaining({ data: expect.objectContaining({ totalPrice: 380 }) }),
     );
     expect(h.prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("allocates a human-readable registration number from the event's atomic counter", async () => {
+    h.prisma.event.update.mockResolvedValue({ registrationSeq: 108, numberPrefix: "26002" });
+
+    await submitRegistration(validInput, meta);
+
+    expect(h.prisma.event.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { registrationSeq: { increment: 1 } } }),
+    );
+    expect(h.prisma.registration.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ registrationNumber: "260020108" }) }),
+    );
+  });
+
+  it("persists the visitor's locale so a later resend mails in their language (P6)", async () => {
+    await submitRegistration(validInput, { ipAddress: "127.0.0.1", lang: "en" });
+
+    expect(h.prisma.registration.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ locale: "en" }) }),
+    );
   });
 
   it("duplicate idempotencyKey → returns existing row, no new insert", async () => {

@@ -10,7 +10,7 @@ import type {
   DayMealStat,
 } from '@/modules/registrations'
 
-const REG_STATUSES: AdminRegistrationStatus[] = ['REGISTERED', 'CANCELLED']
+const REG_STATUSES: AdminRegistrationStatus[] = ['REGISTERED', 'PAID', 'CANCELLED']
 
 function formatDate(iso: string): string {
   const [date = ''] = iso.split('T')
@@ -37,6 +37,10 @@ export default function RegistrationsTable({
 
   const [centerFilter, setCenterFilter] = useState<'ALL' | string>('ALL')
   const [statusFilter, setStatusFilter] = useState<'ALL' | AdminRegistrationStatus>('ALL')
+  // On-site search by registration number (the team types the number to find a
+  // registrant). Matches the email too, as a convenience. Already role/ownership
+  // scoped server-side, so this only narrows the rows this admin may see.
+  const [search, setSearch] = useState('')
 
   const centerName = (r: AdminRegistrationListItem) =>
     locale === 'cs' ? r.centerName_cs : r.centerName_en
@@ -59,22 +63,42 @@ export default function RegistrationsTable({
     .map((r) => ({ id: r.centerId, name: centerName(r) }))
     .sort((a, b) => a.name.localeCompare(b.name, 'cs'))
 
+  const q = search.trim().toLowerCase()
   const filtered = rows.filter(
     (r) =>
       (!scopedEventId || r.eventId === scopedEventId) &&
       // Centre filter applies only on a direct visit; when scoped to an event the
       // centre is already fixed, so it's ignored.
       (!!scopedEventId || centerFilter === 'ALL' || r.centerId === centerFilter) &&
-      (statusFilter === 'ALL' || r.status === statusFilter),
+      (statusFilter === 'ALL' || r.status === statusFilter) &&
+      (q === '' ||
+        (r.registrationNumber?.toLowerCase().includes(q) ?? false) ||
+        r.email.toLowerCase().includes(q)),
   )
 
   return (
     <div>
-      <header className="mb-6">
-        <h1 className="font-serif text-3xl font-semibold text-neutral-900">
-          {t('registrations.title')}
-        </h1>
-        <div className="mt-2 h-0.5 w-12 rounded bg-primary-500" />
+      <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-serif text-3xl font-semibold text-neutral-900">
+            {t('registrations.title')}
+          </h1>
+          <div className="mt-2 h-0.5 w-12 rounded bg-primary-500" />
+        </div>
+        <div className="w-full sm:w-64">
+          <label htmlFor="regSearch" className="sr-only">
+            {t('registrations.searchLabel')}
+          </label>
+          <input
+            id="regSearch"
+            type="search"
+            inputMode="numeric"
+            className="bdc-input"
+            placeholder={t('registrations.searchPlaceholder')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
       </header>
 
       {scopedEventId && scopedEventLabel && (
@@ -198,9 +222,9 @@ export default function RegistrationsTable({
                   <td className="px-4 py-3">
                     <Link
                       href={`${base}/registrations/${r.id}`}
-                      className="font-medium text-primary-600 hover:text-primary-700"
+                      className="font-mono font-medium tabular-nums text-primary-600 hover:text-primary-700"
                     >
-                      {r.id}
+                      {r.registrationNumber ?? '—'}
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-neutral-700">{r.email}</td>

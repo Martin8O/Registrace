@@ -2,7 +2,7 @@
 
 import { useTranslations } from 'next-intl'
 import type { MockEvent } from '@/lib/mock/events'
-import type { MockRegistrationStatus } from '@/lib/mock/registrations'
+import type { AdminRegistrationStatus } from '@/modules/registrations'
 
 // Event status chip — uses the admin `eventStatus` labels (Draft / Published /
 // Closed / Archived) so the badge matches the status filter + the event form.
@@ -20,12 +20,15 @@ export function EventStatusBadge({ status }: { status: MockEvent['status'] }) {
 }
 
 // Registration status chip — its own variants + the admin.regStatus labels.
-const regVariants: Record<MockRegistrationStatus, string> = {
-  REGISTERED: 'bg-success-100 text-success-700 border border-success-500/40',
+// PAID = settled on-site by the registration team → green (done); REGISTERED =
+// still awaiting payment → gold; CANCELLED → red.
+const regVariants: Record<AdminRegistrationStatus, string> = {
+  REGISTERED: 'bg-gold-100 text-gold-800 border border-gold-300',
   CANCELLED: 'bg-danger-100 text-danger-700 border border-danger-500/40',
+  PAID: 'bg-success-100 text-success-700 border border-success-500/40',
 }
 
-export function RegStatusBadge({ status }: { status: MockRegistrationStatus }) {
+export function RegStatusBadge({ status }: { status: AdminRegistrationStatus }) {
   const t = useTranslations('admin.regStatus')
   return <span className={`badge ${regVariants[status]}`}>{t(status)}</span>
 }

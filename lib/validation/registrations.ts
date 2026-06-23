@@ -82,7 +82,7 @@ export const registrationSubmitSchema = z
 // Editable fields only (decision 2): registrant home centre, accommodation, and
 // status. Price is never recomputed here (P5 owns pricing); the stay days/meals
 // are immutable because existing Participant/ParticipantMeal rows reference them.
-const registrationStatusValues = ["REGISTERED", "CANCELLED"] as const;
+const registrationStatusValues = ["REGISTERED", "CANCELLED", "PAID"] as const;
 
 export const registrationUpdateSchema = z.object({
   centerId: z.string().min(1),

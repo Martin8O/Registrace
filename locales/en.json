@@ -205,6 +205,7 @@
     },
     "regStatus": {
       "REGISTERED": "Registered",
+      "PAID": "Paid",
       "CANCELLED": "Cancelled"
     },
     "age": {
@@ -346,8 +347,10 @@
       "showingEvent": "Event: {event}",
       "clearEvent": "Clear event filter",
       "mealStatsTitle": "Meals to prepare",
+      "searchLabel": "Search registration",
+      "searchPlaceholder": "Search registration no.…",
       "table": {
-        "id": "ID",
+        "id": "Reg. no.",
         "email": "Email",
         "center": "Event centre",
         "date": "Created",
@@ -359,6 +362,7 @@
     "registrationDetail": {
       "title": "Registration detail",
       "notFound": "Registration not found.",
+      "number": "Registration no.",
       "email": "Email",
       "event": "Event",
       "homeCenter": "Home centre",

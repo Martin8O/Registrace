@@ -165,8 +165,9 @@ export async function submitRegistration(
   });
 
   let registrationId: string;
+  let registrationNumber: string | null;
   try {
-    registrationId = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       // Capacity re-checked inside the transaction so concurrent submits can't
       // both pass the gate → 409.
       if (event.maxRegistrations !== null) {
@@ -177,6 +178,21 @@ export async function submitRegistration(
           throw new RegistrationCapacityError();
         }
       }
+
+      // Allocate the human-readable registration number atomically: the
+      // per-event counter is incremented and read INSIDE this transaction, so
+      // concurrent submits get distinct ordinals — and a rolled-back submit
+      // (capacity 409 / idempotency race) releases its number with the txn.
+      const counter = await tx.event.update({
+        where: { id: event.id },
+        data: { registrationSeq: { increment: 1 } },
+        select: { registrationSeq: true, numberPrefix: true },
+      });
+      // Registrant ordinal padded to 4 digits (supports up to 9999/event; a
+      // rare overflow past 9999 still works, the number just grows by a digit).
+      const registrationNumber = counter.numberPrefix
+        ? `${counter.numberPrefix}${String(counter.registrationSeq).padStart(4, "0")}`
+        : null;
 
       const registration = await tx.registration.create({
         data: {
@@ -193,6 +209,10 @@ export async function submitRegistration(
           status: "REGISTERED",
           idempotencyKey: input.idempotencyKey,
           ipAddress: meta.ipAddress,
+          // Persist the visitor's UI locale so a later admin resend emails in
+          // their original language (P6), not a cs default.
+          locale: meta.lang,
+          registrationNumber,
         },
       });
 
@@ -229,8 +249,10 @@ export async function submitRegistration(
         }
       }
 
-      return registration.id;
+      return { id: registration.id, registrationNumber };
     });
+    registrationId = result.id;
+    registrationNumber = result.registrationNumber;
   } catch (err) {
     // Two same-key submits can race past the findUnique above; the @unique on
     // idempotencyKey makes the loser fail with P2002 — return the winner's row.
@@ -249,7 +271,7 @@ export async function submitRegistration(
   const lang = meta.lang;
   const emailData = buildConfirmationEmailData(
     {
-      registrationId,
+      registrationNumber,
       to: input.email,
       event,
       center,
@@ -304,7 +326,7 @@ function isUniqueViolation(err: unknown): boolean {
 // ConfirmationEmailData. Keeps the two call sites from drifting (P1 audit valued
 // single-source assembly).
 type ConfirmationSource = {
-  registrationId: string;
+  registrationNumber: string | null;
   to: string;
   event: {
     title_cs: string;
@@ -337,7 +359,7 @@ function buildConfirmationEmailData(
 ): ConfirmationEmailData {
   const pick = (cs: string, en: string) => (lang === "cs" ? cs : en);
   return {
-    registrationId: src.registrationId,
+    registrationNumber: src.registrationNumber,
     to: src.to,
     eventTitle: pick(src.event.title_cs, src.event.title_en),
     eventStart: src.event.startDate,
@@ -368,10 +390,11 @@ function buildConfirmationEmailData(
 // event's hosting centre (decision 12); the registrant's own home centre is a
 // separate, editable field surfaced in the detail.
 
-export type AdminRegistrationStatus = "REGISTERED" | "CANCELLED";
+export type AdminRegistrationStatus = "REGISTERED" | "CANCELLED" | "PAID";
 
 export type AdminRegistrationListItem = {
   id: string;
+  registrationNumber: string | null;
   email: string;
   status: AdminRegistrationStatus;
   totalPrice: number;
@@ -395,6 +418,7 @@ export type AdminRegistrationDetailParticipant = {
 
 export type AdminRegistrationDetailDTO = {
   id: string;
+  registrationNumber: string | null;
   email: string;
   centerId: string; // registrant's HOME centre (editable)
   hasAccommodation: boolean;
@@ -441,6 +465,7 @@ export async function listRegistrations(
 
   return rows.map((r) => ({
     id: r.id,
+    registrationNumber: r.registrationNumber,
     email: r.email,
     status: r.status,
     totalPrice: r.totalPrice,
@@ -476,6 +501,7 @@ export async function getRegistrationForDetail(
 
   return {
     id: r.id,
+    registrationNumber: r.registrationNumber,
     email: r.email,
     centerId: r.centerId,
     hasAccommodation: r.hasAccommodation,
@@ -559,14 +585,14 @@ export async function updateRegistration(
   return { id };
 }
 
-// Re-send the confirmation email (reuses the existing basic template — P6
-// upgrades it). Ownership-checked. Sets confirmationSentAt on success; a failure
-// (incl. Resend test-mode rejecting a non-owner recipient) is surfaced honestly,
-// never thrown. Lang defaults to cs (the registration stores no locale).
+// Re-send the confirmation email (production bilingual template — P6).
+// Ownership-checked. Language = the registration's STORED `locale` (P6 — the
+// visitor's original language), not a cs default. Sets confirmationSentAt on
+// success; a failure (incl. Resend test-mode rejecting a non-owner recipient)
+// is surfaced honestly, never thrown.
 export async function resendConfirmation(
   id: string,
   ctx: AdminContext,
-  lang: "cs" | "en" = "cs",
 ): Promise<{ confirmationSent: boolean; error?: string }> {
   const r = await prisma.registration.findFirst({
     where: { id, deletedAt: null },
@@ -587,9 +613,12 @@ export async function resendConfirmation(
     throw new RegistrationForbiddenError();
   }
 
+  // The visitor's original language, defended against any unexpected stored value.
+  const lang: "cs" | "en" = r.locale === "en" ? "en" : "cs";
+
   const emailData = buildConfirmationEmailData(
     {
-      registrationId: r.id,
+      registrationNumber: r.registrationNumber,
       to: r.email,
       event: r.event,
       center: r.center,

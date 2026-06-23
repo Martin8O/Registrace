@@ -205,6 +205,7 @@
     },
     "regStatus": {
       "REGISTERED": "Registrován/a",
+      "PAID": "Zaplaceno",
       "CANCELLED": "Zrušeno"
     },
     "age": {
@@ -346,8 +347,10 @@
       "showingEvent": "Akce: {event}",
       "clearEvent": "Zrušit filtr akce",
       "mealStatsTitle": "Počty jídel k přípravě",
+      "searchLabel": "Hledat registraci",
+      "searchPlaceholder": "Hledat číslo registrace…",
       "table": {
-        "id": "ID",
+        "id": "Č. registrace",
         "email": "E-mail",
         "center": "Centrum akce",
         "date": "Vytvořeno",
@@ -359,6 +362,7 @@
     "registrationDetail": {
       "title": "Detail registrace",
       "notFound": "Registrace nebyla nalezena.",
+      "number": "Číslo registrace",
       "email": "E-mail",
       "event": "Akce",
       "homeCenter": "Domovské centrum",

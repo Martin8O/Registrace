@@ -41,7 +41,6 @@ export default async function RegistrationDetailPage({
             {t('registrationDetail.title')}
           </h1>
           <div className="mt-2 h-0.5 w-12 rounded bg-primary-500" />
-          <p className="mt-2 font-mono text-sm text-neutral-500">{detail.id}</p>
         </div>
         <Link
           href={`${base}/registrations`}
@@ -50,6 +49,16 @@ export default async function RegistrationDetailPage({
           ← {t('registrations.title')}
         </Link>
       </header>
+
+      {/* Prominent, centered registration number */}
+      <div className="text-center">
+        <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+          {t('registrationDetail.number')}
+        </p>
+        <p className="mt-1 font-mono text-3xl font-semibold tabular-nums text-neutral-900">
+          {detail.registrationNumber ?? detail.id}
+        </p>
+      </div>
 
       {/* Read-only summary */}
       <section className="section-card space-y-5">
