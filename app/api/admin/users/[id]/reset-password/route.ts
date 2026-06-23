@@ -6,10 +6,10 @@ import { resetUserPassword, UserManagementError } from "@/modules/users";
 // only. The honest send result is returned (Supabase's own email; subject to its
 // dev rate limits, not the Resend test-mode limit).
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireSuperAdmin();
+  const guard = await requireSuperAdmin(req);
   if ("response" in guard) return guard.response;
 
   const { id } = await params;
@@ -18,7 +18,7 @@ export async function POST(
     return NextResponse.json({ data: result });
   } catch (err) {
     if (err instanceof UserManagementError) {
-      return NextResponse.json({ error: err.message }, { status: 422 });
+      return NextResponse.json({ error: err.message }, { status: err.status });
     }
     throw err;
   }

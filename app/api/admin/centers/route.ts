@@ -18,7 +18,7 @@ export async function GET() {
 // POST — add a centre. SUPER_ADMIN only (P1 audit C2). Logic in modules/centers
 // (invariant 8); the new centre is active and appears in every picker at once.
 export async function POST(req: NextRequest) {
-  const guard = await requireSuperAdmin();
+  const guard = await requireSuperAdmin(req);
   if ("response" in guard) return guard.response;
 
   const body: unknown = await req.json();

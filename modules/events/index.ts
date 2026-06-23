@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma";
 import type { AdminContext } from "@/modules/auth";
 import type { EventCreateWithRelationsInput, EventUpdateInput } from "@/lib/validation";
+import { logAuditEvent } from "@/lib/audit";
 
 // ─── DTO types (kept structurally identical to the mock scaffolding) ──────────
 
@@ -258,6 +259,17 @@ export async function getCentersForSelect(): Promise<CenterDTO[]> {
     .map(({ id, name_cs, name_en }) => ({ id, name_cs, name_en }));
 }
 
+// Centres the caller may CREATE an event for (the event-create dropdown). ADMIN
+// sees only their assigned centres (matches the createEvent ownership guard:
+// createEvent throws EventOwnershipError if an ADMIN picks a non-assigned
+// centre); SUPER_ADMIN sees all. Returns [] for an ADMIN with no centres — the
+// form then shows a "no assigned centre" notice instead of an empty picker.
+export async function getCentersForAdminSelect(ctx: AdminContext): Promise<CenterDTO[]> {
+  const all = await getCentersForSelect();
+  if (ctx.role === "SUPER_ADMIN") return all;
+  return all.filter((c) => ctx.centerIds.includes(c.id));
+}
+
 // ─── Admin writes / scoped reads (ownership — invariant 20) ────────────────────
 
 // Thrown when an ADMIN tries to create an event for a centre they don't
@@ -309,7 +321,7 @@ export async function createEvent(
   // Day label lookup for deriving meal labels.
   const dayLabels = new Map(input.dates.map((d) => [d.date, { cs: d.label_cs, en: d.label_en }]));
 
-  return prisma.$transaction(async (tx) => {
+  const created = await prisma.$transaction(async (tx) => {
     const event = await tx.event.create({
       data: {
         title_cs: input.title_cs,
@@ -373,8 +385,31 @@ export async function createEvent(
       await tx.eventMeal.createMany({ data: mealData });
     }
 
-    return { id: event.id };
+    return {
+      id: event.id,
+      snapshot: {
+        title_cs: event.title_cs,
+        title_en: event.title_en,
+        centerId: event.centerId,
+        status: event.status,
+        maxRegistrations: event.maxRegistrations,
+        startDate: event.startDate.toISOString(),
+        endDate: event.endDate.toISOString(),
+      },
+    };
   });
+
+  // Audit AFTER the transaction commits — best-effort, never blocks the write (P4).
+  await logAuditEvent({
+    userId: ctx.userId,
+    ip: ctx.ip,
+    action: "event.create",
+    entityType: "Event",
+    entityId: created.id,
+    newData: created.snapshot,
+  });
+
+  return { id: created.id };
 }
 
 // Dashboard counts, role-scoped (invariant 20). ADMIN: only events they created
@@ -445,14 +480,30 @@ export async function getEventForEdit(
 }
 
 // Re-fetch an event for a write and assert the caller may touch it. Missing →
-// EventNotFoundError (404); ADMIN-not-owner → EventOwnershipError (403).
-async function assertEventWritable(id: string, ctx: AdminContext): Promise<void> {
+// EventNotFoundError (404); ADMIN-not-owner → EventOwnershipError (403). Returns
+// the pre-image of the editable scalars + status so the caller can record it as
+// audit `oldData` (P4) without a second round-trip.
+async function assertEventWritable(id: string, ctx: AdminContext) {
   const event = await prisma.event.findFirst({
     where: { id, deletedAt: null },
-    select: { createdBy: true },
+    select: {
+      createdBy: true,
+      title_cs: true,
+      title_en: true,
+      subtitle_cs: true,
+      subtitle_en: true,
+      description_cs: true,
+      description_en: true,
+      contactName: true,
+      contactPhone: true,
+      contactEmail: true,
+      maxRegistrations: true,
+      status: true,
+    },
   });
   if (!event) throw new EventNotFoundError();
   if (ctx.role === "ADMIN" && event.createdBy !== ctx.userId) throw new EventOwnershipError();
+  return event;
 }
 
 // Update an existing event's SCALAR fields only (§0 decision 1). centerId,
@@ -463,7 +514,7 @@ export async function updateEvent(
   input: EventUpdateInput,
   ctx: AdminContext,
 ): Promise<{ id: string }> {
-  await assertEventWritable(id, ctx);
+  const before = await assertEventWritable(id, ctx);
 
   // Whitelist: only these scalar columns are writable. Anything else in the
   // validated payload (centerId/startDate/endDate) is deliberately ignored.
@@ -480,7 +531,22 @@ export async function updateEvent(
   if (input.maxRegistrations !== undefined) data.maxRegistrations = input.maxRegistrations;
   if (input.status !== undefined) data.status = input.status;
 
+  // No writable field present (e.g. a payload of only immutable centerId/dates):
+  // skip the no-op DB write AND the misleading empty-newData audit row.
+  if (Object.keys(data).length === 0) return { id };
+
   await prisma.event.update({ where: { id }, data });
+
+  await logAuditEvent({
+    userId: ctx.userId,
+    ip: ctx.ip,
+    action: "event.update",
+    entityType: "Event",
+    entityId: id,
+    oldData: before, // pre-image of the editable scalars (+ createdBy/status)
+    newData: data, // only the fields actually changed
+  });
+
   return { id };
 }
 
@@ -491,7 +557,18 @@ export async function setEventStatus(
   status: EventStatusValue,
   ctx: AdminContext,
 ): Promise<{ id: string }> {
-  await assertEventWritable(id, ctx);
+  const before = await assertEventWritable(id, ctx);
   await prisma.event.update({ where: { id }, data: { status } });
+
+  await logAuditEvent({
+    userId: ctx.userId,
+    ip: ctx.ip,
+    action: "event.status_change",
+    entityType: "Event",
+    entityId: id,
+    oldData: { status: before.status },
+    newData: { status },
+  });
+
   return { id };
 }

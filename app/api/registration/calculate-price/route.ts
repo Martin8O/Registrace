@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validationError } from "@/app/api/_lib/http";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { calculatePriceSchema } from "@/lib/validation";
 import { getPublicEventForDetail } from "@/modules/events";
 import { calculatePricing } from "@/modules/pricing";
@@ -9,6 +10,11 @@ import { calculatePricing } from "@/modules/pricing";
 // server-side via the pricing seam (zeros until P5). Prices are always
 // server-authoritative (invariants 3–4). Thin wrapper — no pricing math (inv. 2).
 export async function POST(req: NextRequest) {
+  // Rate limit (P4): 60 price calcs / IP / minute (the form debounces, so a real
+  // user stays well under; this caps scripted enumeration).
+  const limited = enforceRateLimit(req, { bucket: "price", limit: 60, windowMs: 60_000 });
+  if (limited) return limited;
+
   const body: unknown = await req.json();
   const result = calculatePriceSchema.safeParse(body);
   if (!result.success) {

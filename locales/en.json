@@ -115,6 +115,7 @@
       "registrations": "Registrations",
       "centers": "Centers",
       "users": "Admins",
+      "logs": "Audit logs",
       "profile": "Profile",
       "logout": "Log out"
     },
@@ -150,7 +151,51 @@
       "totalRegistrations": "Total registrations",
       "quickLinks": "Quick links",
       "goToEvents": "Manage events",
-      "goToRegistrations": "Manage registrations"
+      "goToRegistrations": "Manage registrations",
+      "yourCenters": "Your centres",
+      "noCenters": "You have no assigned centre."
+    },
+    "logs": {
+      "title": "Audit logs",
+      "subtitle": "Record of admin changes — who, what, when and from where. Super-admin only.",
+      "empty": "No entries yet.",
+      "table": {
+        "time": "Time",
+        "actor": "Admin",
+        "action": "Action",
+        "entity": "Entity",
+        "ip": "IP",
+        "details": "Details",
+        "hide": "Hide",
+        "before": "Before",
+        "after": "After"
+      },
+      "actions": {
+        "event": {
+          "create": "Event created",
+          "update": "Event updated",
+          "status_change": "Event status changed"
+        },
+        "registration": {
+          "update": "Registration updated",
+          "status_change": "Registration status changed"
+        },
+        "email": {
+          "resend": "Confirmation resent"
+        },
+        "center": {
+          "create": "Centre created",
+          "update": "Centre updated",
+          "activate": "Centre activated",
+          "deactivate": "Centre deactivated"
+        },
+        "user": {
+          "invite": "Admin invited",
+          "update": "Admin updated",
+          "remove": "Admin removed",
+          "password_reset": "Admin password reset"
+        }
+      }
     },
     "eventStatus": {
       "DRAFT": "Draft",
@@ -200,6 +245,7 @@
     },
     "eventForm": {
       "newTitle": "New event",
+      "noCenters": "You have no assigned centre. Ask a super-admin to assign you one before creating an event.",
       "editTitle": "Edit event",
       "stepLabel": "Step {current} of {total}",
       "next": "Next",

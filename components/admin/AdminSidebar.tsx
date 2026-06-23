@@ -31,6 +31,7 @@ export default function AdminSidebar({ role }: { role: AdminRole | null }) {
       ? [
           { key: 'centers', href: `${base}/centers` },
           { key: 'users', href: `${base}/users` },
+          { key: 'logs', href: `${base}/logs` },
         ]
       : []),
   ]

@@ -9,6 +9,7 @@ import { prisma } from "@/lib/db";
 import { calculatePricing } from "@/modules/pricing";
 import { isPubliclyVisible } from "@/modules/events";
 import { sendRegistrationConfirmation, type ConfirmationEmailData } from "@/lib/email";
+import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/modules/auth";
 import type { RegistrationSubmitInput, RegistrationUpdateInput } from "@/lib/validation";
 
@@ -507,16 +508,23 @@ export async function getRegistrationForDetail(
 }
 
 // Re-fetch + assert the caller may write this registration. Missing → 404;
-// ADMIN-not-owner → 403.
-async function assertRegistrationWritable(id: string, ctx: AdminContext): Promise<void> {
+// ADMIN-not-owner → 403. Returns the pre-image of the editable fields so the
+// caller can record it as audit `oldData` (P4).
+async function assertRegistrationWritable(id: string, ctx: AdminContext) {
   const r = await prisma.registration.findFirst({
     where: { id, deletedAt: null },
-    select: { event: { select: { createdBy: true } } },
+    select: {
+      centerId: true,
+      hasAccommodation: true,
+      status: true,
+      event: { select: { createdBy: true } },
+    },
   });
   if (!r) throw new RegistrationNotFoundError();
   if (ctx.role === "ADMIN" && r.event.createdBy !== ctx.userId) {
     throw new RegistrationForbiddenError();
   }
+  return r;
 }
 
 // Editable fields only (decision 2): home centre, accommodation, status. No
@@ -526,7 +534,7 @@ export async function updateRegistration(
   input: RegistrationUpdateInput,
   ctx: AdminContext,
 ): Promise<{ id: string }> {
-  await assertRegistrationWritable(id, ctx);
+  const before = await assertRegistrationWritable(id, ctx);
   await prisma.registration.update({
     where: { id },
     data: {
@@ -535,6 +543,19 @@ export async function updateRegistration(
       status: input.status,
     },
   });
+
+  // One endpoint covers both spec actions: emit `registration.status_change`
+  // when the lifecycle status flipped, else the generic `registration.update`.
+  await logAuditEvent({
+    userId: ctx.userId,
+    ip: ctx.ip,
+    action: before.status !== input.status ? "registration.status_change" : "registration.update",
+    entityType: "Registration",
+    entityId: id,
+    oldData: { centerId: before.centerId, hasAccommodation: before.hasAccommodation, status: before.status },
+    newData: { centerId: input.centerId, hasAccommodation: input.hasAccommodation, status: input.status },
+  });
+
   return { id };
 }
 
@@ -599,6 +620,17 @@ export async function resendConfirmation(
       data: { confirmationSentAt: new Date() },
     });
   }
+
+  // Record the manual resend attempt + its honest outcome (P4).
+  await logAuditEvent({
+    userId: ctx.userId,
+    ip: ctx.ip,
+    action: "email.resend",
+    entityType: "Registration",
+    entityId: id,
+    newData: { confirmationSent: email.sent, lang, to: r.email },
+  });
+
   return { confirmationSent: email.sent, error: email.error };
 }
 

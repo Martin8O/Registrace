@@ -3,6 +3,7 @@
 // the only mutation (name_cs/_en). Thin handlers call these (invariant 8).
 
 import { prisma } from "@/lib/db";
+import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/modules/auth";
 import type { CenterCreateInput, CenterUpdateInput } from "@/lib/validation";
 
@@ -45,9 +46,22 @@ export async function updateCenter(
   ctx: AdminContext,
 ): Promise<{ id: string }> {
   assertSuperAdmin(ctx);
+  const before = await prisma.center.findUnique({
+    where: { id },
+    select: { name_cs: true, name_en: true },
+  });
   await prisma.center.update({
     where: { id },
     data: { name_cs: input.name_cs, name_en: input.name_en },
+  });
+  await logAuditEvent({
+    userId: ctx.userId,
+    ip: ctx.ip,
+    action: "center.update",
+    entityType: "Center",
+    entityId: id,
+    oldData: before,
+    newData: { name_cs: input.name_cs, name_en: input.name_en },
   });
   return { id };
 }
@@ -70,6 +84,14 @@ export async function createCenter(
       sortOrder: input.sortOrder ?? 0,
     },
   });
+  await logAuditEvent({
+    userId: ctx.userId,
+    ip: ctx.ip,
+    action: "center.create",
+    entityType: "Center",
+    entityId: c.id,
+    newData: { name_cs: c.name_cs, name_en: c.name_en },
+  });
   return { id: c.id };
 }
 
@@ -84,5 +106,13 @@ export async function setCenterActive(
 ): Promise<{ id: string }> {
   assertSuperAdmin(ctx);
   await prisma.center.update({ where: { id }, data: { isActive: active } });
+  await logAuditEvent({
+    userId: ctx.userId,
+    ip: ctx.ip,
+    action: active ? "center.activate" : "center.deactivate",
+    entityType: "Center",
+    entityId: id,
+    newData: { isActive: active },
+  });
   return { id };
 }

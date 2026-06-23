@@ -16,7 +16,7 @@ export async function GET() {
 // POST — create an event (+ dates, pricing, meals) in one transaction with
 // createdBy from the session. Ownership violation → 403; validation → 422.
 export async function POST(req: NextRequest) {
-  const guard = await requireAdminContext();
+  const guard = await requireAdminContext(req);
   if ("response" in guard) return guard.response;
 
   const body: unknown = await req.json();

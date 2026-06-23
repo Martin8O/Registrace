@@ -5,6 +5,7 @@
 
 import { prisma } from "@/lib/db";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/modules/auth";
 import type { UserInviteInput, UserUpdateInput } from "@/lib/validation";
 
@@ -18,12 +19,16 @@ export type AdminUserListItem = {
   assignedCenters: { id: string; name_cs: string; name_en: string }[];
 };
 
-// Invite / reset that the Supabase side rejects (e.g. the email already has an
-// auth user) → handlers map to 422 with the provider message.
+// User-management failure with an explicit HTTP status (P4 taxonomy): 403 wrong
+// role · 404 user not found · 409 conflict (self-removal, email already taken) ·
+// 422 a genuine provider rejection we can't classify. Handlers read `.status`
+// (previously everything collapsed to 422).
 export class UserManagementError extends Error {
-  constructor(message = "User management operation failed") {
+  status: number;
+  constructor(message = "User management operation failed", status = 422) {
     super(message);
     this.name = "UserManagementError";
+    this.status = status;
   }
 }
 
@@ -31,7 +36,7 @@ export class UserManagementError extends Error {
 // service re-asserts so the privilege can't be reached another way.
 function assertSuperAdmin(ctx: AdminContext): void {
   if (ctx.role !== "SUPER_ADMIN") {
-    throw new UserManagementError("SUPER_ADMIN only");
+    throw new UserManagementError("SUPER_ADMIN only", 403);
   }
 }
 
@@ -81,26 +86,56 @@ export async function inviteUser(
     redirectTo ? { redirectTo } : undefined,
   );
   if (error || !data?.user) {
-    throw new UserManagementError(error?.message ?? "Invite failed");
+    // An email that already has an auth identity is a conflict (409). Prefer the
+    // structured GoTrue error code over the free-text message (locale/version
+    // independent), falling back to a substring match when no code is present.
+    const message = error?.message ?? "Invite failed";
+    const code = error?.code;
+    const isConflict =
+      code === "email_exists" ||
+      code === "user_already_exists" ||
+      (!code && /already|registered|exists|duplicate/i.test(message));
+    throw new UserManagementError(message, isConflict ? 409 : 422);
   }
 
   const authUserId = data.user.id;
   const centerIds = effectiveCenterIds(input.role, input.centerIds);
-  await prisma.$transaction(async (tx) => {
-    // upsert (not create): getAdminContext upserts a User on first login, and a
-    // re-invite shouldn't fail on a pre-existing row.
-    await tx.user.upsert({
-      where: { id: authUserId },
-      update: { email: input.email, role: input.role },
-      create: { id: authUserId, email: input.email, role: input.role },
-    });
-    await tx.userCenter.deleteMany({ where: { userId: authUserId } });
-    if (centerIds.length > 0) {
-      await tx.userCenter.createMany({
-        data: centerIds.map((centerId) => ({ userId: authUserId, centerId })),
-        skipDuplicates: true,
+  try {
+    await prisma.$transaction(async (tx) => {
+      // upsert (not create): a re-invite shouldn't fail on a pre-existing row.
+      await tx.user.upsert({
+        where: { id: authUserId },
+        update: { email: input.email, role: input.role },
+        create: { id: authUserId, email: input.email, role: input.role },
       });
-    }
+      await tx.userCenter.deleteMany({ where: { userId: authUserId } });
+      if (centerIds.length > 0) {
+        await tx.userCenter.createMany({
+          data: centerIds.map((centerId) => ({ userId: authUserId, centerId })),
+          skipDuplicates: true,
+        });
+      }
+    });
+  } catch {
+    // The auth identity was created above but the Prisma rows failed (e.g. an
+    // unknown centerId → FK error). Roll back the orphaned identity so the invite
+    // stays retryable — otherwise (with the C1 fix: no auto-provision) the user
+    // could accept the invite yet never resolve a role, and a re-invite would hit
+    // "already registered". Mirrors removeUser's auth-first cleanup discipline.
+    await supabase.auth.admin.deleteUser(authUserId).catch(() => {});
+    throw new UserManagementError(
+      "Failed to provision the user (rolled back) — check the selected centres and retry.",
+      422,
+    );
+  }
+
+  await logAuditEvent({
+    userId: ctx.userId,
+    ip: ctx.ip,
+    action: "user.invite",
+    entityType: "User",
+    entityId: authUserId,
+    newData: { email: input.email, role: input.role, centerIds },
   });
 
   return { id: authUserId };
@@ -114,6 +149,9 @@ export async function updateUser(
 ): Promise<{ id: string }> {
   assertSuperAdmin(ctx);
 
+  const existing = await prisma.user.findUnique({ where: { id }, select: { role: true } });
+  if (!existing) throw new UserManagementError("User not found", 404);
+
   const centerIds = effectiveCenterIds(input.role, input.centerIds);
   await prisma.$transaction(async (tx) => {
     await tx.user.update({ where: { id }, data: { role: input.role } });
@@ -124,6 +162,16 @@ export async function updateUser(
         skipDuplicates: true,
       });
     }
+  });
+
+  await logAuditEvent({
+    userId: ctx.userId,
+    ip: ctx.ip,
+    action: "user.update",
+    entityType: "User",
+    entityId: id,
+    oldData: { role: existing.role },
+    newData: { role: input.role, centerIds },
   });
 
   return { id };
@@ -137,11 +185,11 @@ export async function updateUser(
 export async function removeUser(id: string, ctx: AdminContext): Promise<{ id: string }> {
   assertSuperAdmin(ctx);
   if (id === ctx.userId) {
-    throw new UserManagementError("Cannot remove your own account");
+    throw new UserManagementError("Cannot remove your own account", 409);
   }
 
-  const user = await prisma.user.findUnique({ where: { id }, select: { id: true } });
-  if (!user) throw new UserManagementError("User not found");
+  const user = await prisma.user.findUnique({ where: { id }, select: { email: true } });
+  if (!user) throw new UserManagementError("User not found", 404);
 
   // Delete the auth identity first — if that fails (other than already-gone),
   // abort before touching Prisma so we don't leave a still-loginable account.
@@ -152,6 +200,14 @@ export async function removeUser(id: string, ctx: AdminContext): Promise<{ id: s
   }
 
   await prisma.user.delete({ where: { id } });
+  await logAuditEvent({
+    userId: ctx.userId,
+    ip: ctx.ip,
+    action: "user.remove",
+    entityType: "User",
+    entityId: id,
+    oldData: { email: user.email },
+  });
   return { id };
 }
 
@@ -163,7 +219,7 @@ export async function resetUserPassword(
   assertSuperAdmin(ctx);
 
   const user = await prisma.user.findUnique({ where: { id }, select: { email: true } });
-  if (!user) throw new UserManagementError("User not found");
+  if (!user) throw new UserManagementError("User not found", 404);
 
   const supabase = createAdminClient();
   const redirectTo = loginRedirect();
@@ -171,6 +227,14 @@ export async function resetUserPassword(
     user.email,
     redirectTo ? { redirectTo } : undefined,
   );
+  await logAuditEvent({
+    userId: ctx.userId,
+    ip: ctx.ip,
+    action: "user.password_reset",
+    entityType: "User",
+    entityId: id,
+    newData: { sent: !error, to: user.email },
+  });
   if (error) return { sent: false, error: error.message };
   return { sent: true };
 }

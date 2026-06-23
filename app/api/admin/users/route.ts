@@ -14,10 +14,10 @@ export async function GET() {
 }
 
 // POST — invite a new admin (Supabase auth user + invite email + Prisma row).
-// SUPER_ADMIN only. 400 invalid payload; 422 Supabase rejection (admin-ops
-// error taxonomy is P4's to refine — see UserManagementError).
+// SUPER_ADMIN only. 400 invalid payload; UserManagementError carries its own
+// status (P4 taxonomy): 409 email already taken, 403 wrong role, 422 other.
 export async function POST(req: NextRequest) {
-  const guard = await requireSuperAdmin();
+  const guard = await requireSuperAdmin(req);
   if ("response" in guard) return guard.response;
 
   const body: unknown = await req.json();
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ data: { id } }, { status: 201 });
   } catch (err) {
     if (err instanceof UserManagementError) {
-      return NextResponse.json({ error: err.message }, { status: 422 });
+      return NextResponse.json({ error: err.message }, { status: err.status });
     }
     throw err;
   }

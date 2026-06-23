@@ -251,6 +251,7 @@ model AuditLog {
   entityId   String
   oldData    Json?
   newData    Json?
+  ip         String? // client IP of the actor (P4) — forensic trail; nullable for non-HTTP/system writes
   createdAt  DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id])

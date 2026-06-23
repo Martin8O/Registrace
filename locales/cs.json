@@ -115,6 +115,7 @@
       "registrations": "Registrace",
       "centers": "Centra",
       "users": "Správci",
+      "logs": "Audit logy",
       "profile": "Profil",
       "logout": "Odhlásit se"
     },
@@ -150,7 +151,51 @@
       "totalRegistrations": "Celkem registrací",
       "quickLinks": "Rychlé odkazy",
       "goToEvents": "Spravovat akce",
-      "goToRegistrations": "Spravovat registrace"
+      "goToRegistrations": "Spravovat registrace",
+      "yourCenters": "Vaše centra",
+      "noCenters": "Nemáte přiřazené žádné centrum."
+    },
+    "logs": {
+      "title": "Audit logy",
+      "subtitle": "Záznam administrátorských změn — kdo, co, kdy a odkud. Jen pro super-admina.",
+      "empty": "Zatím žádné záznamy.",
+      "table": {
+        "time": "Čas",
+        "actor": "Správce",
+        "action": "Akce",
+        "entity": "Entita",
+        "ip": "IP",
+        "details": "Detail",
+        "hide": "Skrýt",
+        "before": "Před",
+        "after": "Po"
+      },
+      "actions": {
+        "event": {
+          "create": "Vytvoření akce",
+          "update": "Úprava akce",
+          "status_change": "Změna stavu akce"
+        },
+        "registration": {
+          "update": "Úprava registrace",
+          "status_change": "Změna stavu registrace"
+        },
+        "email": {
+          "resend": "Znovuodeslání potvrzení"
+        },
+        "center": {
+          "create": "Vytvoření centra",
+          "update": "Úprava centra",
+          "activate": "Aktivace centra",
+          "deactivate": "Deaktivace centra"
+        },
+        "user": {
+          "invite": "Pozvání správce",
+          "update": "Úprava správce",
+          "remove": "Odebrání správce",
+          "password_reset": "Reset hesla správce"
+        }
+      }
     },
     "eventStatus": {
       "DRAFT": "Koncept",
@@ -200,6 +245,7 @@
     },
     "eventForm": {
       "newTitle": "Nová akce",
+      "noCenters": "Nemáte přiřazené žádné centrum. Než založíte akci, požádejte super-admina o přiřazení centra.",
       "editTitle": "Upravit akci",
       "stepLabel": "Krok {current} z {total}",
       "next": "Další",

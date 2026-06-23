@@ -9,7 +9,7 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireSuperAdmin();
+  const guard = await requireSuperAdmin(req);
   if ("response" in guard) return guard.response;
 
   const { id } = await params;
@@ -26,10 +26,10 @@ export async function PUT(
 // DELETE — "delete" a centre = deactivate (isActive=false). Soft by design: a
 // hard delete would hit the RESTRICT FKs and breaks invariant 9. SUPER_ADMIN only.
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireSuperAdmin();
+  const guard = await requireSuperAdmin(req);
   if ("response" in guard) return guard.response;
 
   const { id } = await params;
@@ -39,10 +39,10 @@ export async function DELETE(
 
 // PATCH — restore a deactivated centre (isActive=true). SUPER_ADMIN only.
 export async function PATCH(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireSuperAdmin();
+  const guard = await requireSuperAdmin(req);
   if ("response" in guard) return guard.response;
 
   const { id } = await params;

@@ -9,7 +9,7 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireSuperAdmin();
+  const guard = await requireSuperAdmin(req);
   if ("response" in guard) return guard.response;
 
   const { id } = await params;
@@ -24,7 +24,7 @@ export async function PUT(
     return NextResponse.json({ data: { id } });
   } catch (err) {
     if (err instanceof UserManagementError) {
-      return NextResponse.json({ error: err.message }, { status: 422 });
+      return NextResponse.json({ error: err.message }, { status: err.status });
     }
     throw err;
   }
@@ -33,10 +33,10 @@ export async function PUT(
 // DELETE — remove an admin entirely (auth identity + Prisma row). SUPER_ADMIN
 // only; the service blocks self-removal.
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireSuperAdmin();
+  const guard = await requireSuperAdmin(req);
   if ("response" in guard) return guard.response;
 
   const { id } = await params;
@@ -45,7 +45,7 @@ export async function DELETE(
     return NextResponse.json({ data: { id } });
   } catch (err) {
     if (err instanceof UserManagementError) {
-      return NextResponse.json({ error: err.message }, { status: 422 });
+      return NextResponse.json({ error: err.message }, { status: err.status });
     }
     throw err;
   }

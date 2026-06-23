@@ -10,7 +10,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireAdminContext();
+  const guard = await requireAdminContext(req);
   if ("response" in guard) return guard.response;
 
   const { id } = await params;

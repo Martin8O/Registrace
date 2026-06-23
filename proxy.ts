@@ -2,6 +2,8 @@ import createMiddleware from 'next-intl/middleware';
 import { defineRouting } from 'next-intl/routing';
 import { NextResponse, type NextRequest } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
+import { clientIp, rateLimit, rateLimitResponse } from '@/lib/security/rate-limit';
+import { isMutating, isSameOrigin, csrfFailureResponse } from '@/lib/security/csrf';
 
 const routing = defineRouting({
   locales: ['cs', 'en'],
@@ -11,24 +13,38 @@ const routing = defineRouting({
 const handleI18nRouting = createMiddleware(routing);
 
 // Single middleware (Next.js 16 / next-intl convention — there is no
-// middleware.ts). It composes next-intl locale routing with Supabase
-// session-presence guarding:
-//   • /api/admin/**  → 401 JSON when unauthenticated (edge session check; the
-//     handlers resolve the real role/ownership via requireAdminContext. A role
-//     check AT the edge is still P4 — see TODO below).
+// middleware.ts). It composes next-intl locale routing with the Supabase session
+// + the P4 edge hardening for the admin API:
+//   • /api/admin/**  → rate-limit (120/min/IP) + CSRF (mutations) + 401 JSON when
+//     unauthenticated. Edge enforces session PRESENCE + abuse controls only.
 //   • /[locale]/admin/**  → redirect to /[locale]/admin/login when unauthenticated
 //     (the login route itself passes through).
 //   • everything else (public pages, other /api, static) passes through,
 //     with the Supabase session refreshed so auth cookies stay live.
-// Guard is session-presence ONLY — no role lookup, no DB. See TODO(B7) below.
+//
+// DECISION C (P4): the authoritative role/ownership check (SUPER_ADMIN vs ADMIN,
+// Event.createdBy) is NOT done here — Prisma can't run in the edge runtime. It
+// lives at the handler/service layer (requireAdminContext / requireSuperAdmin /
+// the *Ownership errors). Edge + handler are two deliberate layers (defence in
+// depth), not one. This is the resolution of the former TODO(B7)/TODO(P4) markers.
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // ── /api branch: no locale logic. Only /api/admin/** reaches here (matcher). ──
   if (pathname.startsWith('/api/')) {
     if (pathname.startsWith('/api/admin')) {
-      // TODO(B7): after the role/UserCenter/createdBy migration, also enforce
-      // SUPER_ADMIN vs ADMIN scoping + center-ownership 403 for admin APIs.
+      // Order: cheapest checks first, the Supabase round-trip last.
+      // 1) Rate limit: 120 requests / IP / minute across all admin APIs.
+      const rl = rateLimit(`admin:${clientIp(request) ?? 'unknown'}`, 120, 60_000);
+      if (!rl.ok) return rateLimitResponse(rl);
+
+      // 2) CSRF: mutating admin requests must originate from our own origin.
+      if (isMutating(request.method) && !isSameOrigin(request)) {
+        return csrfFailureResponse();
+      }
+
+      // 3) Session presence (real role/ownership asserted in the handlers — see
+      //    DECISION C above).
       const { user } = await updateSession(request);
       if (!user) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -51,8 +67,9 @@ export async function proxy(request: NextRequest) {
     const locale = adminMatch[1];
     const rest = adminMatch[2] ?? '';
     const isLoginRoute = rest === 'login' || rest.startsWith('login/');
-    // TODO(B7): swap session-presence for a real SUPER_ADMIN/ADMIN role check
-    // and center scoping; ADMIN may only reach events where createdBy = their id.
+    // DECISION C (P4): edge does session presence only — role/ownership scoping
+    // for admin PAGES is enforced server-side when each page loads its data via
+    // getAdminContext (Prisma can't run at the edge). Unauthenticated → login.
     if (!user && !isLoginRoute) {
       const loginUrl = new URL(`/${locale}/admin/login`, request.url);
       const redirect = NextResponse.redirect(loginUrl);

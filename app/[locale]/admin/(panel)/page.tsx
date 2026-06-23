@@ -1,8 +1,8 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getTranslations } from 'next-intl/server'
+import { getLocale, getTranslations } from 'next-intl/server'
 import { getAdminContext } from '@/modules/auth'
-import { getAdminDashboardCounts } from '@/modules/events'
+import { getAdminDashboardCounts, getCentersForAdminSelect } from '@/modules/events'
 
 // Dashboard at /[locale]/admin — stat cards from live DB counts, scoped by role
 // (ADMIN: own events + their registrations; SUPER_ADMIN: all). Server component;
@@ -21,6 +21,12 @@ export default async function AdminDashboardPage({
     await getAdminDashboardCounts(ctx)
   const base = `/${locale}/admin`
 
+  // An ADMIN is scoped to their assigned centres — surface which ones (they
+  // reported not knowing). SUPER_ADMIN covers all, so no list is shown.
+  const uiLocale = await getLocale()
+  const myCenters =
+    ctx.role === 'ADMIN' ? await getCentersForAdminSelect(ctx) : []
+
   return (
     <div>
       <header className="mb-8">
@@ -30,6 +36,19 @@ export default async function AdminDashboardPage({
         <div className="mt-2 h-0.5 w-12 rounded bg-primary-500" />
         <p className="mt-3 text-neutral-500">{t('subtitle')}</p>
       </header>
+
+      {ctx.role === 'ADMIN' && (
+        <div className="section-card mb-6">
+          <p className="text-sm font-medium text-neutral-500">{t('yourCenters')}</p>
+          <p className="mt-1 text-neutral-900">
+            {myCenters.length > 0
+              ? myCenters
+                  .map((c) => (uiLocale === 'cs' ? c.name_cs : c.name_en))
+                  .join(', ')
+              : t('noCenters')}
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <div className="section-card">

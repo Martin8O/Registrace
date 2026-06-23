@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validationError } from "@/app/api/_lib/http";
+import { clientIp, enforceRateLimit } from "@/lib/security/rate-limit";
 import { registrationSubmitSchema, type RegistrationSubmitInput } from "@/lib/validation";
 import {
   submitRegistration,
@@ -21,12 +22,6 @@ function rawHoneypot(body: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-function clientIp(req: NextRequest): string | null {
-  const forwarded = req.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0]?.trim() ?? null;
-  return req.headers.get("x-real-ip");
-}
-
 // Email language: next-intl's NEXT_LOCALE cookie, falling back to the referer
 // path's locale segment, defaulting to cs. (The submit payload carries no
 // locale — keeping the frozen-ish schema untouched in B7d.)
@@ -46,6 +41,10 @@ function emailLang(req: NextRequest): "cs" | "en" {
 }
 
 export async function POST(req: NextRequest) {
+  // Rate limit (P4): 10 submits / IP / hour, before any parsing.
+  const limited = enforceRateLimit(req, { bucket: "submit", limit: 10, windowMs: 3_600_000 });
+  if (limited) return limited;
+
   let body: unknown;
   try {
     body = await req.json();
