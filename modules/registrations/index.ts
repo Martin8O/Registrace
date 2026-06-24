@@ -11,7 +11,12 @@ import { isPubliclyVisible } from "@/modules/events";
 import { sendRegistrationConfirmation, type ConfirmationEmailData } from "@/lib/email";
 import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/modules/auth";
-import type { RegistrationSubmitInput, RegistrationUpdateInput } from "@/lib/validation";
+import type {
+  RegistrationSubmitInput,
+  RegistrationUpdateInput,
+  RegistrationExportInput,
+} from "@/lib/validation";
+import type { ExportTable } from "@/lib/export/csv";
 
 // ─── Typed errors (handlers map them to HTTP statuses) ────────────────────────
 
@@ -716,4 +721,192 @@ export async function getEventMealStats(
     }
   }
   return result;
+}
+
+// ─── Admin registration export (P7) ───────────────────────────────────────────
+// Builds the flat row table for the CSV/XLSX export. Data query + row shaping
+// live here (invariant 8); the route only serializes. Filters are re-applied
+// server-side under the same ownership scope as the list (ownEventFilter), so a
+// client can never export rows it couldn't already see. Labels are localized to
+// `lang` via an inline cs/en map (the email module set this precedent —
+// rendering happens outside the next-intl request scope; the values mirror the
+// admin locale files).
+
+type ExportLang = "cs" | "en";
+
+export type RegistrationExportFilters = Omit<RegistrationExportInput, "format" | "lang">;
+
+const EXPORT_HEADERS: Record<ExportLang, {
+  regNo: string; event: string; created: string; email: string;
+  eventCenter: string; homeCenter: string; status: string;
+  arrival: string; arrivalTime: string; departure: string;
+  earlyDeparture: string; accommodation: string; total: string; count: string;
+  participant: string; pName: string; pAge: string; pType: string;
+  pParticipation: string; pMeal: string; pTotal: string; pMeals: string;
+  yes: string; no: string; sheet: string;
+}> = {
+  cs: {
+    regNo: "Č. registrace", event: "Akce", created: "Vytvořeno", email: "E-mail",
+    eventCenter: "Centrum akce", homeCenter: "Domovské centrum", status: "Stav",
+    arrival: "Příjezd", arrivalTime: "Čas příjezdu", departure: "Odjezd",
+    earlyDeparture: "Dřívější odjezd", accommodation: "Ubytování",
+    total: "Celková cena (Kč)", count: "Počet účastníků",
+    participant: "Účastník", pName: "jméno", pAge: "věk", pType: "typ ceny",
+    pParticipation: "cena za účast (Kč)", pMeal: "cena za stravu (Kč)",
+    pTotal: "celkem (Kč)", pMeals: "strava",
+    yes: "Ano", no: "Ne", sheet: "Registrace",
+  },
+  en: {
+    regNo: "Reg. no.", event: "Event", created: "Created", email: "Email",
+    eventCenter: "Event centre", homeCenter: "Home centre", status: "Status",
+    arrival: "Arrival", arrivalTime: "Arrival time", departure: "Departure",
+    earlyDeparture: "Early departure", accommodation: "Accommodation",
+    total: "Total price (CZK)", count: "Participants",
+    participant: "Participant", pName: "name", pAge: "age", pType: "price type",
+    pParticipation: "participation price (CZK)", pMeal: "meal price (CZK)",
+    pTotal: "total (CZK)", pMeals: "meals",
+    yes: "Yes", no: "No", sheet: "Registrations",
+  },
+};
+
+const REG_STATUS_LABELS: Record<ExportLang, Record<string, string>> = {
+  cs: { REGISTERED: "Registrován/a", PAID: "Zaplaceno", CANCELLED: "Zrušeno" },
+  en: { REGISTERED: "Registered", PAID: "Paid", CANCELLED: "Cancelled" },
+};
+const AGE_LABELS: Record<ExportLang, Record<string, string>> = {
+  cs: { AGE_0_3: "0–3 roky", AGE_4_7: "4–7 let", AGE_8_14: "8–14 let", AGE_15_PLUS: "15 let a více" },
+  en: { AGE_0_3: "0–3 years", AGE_4_7: "4–7 years", AGE_8_14: "8–14 years", AGE_15_PLUS: "15+ years" },
+};
+const PRICING_LABELS: Record<ExportLang, Record<string, string>> = {
+  cs: { STANDARD: "Standardní", SUPPORTED: "Podporovaná", SURPLUS: "Nadbytek" },
+  en: { STANDARD: "Standard", SUPPORTED: "Supported", SURPLUS: "Surplus" },
+};
+const ARRIVAL_TIME_LABELS: Record<ExportLang, Record<string, string>> = {
+  cs: { MORNING: "Ráno", AFTERNOON: "Odpoledne", EVENING: "Večer" },
+  en: { MORNING: "Morning", AFTERNOON: "Afternoon", EVENING: "Evening" },
+};
+
+function formatExportDate(d: Date, lang: ExportLang): string {
+  // Europe/Prague (invariant 11), regardless of server TZ.
+  return new Intl.DateTimeFormat(lang === "cs" ? "cs-CZ" : "en-GB", {
+    timeZone: "Europe/Prague",
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+  }).format(d);
+}
+
+export async function buildRegistrationExport(
+  filters: RegistrationExportFilters,
+  ctx: AdminContext,
+  lang: ExportLang,
+): Promise<ExportTable> {
+  const search = filters.search?.trim();
+
+  // Optional created-date range → UTC-day boundaries. The admin UI doesn't
+  // surface a date filter yet; this honours the documented API contract. UTC-day
+  // (not Prague-day) is a ≤2h boundary skew, immaterial for a coarse filter.
+  const createdAt: { gte?: Date; lte?: Date } = {};
+  if (filters.dateFrom) createdAt.gte = new Date(`${filters.dateFrom}T00:00:00.000Z`);
+  if (filters.dateTo) createdAt.lte = new Date(`${filters.dateTo}T23:59:59.999Z`);
+
+  const rows = await prisma.registration.findMany({
+    where: {
+      deletedAt: null,
+      ...(filters.status ? { status: filters.status } : {}),
+      ...(createdAt.gte || createdAt.lte ? { createdAt } : {}),
+      ...(search
+        ? {
+            OR: [
+              { registrationNumber: { contains: search, mode: "insensitive" } },
+              { email: { contains: search, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+      event: {
+        deletedAt: null,
+        ...ownEventFilter(ctx),
+        ...(filters.eventId ? { id: filters.eventId } : {}),
+        ...(filters.centerId ? { centerId: filters.centerId } : {}),
+      },
+    },
+    include: {
+      event: { include: { center: true } },
+      center: true, // registrant's HOME centre
+      arrivalDate: true,
+      departureDate: true,
+      participants: {
+        where: { deletedAt: null },
+        orderBy: { sortOrder: "asc" },
+        include: { meals: { include: { eventMeal: true } } },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const L = EXPORT_HEADERS[lang];
+  const pick = (cs: string, en: string) => (lang === "cs" ? cs : en);
+
+  // Participant column-groups = the widest registration in the result (≥1 so the
+  // file always carries the participant structure), capped at the 10-max (inv. 19).
+  const maxParticipants = Math.min(
+    10,
+    Math.max(1, ...rows.map((r) => r.participants.length)),
+  );
+
+  const headers: string[] = [
+    L.regNo, L.event, L.created, L.email, L.eventCenter, L.homeCenter, L.status,
+    L.arrival, L.arrivalTime, L.departure, L.earlyDeparture, L.accommodation,
+    L.total, L.count,
+  ];
+  for (let i = 1; i <= maxParticipants; i++) {
+    headers.push(
+      `${L.participant} ${i} — ${L.pName}`,
+      `${L.participant} ${i} — ${L.pAge}`,
+      `${L.participant} ${i} — ${L.pType}`,
+      `${L.participant} ${i} — ${L.pParticipation}`,
+      `${L.participant} ${i} — ${L.pMeal}`,
+      `${L.participant} ${i} — ${L.pTotal}`,
+      `${L.participant} ${i} — ${L.pMeals}`,
+    );
+  }
+
+  const dataRows: (string | number)[][] = rows.map((r) => {
+    const row: (string | number)[] = [
+      r.registrationNumber ?? "",
+      pick(r.event.title_cs, r.event.title_en),
+      formatExportDate(r.createdAt, lang),
+      r.email,
+      pick(r.event.center.name_cs, r.event.center.name_en),
+      pick(r.center.name_cs, r.center.name_en),
+      REG_STATUS_LABELS[lang][r.status] ?? r.status,
+      pick(r.arrivalDate.label_cs, r.arrivalDate.label_en),
+      ARRIVAL_TIME_LABELS[lang][r.arrivalTime] ?? r.arrivalTime,
+      pick(r.departureDate.label_cs, r.departureDate.label_en),
+      r.earlyDeparture === "AFTER_BREAKFAST" ? L.yes : L.no,
+      r.hasAccommodation ? L.yes : L.no,
+      r.totalPrice,
+      r.participants.length,
+    ];
+    for (let i = 0; i < maxParticipants; i++) {
+      const p = r.participants[i];
+      if (!p) {
+        row.push("", "", "", "", "", "", "");
+        continue;
+      }
+      const is15 = p.ageCategory === "AGE_15_PLUS";
+      row.push(
+        p.fullName,
+        AGE_LABELS[lang][p.ageCategory] ?? p.ageCategory,
+        is15 ? (PRICING_LABELS[lang][p.pricingType] ?? p.pricingType) : "",
+        p.participationPrice,
+        p.mealPrice,
+        p.totalPrice,
+        p.meals.map((pm) => pick(pm.eventMeal.label_cs, pm.eventMeal.label_en)).join(", "),
+      );
+    }
+    return row;
+  });
+
+  return { headers, rows: dataRows, sheetName: L.sheet };
 }

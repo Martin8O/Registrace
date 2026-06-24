@@ -18,6 +18,13 @@ function formatDate(iso: string): string {
   return `${Number(day)}. ${Number(month)}. ${year}`
 }
 
+// The server sets the real filename via Content-Disposition (date-stamped); fall
+// back to a sensible default if the header is unavailable.
+function filenameFromHeader(header: string | null, format: 'csv' | 'excel'): string {
+  const match = header?.match(/filename="?([^"]+)"?/i)
+  return match?.[1] ?? `registrations.${format === 'excel' ? 'xlsx' : 'csv'}`
+}
+
 // Client island over the server-loaded registration rows. Data + ownership
 // scoping are resolved server-side (listRegistrations); meal stats are computed
 // server-side too (getEventMealStats) and passed in. This island only owns the
@@ -41,6 +48,12 @@ export default function RegistrationsTable({
   // registrant). Matches the email too, as a convenience. Already role/ownership
   // scoped server-side, so this only narrows the rows this admin may see.
   const [search, setSearch] = useState('')
+
+  // Export state. `exporting` = which button is mid-download; `langChoice` holds
+  // the pending format while the EN-UI language prompt is open (CS UI skips it).
+  const [exporting, setExporting] = useState<'csv' | 'excel' | null>(null)
+  const [langChoice, setLangChoice] = useState<'csv' | 'excel' | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   const centerName = (r: AdminRegistrationListItem) =>
     locale === 'cs' ? r.centerName_cs : r.centerName_en
@@ -75,6 +88,58 @@ export default function RegistrationsTable({
         (r.registrationNumber?.toLowerCase().includes(q) ?? false) ||
         r.email.toLowerCase().includes(q)),
   )
+
+  // Send exactly the filters the admin currently sees (the server re-applies them
+  // under the same ownership scope, so the file matches the on-screen table). The
+  // centre filter is omitted when scoped to one event (the UI hides it then too).
+  function currentExportFilters() {
+    return {
+      eventId: scopedEventId ?? undefined,
+      centerId: !scopedEventId && centerFilter !== 'ALL' ? centerFilter : undefined,
+      status: statusFilter !== 'ALL' ? statusFilter : undefined,
+      search: q || undefined,
+    }
+  }
+
+  function handleExportClick(format: 'csv' | 'excel') {
+    setExportError(null)
+    if (locale === 'en') {
+      setLangChoice(format) // EN UI → ask which language first
+      return
+    }
+    void runExport(format, 'cs') // CS UI → straight to a Czech file
+  }
+
+  async function runExport(format: 'csv' | 'excel', exportLang: 'cs' | 'en') {
+    setLangChoice(null)
+    setExporting(format)
+    setExportError(null)
+    try {
+      const res = await fetch('/api/admin/registrations/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...currentExportFilters(), format, lang: exportLang }),
+      })
+      if (!res.ok) {
+        setExportError(t('registrations.exportFailed'))
+        return
+      }
+      // Stream the file body to a download via a temporary object URL.
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filenameFromHeader(res.headers.get('content-disposition'), format)
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      setExportError(t('registrations.exportFailed'))
+    } finally {
+      setExporting(null)
+    }
+  }
 
   return (
     <div>
@@ -187,7 +252,34 @@ export default function RegistrationsTable({
             ))}
           </select>
         </div>
+
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => handleExportClick('csv')}
+            disabled={filtered.length === 0 || exporting !== null}
+            className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {exporting === 'csv' ? t('registrations.exporting') : t('registrations.exportCsv')}
+          </button>
+          <button
+            type="button"
+            onClick={() => handleExportClick('excel')}
+            disabled={filtered.length === 0 || exporting !== null}
+            className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {exporting === 'excel'
+              ? t('registrations.exporting')
+              : t('registrations.exportExcel')}
+          </button>
+        </div>
       </div>
+
+      {exportError && (
+        <div className="mb-4 rounded-lg border border-danger-500/40 bg-danger-50 p-3 text-sm text-danger-700">
+          {exportError}
+        </div>
+      )}
 
       <div className="section-card overflow-x-auto p-0">
         <table className="w-full text-sm">
@@ -247,6 +339,46 @@ export default function RegistrationsTable({
           </tbody>
         </table>
       </div>
+
+      {langChoice && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/60 p-4 backdrop-blur-sm"
+          onClick={() => setLangChoice(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="font-serif text-xl font-semibold text-neutral-900">
+              {t('registrations.exportLangTitle')}
+            </h2>
+            <div className="mt-2 mb-5 h-0.5 w-10 rounded bg-primary-500" />
+            <div className="flex flex-wrap justify-end gap-3">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setLangChoice(null)}
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => runExport(langChoice, 'cs')}
+              >
+                {t('registrations.exportLangCzech')}
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => runExport(langChoice, 'en')}
+              >
+                {t('registrations.exportLangEnglish')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

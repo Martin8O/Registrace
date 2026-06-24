@@ -178,7 +178,8 @@
         },
         "registration": {
           "update": "Registration updated",
-          "status_change": "Registration status changed"
+          "status_change": "Registration status changed",
+          "export": "Registrations export"
         },
         "email": {
           "resend": "Confirmation resent"
@@ -349,6 +350,13 @@
       "mealStatsTitle": "Meals to prepare",
       "searchLabel": "Search registration",
       "searchPlaceholder": "Search registration no.…",
+      "exportCsv": "Export CSV",
+      "exportExcel": "Export Excel",
+      "exporting": "Exporting…",
+      "exportFailed": "Export failed. Please try again.",
+      "exportLangTitle": "Which language to export?",
+      "exportLangEnglish": "English",
+      "exportLangCzech": "Czech",
       "table": {
         "id": "Reg. no.",
         "email": "Email",

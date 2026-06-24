@@ -18,6 +18,7 @@ export type AuditAction =
   | "event.status_change"
   | "registration.update"
   | "registration.status_change"
+  | "registration.export"
   | "email.resend"
   | "center.create"
   | "center.update"

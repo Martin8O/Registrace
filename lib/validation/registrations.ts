@@ -90,8 +90,30 @@ export const registrationUpdateSchema = z.object({
   status: z.enum(registrationStatusValues),
 });
 
+// ─── Admin registration export (P7) ───────────────────────────────────────────
+// Filters mirror the admin registrations list (event scope, hosting centre,
+// status, on-site search by reg number / email) plus an optional created-date
+// range; the export re-applies them server-side under the SAME role/ownership
+// scope (a client never widens what it may see). `format` picks CSV vs Excel;
+// `lang` localizes the file's labels — the admin's UI language, with an EN-UI
+// prompt offering Czech (see RegistrationsTable).
+const exportFormatValues = ["csv", "excel"] as const;
+const exportLangValues = ["cs", "en"] as const;
+
+export const registrationExportSchema = z.object({
+  eventId: z.string().min(1).optional(),
+  centerId: z.string().min(1).optional(),
+  status: z.enum(registrationStatusValues).optional(),
+  dateFrom: z.string().optional(), // YYYY-MM-DD, inclusive (UTC-day boundary)
+  dateTo: z.string().optional(), // YYYY-MM-DD, inclusive
+  search: z.string().optional(),
+  format: z.enum(exportFormatValues),
+  lang: z.enum(exportLangValues).default("cs"),
+});
+
 // ─── Inferred types ───────────────────────────────────────────────────────────
 
 export type CalculatePriceInput = z.infer<typeof calculatePriceSchema>;
 export type RegistrationSubmitInput = z.infer<typeof registrationSubmitSchema>;
 export type RegistrationUpdateInput = z.infer<typeof registrationUpdateSchema>;
+export type RegistrationExportInput = z.infer<typeof registrationExportSchema>;

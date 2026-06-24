@@ -10,6 +10,7 @@ import type { EventStatusValue } from "@/modules/events";
 export type {
   CalculatePriceInput,
   RegistrationSubmitInput,
+  RegistrationExportInput,
   EventCreateInput,
   EventCreateWithRelationsInput,
   EventUpdateInput,
