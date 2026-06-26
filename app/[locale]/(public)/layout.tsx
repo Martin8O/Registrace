@@ -26,22 +26,24 @@ export default async function PublicLayout({
               gray box on the pure-white header; brightness() lifts it to true white, and
               multiply keeps that white acting as transparent on any non-white surface. */}
           <div className="relative shrink-0">
-            {/* Full-width crimson rule that CONTINUES the logo's own baked-in underline to the
-                left across the whole page (like bdc.cz). The logo's line sits at 72.4% of the
-                image height and starts at its left edge; positioning this span relative to the
-                logo (top 72.4%, right-full) auto-aligns it at any logo height/breakpoint. Color
-                is the logo's exact red (#CC1728) so the join is seamless — replaces the former
-                header bottom-border, which sat lower and read as a second, parallel line. */}
+            {/* SINGLE crimson rule — the only line on the page (the logo's own baked-in underline
+                was erased from the JPEG). It spans the full viewport to the left and its right end
+                stops at 45.7% of the logo (where the title's underline ended, before the subtitle).
+                The logo renders ON TOP via mixBlendMode:multiply, so this red rule shows through the
+                logo's white areas → it reads as the underline beneath the title too, perfectly
+                continuous (one source = no sub-pixel step between a CSS line and a raster line at
+                100/133/140% zoom). top 72.36% = the original underline height; right 54.3% leaves
+                the subtitle + symbol clear. */}
             <span
               aria-hidden
-              className="pointer-events-none absolute right-full top-[72.4%] -translate-y-1/2 h-px w-screen"
+              className="pointer-events-none absolute right-[54.3%] top-[72.36%] z-0 -translate-y-1/2 h-0.5 w-screen"
               style={{ backgroundColor: '#CC1728' }}
             />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/images/bdc_logo_2.jpg"
               alt="Buddhismus Diamantové cesty"
-              className="block h-10 md:h-11 w-auto"
+              className="relative z-10 block h-10 md:h-11 w-auto"
               style={{ mixBlendMode: 'multiply', filter: 'brightness(1.05)' }}
             />
           </div>
