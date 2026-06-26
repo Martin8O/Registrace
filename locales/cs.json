@@ -471,6 +471,7 @@
       "newEmail": "Nový e-mail",
       "changeEmail": "Změnit e-mail",
       "emailSaved": "Na nový e-mail jsme poslali ověřovací odkaz — změna se projeví po jeho potvrzení.",
+      "emailChangedConfirmed": "E-mail byl úspěšně změněn. Od teď se přihlašujete novou adresou.",
       "emailFailed": "Změna e-mailu se nezdařila.",
       "newPassword": "Nové heslo",
       "confirmPassword": "Potvrzení hesla",

@@ -471,6 +471,7 @@
       "newEmail": "New email",
       "changeEmail": "Change email",
       "emailSaved": "We've sent a verification link to the new address — the change takes effect once you confirm it.",
+      "emailChangedConfirmed": "Your email has been changed. From now on you sign in with the new address.",
       "emailFailed": "Could not change the email.",
       "newPassword": "New password",
       "confirmPassword": "Confirm password",

@@ -28,6 +28,15 @@ export default function ProfilePage() {
       })
   }, [])
 
+  // Arriving here from the e-mail-change confirmation link (auth/confirm sends
+  // ?emailChanged=1) → show the green confirmation banner. Read from the URL
+  // directly to avoid needing a useSearchParams Suspense boundary.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('emailChanged') === '1') {
+      setToast(t('emailChangedConfirmed'))
+    }
+  }, [t])
+
   const handleChangeEmail = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
