@@ -21,7 +21,7 @@ export default async function PublicLayout({
   return (
     <>
       <header className="sticky top-0 z-40 overflow-hidden bg-white">
-        <div className="max-w-admin mx-auto px-5 md:px-8 h-[72px] flex items-center justify-end">
+        <div className="max-w-admin mx-auto px-5 md:px-8 h-[54px] flex items-center justify-end">
           {/* Logo at far right — the JPEG's near-white (#F9F9F9) background reads as a faint
               gray box on the pure-white header; brightness() lifts it to true white, and
               multiply keeps that white acting as transparent on any non-white surface. */}
@@ -54,7 +54,7 @@ export default async function PublicLayout({
           left edge of the page heading; CZ/EN stays at the right. w-full is required
           because this div is a direct flex-item of the body's flex-col; without it,
           mx-auto suppresses stretch and the row collapses. */}
-      <div className="w-full max-w-public mx-auto px-5 md:px-8 mt-4 flex items-center justify-between">
+      <div className="w-full max-w-public mx-auto px-5 md:px-8 mt-2.5 flex items-center justify-between">
         <Link
           href={`/${locale}`}
           aria-label={t('homeButton')}
