@@ -9,26 +9,29 @@ const earlyDepartureValues = ["NONE", "AFTER_BREAKFAST"] as const;
 
 // ─── Participant schemas ──────────────────────────────────────────────────────
 
+// String length caps (P8 item 7): every free-text/id input is bounded so a
+// hostile client can't post multi-MB strings. IDs are cuid/uuid (~25–36 chars) →
+// 64 is generous; names/emails use RFC-ish ceilings.
 const calculateParticipantSchema = z.object({
   ageCategory: z.enum(ageCategoryValues),
   pricingType: z.enum(pricingTypeValues).optional(),
-  mealIds: z.array(z.string()),
+  mealIds: z.array(z.string().min(1).max(64)).max(200),
 });
 
 const submitParticipantSchema = calculateParticipantSchema.extend({
-  fullName: z.string().min(2),
+  fullName: z.string().min(2).max(100),
 });
 
 // ─── Shared base fields ───────────────────────────────────────────────────────
 
 const baseFields = {
-  eventId: z.string().min(1),
-  arrivalDateId: z.string().min(1),
+  eventId: z.string().min(1).max(64),
+  arrivalDateId: z.string().min(1).max(64),
   arrivalTime: z.enum(arrivalTimeValues),
-  departureDateId: z.string().min(1),
+  departureDateId: z.string().min(1).max(64),
   earlyDeparture: z.enum(earlyDepartureValues),
   hasAccommodation: z.boolean(),
-  honeypot: z.string().optional(),
+  honeypot: z.string().max(200).optional(),
 };
 
 // ─── Shared refinements ───────────────────────────────────────────────────────
@@ -71,11 +74,20 @@ export const registrationSubmitSchema = z
   .object({
     ...baseFields,
     idempotencyKey: z.string().uuid(),
-    centerId: z.string().min(1),
-    email: z.string().email(),
+    centerId: z.string().min(1).max(64),
+    email: z.string().email().max(254), // RFC 5321 max address length
+    // GDPR (P8 item 8): consent is a LITERAL true — a missing/false/`"true"`
+    // value fails validation server-side, so a registration can never persist
+    // without explicit affirmative consent. This is the authoritative gate
+    // (the form checkbox is only the UI surface).
     gdprConsent: z.literal(true),
     participants: z.array(submitParticipantSchema).min(1).max(10),
   })
+  // NOTE on the visitor's IP: it is NOT part of this schema. It is read
+  // server-side from request headers (lib/security/rate-limit clientIp) and
+  // retained on Registration.ipAddress solely for abuse prevention / rate-limiting
+  // (legitimate-interest basis) — never collected from the client payload and
+  // never shown in the UI. See prisma/schema.prisma Registration.ipAddress.
   .superRefine((data, ctx) => applySharedRefinements(data, ctx));
 
 // ─── Admin registration edit (P2.5) ──────────────────────────────────────────
@@ -85,7 +97,7 @@ export const registrationSubmitSchema = z
 const registrationStatusValues = ["REGISTERED", "CANCELLED", "PAID"] as const;
 
 export const registrationUpdateSchema = z.object({
-  centerId: z.string().min(1),
+  centerId: z.string().min(1).max(64),
   hasAccommodation: z.boolean(),
   status: z.enum(registrationStatusValues),
 });
@@ -101,12 +113,12 @@ const exportFormatValues = ["csv", "excel"] as const;
 const exportLangValues = ["cs", "en"] as const;
 
 export const registrationExportSchema = z.object({
-  eventId: z.string().min(1).optional(),
-  centerId: z.string().min(1).optional(),
+  eventId: z.string().min(1).max(64).optional(),
+  centerId: z.string().min(1).max(64).optional(),
   status: z.enum(registrationStatusValues).optional(),
-  dateFrom: z.string().optional(), // YYYY-MM-DD, inclusive (UTC-day boundary)
-  dateTo: z.string().optional(), // YYYY-MM-DD, inclusive
-  search: z.string().optional(),
+  dateFrom: z.string().max(10).optional(), // YYYY-MM-DD, inclusive (UTC-day boundary)
+  dateTo: z.string().max(10).optional(), // YYYY-MM-DD, inclusive
+  search: z.string().max(100).optional(),
   format: z.enum(exportFormatValues),
   lang: z.enum(exportLangValues).default("cs"),
 });

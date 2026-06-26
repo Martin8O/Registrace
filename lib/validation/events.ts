@@ -9,17 +9,18 @@ const mealTypeValues = ["BREAKFAST", "LUNCH", "DINNER"] as const;
 
 // ─── Base shape ───────────────────────────────────────────────────────────────
 
+// String length caps (P8 item 7) — bound every free-text/id input.
 const eventFields = {
-  centerId: z.string().min(1),
-  title_cs: z.string().min(1),
-  title_en: z.string().min(1),
-  subtitle_cs: z.string().optional(),
-  subtitle_en: z.string().optional(),
-  description_cs: z.string().optional(),
-  description_en: z.string().optional(),
-  contactName: z.string().optional(),
-  contactPhone: z.string().optional(),
-  contactEmail: z.string().email().optional(),
+  centerId: z.string().min(1).max(64),
+  title_cs: z.string().min(1).max(200),
+  title_en: z.string().min(1).max(200),
+  subtitle_cs: z.string().max(300).optional(),
+  subtitle_en: z.string().max(300).optional(),
+  description_cs: z.string().max(5000).optional(),
+  description_en: z.string().max(5000).optional(),
+  contactName: z.string().max(200).optional(),
+  contactPhone: z.string().max(50).optional(),
+  contactEmail: z.string().email().max(254).optional(),
   status: z.enum(eventStatusValues),
   maxRegistrations: z.number().int().positive().optional(),
   startDate: z.coerce.date(),
@@ -29,9 +30,9 @@ const eventFields = {
 // ─── Relation child shapes (the full create payload) ────────────────────────────
 
 const eventDateInputSchema = z.object({
-  date: z.string().min(1), // ISO yyyy-mm-dd
-  label_cs: z.string().min(1),
-  label_en: z.string().min(1),
+  date: z.string().min(1).max(40), // ISO yyyy-mm-dd
+  label_cs: z.string().min(1).max(100),
+  label_en: z.string().min(1).max(100),
   sortOrder: z.number().int(),
 });
 
@@ -47,7 +48,7 @@ const pricingRuleInputSchema = z.object({
 });
 
 const eventMealInputSchema = z.object({
-  date: z.string().min(1), // ISO yyyy-mm-dd — matched to the created EventDate
+  date: z.string().min(1).max(40), // ISO yyyy-mm-dd — matched to the created EventDate
   mealType: z.enum(mealTypeValues),
   price: z.number().int().min(0),
   isClosed: z.boolean(),
@@ -101,16 +102,16 @@ export const eventStatusSchema = z.object({
 // ─── Centre schema (admin) — moved here from the centers route (P2 item 3: no
 // Zod schemas defined outside lib/validation) ───────────────────────────────────
 export const centerCreateSchema = z.object({
-  name_cs: z.string().min(1),
-  name_en: z.string().min(1),
+  name_cs: z.string().min(1).max(200),
+  name_en: z.string().min(1).max(200),
   sortOrder: z.number().int().optional(),
 });
 
 // Centre rename (P2.5) — SUPER_ADMIN only. Names are the only editable fields
 // (isActive/sortOrder are not exposed in the admin UI).
 export const centerUpdateSchema = z.object({
-  name_cs: z.string().min(1),
-  name_en: z.string().min(1),
+  name_cs: z.string().min(1).max(200),
+  name_en: z.string().min(1).max(200),
 });
 
 // ─── Inferred types ───────────────────────────────────────────────────────────

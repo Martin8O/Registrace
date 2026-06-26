@@ -207,6 +207,10 @@ model Registration {
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
   deletedAt          DateTime?
+  // GDPR (P8 item 8): the submitter's IP, captured server-side from request
+  // headers at submit. Retained ONLY for abuse prevention / rate-limiting
+  // (legitimate-interest basis) — never surfaced in the UI or any export, and
+  // not part of the public submit payload. See lib/validation/registrations.ts.
   ipAddress          String?
   // Human-readable, unique registration number shown to registrants + searched
   // by the on-site team (e.g. "260020108" = year 26 / event 002 / registrant 0108).

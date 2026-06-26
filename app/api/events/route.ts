@@ -1,10 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { getPublishedEvents } from "@/modules/events";
 import type { PublicEventListItem } from "@/lib/types";
 
 // GET /api/events?lang=cs|en — publicly visible (PUBLISHED + not past) events,
 // localized. Thin wrapper over the events service (invariant 8).
 export async function GET(req: NextRequest) {
+  // Rate limit (P8): human-level per-IP ceiling on the public reads — these
+  // aren't on the /api/admin edge matcher, so without this they'd be unbounded.
+  // 60/min (1 req/s sustained) sits well above real browsing (even on a shared
+  // centre IP / NAT) yet a scraper or DoS burst doing many req/s trips instantly.
+  const limited = enforceRateLimit(req, { bucket: "public-read", limit: 60, windowMs: 60_000 });
+  if (limited) return limited;
+
   const lang = req.nextUrl.searchParams.get("lang") === "en" ? "en" : "cs";
   const events = await getPublishedEvents();
 
