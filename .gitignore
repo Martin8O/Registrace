@@ -46,3 +46,6 @@ next-env.d.ts
 
 # Claude Code internal workspace (notes, wiki, session state — never push)
 local/
+
+# Throwaway email-preview artifacts (P6) — never serve publicly
+/public/_email_preview_*.html
