@@ -50,36 +50,38 @@ export default async function AdminDashboardPage({
         </div>
       )}
 
-      {/* Stat cards (centered count). Their action buttons live in a mirrored
-          row BELOW the cards — same 2-column grid + width — so each button sits
-          directly under its card on desktop, not inside it. */}
-      <div className="grid max-w-2xl grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="section-card flex flex-col items-center py-6 text-center">
-          <p className="text-sm font-medium text-neutral-500">{t('totalEvents')}</p>
-          <p className="mt-1 font-mono text-4xl font-semibold tabular-nums text-primary-600">
-            {totalEvents}
-          </p>
+      {/* Each cell pairs a stat card with its own action button stacked below it,
+          so the button stays under its card in BOTH layouts — two columns on
+          desktop, a single stacked column on mobile (card → its button → next
+          card → its button), never both buttons grouped below both cards. */}
+      <div className="grid max-w-2xl grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-4">
+          <div className="section-card flex flex-col items-center py-6 text-center">
+            <p className="text-sm font-medium text-neutral-500">{t('totalEvents')}</p>
+            <p className="mt-1 font-mono text-4xl font-semibold tabular-nums text-primary-600">
+              {totalEvents}
+            </p>
+          </div>
+          <div className="flex justify-center">
+            <Link href={`${base}/events`} className="btn-primary inline-block">
+              {t('goToEvents')}
+            </Link>
+          </div>
         </div>
-        <div className="section-card flex flex-col items-center py-6 text-center">
-          <p className="text-sm font-medium text-neutral-500">
-            {t('totalRegistrations')}
-          </p>
-          <p className="mt-1 font-mono text-4xl font-semibold tabular-nums text-primary-600">
-            {totalRegistrations}
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-4 grid max-w-2xl grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="flex justify-center">
-          <Link href={`${base}/events`} className="btn-primary inline-block">
-            {t('goToEvents')}
-          </Link>
-        </div>
-        <div className="flex justify-center">
-          <Link href={`${base}/registrations`} className="btn-secondary inline-block">
-            {t('goToRegistrations')}
-          </Link>
+        <div className="flex flex-col gap-4">
+          <div className="section-card flex flex-col items-center py-6 text-center">
+            <p className="text-sm font-medium text-neutral-500">
+              {t('totalRegistrations')}
+            </p>
+            <p className="mt-1 font-mono text-4xl font-semibold tabular-nums text-primary-600">
+              {totalRegistrations}
+            </p>
+          </div>
+          <div className="flex justify-center">
+            <Link href={`${base}/registrations`} className="btn-secondary inline-block">
+              {t('goToRegistrations')}
+            </Link>
+          </div>
         </div>
       </div>
     </div>

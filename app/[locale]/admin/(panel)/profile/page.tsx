@@ -96,12 +96,12 @@ export default function ProfilePage() {
       </header>
 
       {toast && (
-        <div className="rounded-lg border border-success-500/40 bg-success-50 p-3 text-sm text-success-700">
+        <div className="max-w-md rounded-lg border border-success-500/40 bg-success-50 p-3 text-sm text-success-700">
           {toast}
         </div>
       )}
       {error && (
-        <div className="rounded-lg border border-danger-500/40 bg-danger-50 p-3 text-sm text-danger-700">
+        <div className="max-w-md rounded-lg border border-danger-500/40 bg-danger-50 p-3 text-sm text-danger-700">
           {error}
         </div>
       )}
