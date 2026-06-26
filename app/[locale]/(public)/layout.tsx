@@ -41,7 +41,7 @@ export default async function PublicLayout({
             />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/images/bdc_logo_2.jpg"
+              src="/images/bdc_logo_2.jpg?v=2"
               alt="Buddhismus Diamantové cesty"
               className="relative z-10 block h-10 md:h-11 w-auto"
               style={{ mixBlendMode: 'multiply', filter: 'brightness(1.05)' }}
