@@ -390,8 +390,9 @@ function buildConfirmationEmailData(
 }
 
 // ─── Admin reads / writes (ownership — invariant 20) ──────────────────────────
-// A registration is visible/editable iff its event.createdBy = ctx.userId
-// (ADMIN) or always (SUPER_ADMIN). The centre shown/filtered in the LIST is the
+// A registration is visible/editable iff its event's centre is one of the admin's
+// assigned centres (ADMIN) or always (SUPER_ADMIN) — scope is by centre, not by
+// who created the event. The centre shown/filtered in the LIST is the
 // event's hosting centre (decision 12); the registrant's own home centre is a
 // separate, editable field surfaced in the detail.
 
@@ -451,9 +452,10 @@ export type DayMealStat = {
   meals: { mealType: string; count: number }[];
 };
 
-// Centre/role filter fragment shared by the admin reads.
+// Centre/role filter fragment shared by the admin reads. ADMIN is scoped to the
+// events of their assigned centres (invariant 20); SUPER_ADMIN: no filter.
 function ownEventFilter(ctx: AdminContext) {
-  return ctx.role === "ADMIN" ? { createdBy: ctx.userId } : {};
+  return ctx.role === "ADMIN" ? { centerId: { in: ctx.centerIds } } : {};
 }
 
 export async function listRegistrations(
@@ -548,11 +550,11 @@ async function assertRegistrationWritable(id: string, ctx: AdminContext) {
       centerId: true,
       hasAccommodation: true,
       status: true,
-      event: { select: { createdBy: true } },
+      event: { select: { centerId: true } },
     },
   });
   if (!r) throw new RegistrationNotFoundError();
-  if (ctx.role === "ADMIN" && r.event.createdBy !== ctx.userId) {
+  if (ctx.role === "ADMIN" && !ctx.centerIds.includes(r.event.centerId)) {
     throw new RegistrationForbiddenError();
   }
   return r;
@@ -614,7 +616,7 @@ export async function resendConfirmation(
     },
   });
   if (!r) throw new RegistrationNotFoundError();
-  if (ctx.role === "ADMIN" && r.event.createdBy !== ctx.userId) {
+  if (ctx.role === "ADMIN" && !ctx.centerIds.includes(r.event.centerId)) {
     throw new RegistrationForbiddenError();
   }
 

@@ -434,7 +434,9 @@ export async function createEvent(
 export async function getAdminDashboardCounts(
   ctx: AdminContext,
 ): Promise<{ events: number; registrations: number }> {
-  const ownEvents = ctx.role === "ADMIN" ? { createdBy: ctx.userId } : {};
+  // ADMIN is scoped to the events of their assigned centres (not by who created
+  // them — a centre can have several admins; invariant 20). SUPER_ADMIN: all.
+  const ownEvents = ctx.role === "ADMIN" ? { centerId: { in: ctx.centerIds } } : {};
   const [events, registrations] = await Promise.all([
     prisma.event.count({ where: { deletedAt: null, ...ownEvents } }),
     prisma.registration.count({
@@ -448,12 +450,14 @@ export async function getAdminDashboardCounts(
   return { events, registrations };
 }
 
-// ADMIN sees only events they created; SUPER_ADMIN sees all (invariant 20).
+// ADMIN sees all events of their assigned centres; SUPER_ADMIN sees all
+// (invariant 20). Scope is by centre, not by creator — a centre may have several
+// admins who all manage its events.
 export async function listAdminEvents(ctx: AdminContext): Promise<AdminEventListItem[]> {
   const events = await prisma.event.findMany({
     where: {
       deletedAt: null,
-      ...(ctx.role === "ADMIN" ? { createdBy: ctx.userId } : {}),
+      ...(ctx.role === "ADMIN" ? { centerId: { in: ctx.centerIds } } : {}),
     },
     include: { center: true },
     orderBy: { startDate: "desc" },
@@ -491,7 +495,7 @@ export async function getEventForEdit(
     include: eventDetailInclude,
   });
   if (!event) return null;
-  if (ctx.role === "ADMIN" && event.createdBy !== ctx.userId) return null;
+  if (ctx.role === "ADMIN" && !ctx.centerIds.includes(event.centerId)) return null;
   return { ...toEventDetailDTO(event), centerId: event.centerId, maxRegistrations: event.maxRegistrations };
 }
 
@@ -503,7 +507,7 @@ async function assertEventWritable(id: string, ctx: AdminContext) {
   const event = await prisma.event.findFirst({
     where: { id, deletedAt: null },
     select: {
-      createdBy: true,
+      centerId: true,
       title_cs: true,
       title_en: true,
       subtitle_cs: true,
@@ -518,7 +522,7 @@ async function assertEventWritable(id: string, ctx: AdminContext) {
     },
   });
   if (!event) throw new EventNotFoundError();
-  if (ctx.role === "ADMIN" && event.createdBy !== ctx.userId) throw new EventOwnershipError();
+  if (ctx.role === "ADMIN" && !ctx.centerIds.includes(event.centerId)) throw new EventOwnershipError();
   return event;
 }
 

@@ -71,7 +71,9 @@ next-intl 4 (i18n) · Zod 4 (validation — only lib) · React Hook Form · Rese
 ## Roles
 - **SUPER_ADMIN** (Martin) — full access to everything; assigns center admins via User
   Management; can manage events for any center.
-- **ADMIN** — center-scoped; can only create/manage events where `Event.createdBy = their userId`.
+- **ADMIN** — center-scoped; can create/manage events of their assigned centre(s)
+  (`Event.centerId ∈ their UserCenter`). A centre may have several admins who all manage its
+  events. `Event.createdBy` is kept only as a record of who created it, not for access control (M27).
 
 Deeper detail (session vs. body, ownership 403): architecture.md §Auth/roles.
 
