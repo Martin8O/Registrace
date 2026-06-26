@@ -20,7 +20,7 @@ export default async function PublicLayout({
 
   return (
     <>
-      <header className="sticky top-0 z-40 overflow-hidden bg-white">
+      <header className="sticky top-0 z-40 overflow-hidden bg-stone-100">
         <div className="max-w-admin mx-auto px-5 md:px-8 h-[54px] flex items-center justify-end">
           {/* Logo at far right — the JPEG's near-white (#F9F9F9) background reads as a faint
               gray box on the pure-white header; brightness() lifts it to true white, and
