@@ -29,7 +29,13 @@ export async function GET(
     const supabase = await createClient()
     const { error } = await supabase.auth.verifyOtp({ type, token_hash })
     if (!error) {
-      redirect(`/${locale}/admin/set-password`)
+      // invite/recovery → choose a password; email change → just confirmed, send
+      // them to their profile (no password step). type comes from the template.
+      const dest =
+        type === 'email_change'
+          ? `/${locale}/admin/profile?emailChanged=1`
+          : `/${locale}/admin/set-password`
+      redirect(dest)
     }
   }
 

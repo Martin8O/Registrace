@@ -194,8 +194,13 @@ export async function removeUser(id: string, ctx: AdminContext): Promise<{ id: s
     throw new UserManagementError("Cannot remove your own account", 409);
   }
 
-  const user = await prisma.user.findUnique({ where: { id }, select: { email: true } });
+  const user = await prisma.user.findUnique({ where: { id }, select: { email: true, role: true } });
   if (!user) throw new UserManagementError("User not found", 404);
+  // A super-admin can never be removed — not by themselves (above) and not by
+  // another super-admin. Protects the top-level accounts (Martin's request).
+  if (user.role === "SUPER_ADMIN") {
+    throw new UserManagementError("A super-admin account cannot be removed", 403);
+  }
 
   // Delete the auth identity first — if that fails (other than already-gone),
   // abort before touching Prisma so we don't leave a still-loginable account.

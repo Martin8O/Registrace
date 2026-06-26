@@ -325,16 +325,20 @@ export default function UsersManager({
             >
               {t('common.cancel')}
             </button>
-            {/* Remove admin — only when editing someone OTHER than yourself. */}
-            {editor.mode === 'edit' && editor.user.id !== currentUserId && (
-              <button
-                type="button"
-                onClick={() => setConfirmRemove(editor.user)}
-                className="ml-auto text-sm font-medium text-danger-600 hover:text-danger-700"
-              >
-                {t('users.remove')}
-              </button>
-            )}
+            {/* Remove admin — only when editing someone OTHER than yourself, and
+                never a super-admin (those accounts can't be removed; the API
+                enforces this too). */}
+            {editor.mode === 'edit' &&
+              editor.user.id !== currentUserId &&
+              editor.user.role !== 'SUPER_ADMIN' && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmRemove(editor.user)}
+                  className="ml-auto text-sm font-medium text-danger-600 hover:text-danger-700"
+                >
+                  {t('users.remove')}
+                </button>
+              )}
           </div>
         </section>
       )}
