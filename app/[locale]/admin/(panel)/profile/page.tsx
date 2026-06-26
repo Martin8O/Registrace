@@ -129,13 +129,15 @@ export default function ProfilePage() {
               onChange={(e) => setNewEmail(e.target.value)}
             />
           </div>
-          <button
-            type="submit"
-            disabled={busy}
-            className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {t('changeEmail')}
-          </button>
+          <div className="flex justify-center">
+            <button
+              type="submit"
+              disabled={busy}
+              className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {t('changeEmail')}
+            </button>
+          </div>
         </form>
       </section>
 
@@ -167,13 +169,15 @@ export default function ProfilePage() {
               onChange={(e) => setConfirm(e.target.value)}
             />
           </div>
-          <button
-            type="submit"
-            disabled={busy}
-            className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {t('changePassword')}
-          </button>
+          <div className="flex justify-center">
+            <button
+              type="submit"
+              disabled={busy}
+              className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {t('changePassword')}
+            </button>
+          </div>
         </form>
       </section>
     </div>
