@@ -144,6 +144,22 @@
       "signingIn": "Signing in…",
       "error": "Sign-in failed. Check your email and password."
     },
+    "setPassword": {
+      "title": "Set your password",
+      "subtitle": "Choose a new password to access the admin panel.",
+      "password": "New password",
+      "confirm": "Repeat password",
+      "submit": "Save password",
+      "saving": "Saving…",
+      "success": "Password set. Redirecting to the admin panel…",
+      "error": "Could not set the password. Please try again.",
+      "tooShort": "Password must be at least 8 characters.",
+      "mismatch": "Passwords do not match.",
+      "checking": "Verifying the link…",
+      "invalidTitle": "Link not valid",
+      "invalid": "This password link is invalid or has expired. Ask for a new invitation or password reset.",
+      "backToLogin": "Back to sign-in"
+    },
     "dashboard": {
       "title": "Dashboard",
       "subtitle": "Overview of events and registrations.",

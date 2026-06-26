@@ -144,6 +144,22 @@
       "signingIn": "Přihlašuji…",
       "error": "Přihlášení se nezdařilo. Zkontrolujte e-mail a heslo."
     },
+    "setPassword": {
+      "title": "Nastavení hesla",
+      "subtitle": "Zvolte si nové heslo pro přístup do administrace.",
+      "password": "Nové heslo",
+      "confirm": "Heslo znovu",
+      "submit": "Uložit heslo",
+      "saving": "Ukládám…",
+      "success": "Heslo bylo nastaveno. Přesměrovávám do administrace…",
+      "error": "Heslo se nepodařilo nastavit. Zkuste to prosím znovu.",
+      "tooShort": "Heslo musí mít alespoň 8 znaků.",
+      "mismatch": "Hesla se neshodují.",
+      "checking": "Ověřuji odkaz…",
+      "invalidTitle": "Odkaz není platný",
+      "invalid": "Odkaz pro nastavení hesla je neplatný nebo vypršel. Nech si poslat nový (pozvánku nebo reset hesla).",
+      "backToLogin": "Zpět na přihlášení"
+    },
     "dashboard": {
       "title": "Přehled",
       "subtitle": "Souhrn akcí a registrací.",

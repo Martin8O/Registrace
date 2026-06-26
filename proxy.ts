@@ -66,11 +66,19 @@ export async function proxy(request: NextRequest) {
   if (adminMatch) {
     const locale = adminMatch[1];
     const rest = adminMatch[2] ?? '';
-    const isLoginRoute = rest === 'login' || rest.startsWith('login/');
+    // login + set-password are reachable WITHOUT a prior server session: login is
+    // the entry point, and set-password receives its session from the invite/reset
+    // token in the URL fragment (which the edge can't see) — the client
+    // establishes it after load. Redirecting them to login would break both.
+    const isPublicAdminRoute =
+      rest === 'login' ||
+      rest.startsWith('login/') ||
+      rest === 'set-password' ||
+      rest.startsWith('set-password/');
     // DECISION C (P4): edge does session presence only — role/ownership scoping
     // for admin PAGES is enforced server-side when each page loads its data via
     // getAdminContext (Prisma can't run at the edge). Unauthenticated → login.
-    if (!user && !isLoginRoute) {
+    if (!user && !isPublicAdminRoute) {
       const loginUrl = new URL(`/${locale}/admin/login`, request.url);
       const redirect = NextResponse.redirect(loginUrl);
       supabaseResponse.cookies.getAll().forEach((cookie) => {

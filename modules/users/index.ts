@@ -46,9 +46,15 @@ function effectiveCenterIds(role: AdminUserRole, centerIds: string[]): string[] 
   return role === "SUPER_ADMIN" ? [] : centerIds;
 }
 
-function loginRedirect(): string | undefined {
+// Where the Supabase invite + password-reset emails land. NOT the login page —
+// an invited user has no password yet, and a reset needs to enter a NEW one. The
+// /admin/set-password page consumes the token from the URL and calls
+// updateUser({ password }). Built from NEXT_PUBLIC_APP_URL; the target must also
+// be in Supabase Auth → URL Configuration → Redirect URLs (allowlist), or
+// Supabase ignores it and falls back to the (possibly localhost) Site URL.
+function passwordSetupRedirect(): string | undefined {
   const base = process.env.NEXT_PUBLIC_APP_URL;
-  return base ? `${base}/cs/admin/login` : undefined;
+  return base ? `${base}/cs/admin/set-password` : undefined;
 }
 
 export async function listUsers(ctx: AdminContext): Promise<AdminUserListItem[]> {
@@ -80,7 +86,7 @@ export async function inviteUser(
   assertSuperAdmin(ctx);
 
   const supabase = createAdminClient();
-  const redirectTo = loginRedirect();
+  const redirectTo = passwordSetupRedirect();
   const { data, error } = await supabase.auth.admin.inviteUserByEmail(
     input.email,
     redirectTo ? { redirectTo } : undefined,
@@ -222,7 +228,7 @@ export async function resetUserPassword(
   if (!user) throw new UserManagementError("User not found", 404);
 
   const supabase = createAdminClient();
-  const redirectTo = loginRedirect();
+  const redirectTo = passwordSetupRedirect();
   const { error } = await supabase.auth.resetPasswordForEmail(
     user.email,
     redirectTo ? { redirectTo } : undefined,

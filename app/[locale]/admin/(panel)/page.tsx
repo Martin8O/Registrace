@@ -38,7 +38,7 @@ export default async function AdminDashboardPage({
       </header>
 
       {ctx.role === 'ADMIN' && (
-        <div className="section-card mb-6">
+        <div className="section-card mb-5 max-w-md py-4">
           <p className="text-sm font-medium text-neutral-500">{t('yourCenters')}</p>
           <p className="mt-1 text-neutral-900">
             {myCenters.length > 0
@@ -50,31 +50,33 @@ export default async function AdminDashboardPage({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        <div className="section-card">
+      {/* Stat cards (centered count). Their action buttons live in a mirrored
+          row BELOW the cards — same 2-column grid + width — so each button sits
+          directly under its card on desktop, not inside it. */}
+      <div className="grid max-w-2xl grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="section-card flex flex-col items-center py-6 text-center">
           <p className="text-sm font-medium text-neutral-500">{t('totalEvents')}</p>
-          <p className="mt-2 font-mono text-4xl font-semibold tabular-nums text-primary-600">
+          <p className="mt-1 font-mono text-4xl font-semibold tabular-nums text-primary-600">
             {totalEvents}
           </p>
         </div>
-        <div className="section-card">
+        <div className="section-card flex flex-col items-center py-6 text-center">
           <p className="text-sm font-medium text-neutral-500">
             {t('totalRegistrations')}
           </p>
-          <p className="mt-2 font-mono text-4xl font-semibold tabular-nums text-primary-600">
+          <p className="mt-1 font-mono text-4xl font-semibold tabular-nums text-primary-600">
             {totalRegistrations}
           </p>
         </div>
       </div>
 
-      <div className="mt-8">
-        <h2 className="font-serif text-lg font-semibold text-neutral-900">
-          {t('quickLinks')}
-        </h2>
-        <div className="mt-4 flex flex-wrap gap-3">
+      <div className="mt-4 grid max-w-2xl grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="flex justify-center">
           <Link href={`${base}/events`} className="btn-primary inline-block">
             {t('goToEvents')}
           </Link>
+        </div>
+        <div className="flex justify-center">
           <Link href={`${base}/registrations`} className="btn-secondary inline-block">
             {t('goToRegistrations')}
           </Link>
