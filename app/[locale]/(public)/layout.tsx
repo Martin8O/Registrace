@@ -20,18 +20,31 @@ export default async function PublicLayout({
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b-2 border-primary-500/90 bg-white">
+      <header className="sticky top-0 z-40 overflow-hidden bg-white">
         <div className="max-w-admin mx-auto px-5 md:px-8 h-[72px] flex items-center justify-end">
           {/* Logo at far right — the JPEG's near-white (#F9F9F9) background reads as a faint
               gray box on the pure-white header; brightness() lifts it to true white, and
               multiply keeps that white acting as transparent on any non-white surface. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/images/bdc_logo_2.jpg"
-            alt="Buddhismus Diamantové cesty"
-            className="h-10 md:h-11 w-auto shrink-0"
-            style={{ mixBlendMode: 'multiply', filter: 'brightness(1.05)' }}
-          />
+          <div className="relative shrink-0">
+            {/* Full-width crimson rule that CONTINUES the logo's own baked-in underline to the
+                left across the whole page (like bdc.cz). The logo's line sits at 72.4% of the
+                image height and starts at its left edge; positioning this span relative to the
+                logo (top 72.4%, right-full) auto-aligns it at any logo height/breakpoint. Color
+                is the logo's exact red (#CC1728) so the join is seamless — replaces the former
+                header bottom-border, which sat lower and read as a second, parallel line. */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute right-full top-[72.4%] -translate-y-1/2 h-px w-screen"
+              style={{ backgroundColor: '#CC1728' }}
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/images/bdc_logo_2.jpg"
+              alt="Buddhismus Diamantové cesty"
+              className="block h-10 md:h-11 w-auto"
+              style={{ mixBlendMode: 'multiply', filter: 'brightness(1.05)' }}
+            />
+          </div>
         </div>
       </header>
       {/* Home link + CZ/EN toggle — below the logo, beneath the crimson rule.
