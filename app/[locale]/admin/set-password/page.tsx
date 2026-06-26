@@ -6,23 +6,26 @@ import { useRouter } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { createClient } from '@/lib/supabase/client'
 
-// Standalone "set your password" page — the landing target for the Supabase
-// invite + password-reset emails (modules/users → redirectTo). NOT inside the
-// (panel) shell (no sidebar), like the login page.
+// "Set your password" page — reached ONLY after /admin/auth/confirm has verified
+// the invite/reset token server-side and put the token user's session in the
+// cookies. Here we just let that user choose a password (updateUser).
 //
-// Flow: the invite/recovery link carries a token that Supabase's verify endpoint
-// turns into a session, handed back in the URL. The browser client's
-// detectSessionInUrl consumes it on mount and fires onAuthStateChange; once a
-// session exists we let the user choose a password via updateUser({ password }).
-// The edge (proxy.ts) lets this route through without a prior server session,
-// because the token lives in the URL fragment the server never sees.
+// SECURITY: this page must NEVER change a password using an *ambient* session.
+// The earlier bug was exactly that — an invite link, clicked while the
+// super-admin was logged in, fell back to the super-admin's session and changed
+// THEIR password. Two guards now:
+//   1) Tokens are verified server-side (auth/confirm), so the session here is the
+//      token user's, replacing any prior one.
+//   2) If we detect a raw auth token in the URL, it means we were reached by an
+//      OLD direct link (not via auth/confirm). We refuse and ask for a fresh
+//      link — we do NOT fall back to whatever session is present.
 export default function SetPasswordPage() {
   const router = useRouter()
   const locale = useLocale()
   const t = useTranslations('admin.setPassword')
 
   const clientRef = useRef<ReturnType<typeof createClient> | null>(null)
-  const [phase, setPhase] = useState<'checking' | 'ready' | 'nosession'>('checking')
+  const [phase, setPhase] = useState<'checking' | 'ready' | 'invalid'>('checking')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -30,35 +33,18 @@ export default function SetPasswordPage() {
   const [done, setDone] = useState(false)
 
   useEffect(() => {
+    // A raw auth token in the URL ⇒ reached by an old direct link, not through
+    // the server confirm route. Refuse rather than touch any ambient session.
+    const raw = (window.location.hash || '') + (window.location.search || '')
+    if (/access_token=|token_hash=|[?&]code=|[?&]type=|error=/.test(raw)) {
+      setPhase('invalid')
+      return
+    }
     const supabase = createClient()
     clientRef.current = supabase
-    let settled = false
-    const markReady = () => {
-      if (!settled) {
-        settled = true
-        setPhase('ready')
-      }
-    }
-
-    // Two paths to a session: the auth-state event detectSessionInUrl fires, and
-    // a direct getSession() (covers the case where it resolved before we subscribed).
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) markReady()
-    })
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) markReady()
+      setPhase(data.session ? 'ready' : 'invalid')
     })
-
-    // No session after a grace period → the link was invalid/expired or the page
-    // was opened directly.
-    const timer = setTimeout(() => {
-      if (!settled) setPhase('nosession')
-    }, 2500)
-
-    return () => {
-      clearTimeout(timer)
-      sub.subscription.unsubscribe()
-    }
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
@@ -94,7 +80,7 @@ export default function SetPasswordPage() {
     <div className="flex min-h-screen items-center justify-center bg-stone-100 px-5 py-10">
       <div className="section-card w-full max-w-sm">
         <h1 className="font-serif text-2xl font-semibold text-neutral-900">
-          {phase === 'nosession' ? t('invalidTitle') : t('title')}
+          {phase === 'invalid' ? t('invalidTitle') : t('title')}
         </h1>
         <div className="mt-2 h-0.5 w-10 rounded bg-primary-500" />
 
@@ -102,7 +88,7 @@ export default function SetPasswordPage() {
           <p className="mt-4 text-sm text-neutral-500">{t('checking')}</p>
         )}
 
-        {phase === 'nosession' && (
+        {phase === 'invalid' && (
           <>
             <p className="mt-3 text-sm text-neutral-600">{t('invalid')}</p>
             <Link

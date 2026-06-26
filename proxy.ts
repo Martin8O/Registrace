@@ -66,13 +66,18 @@ export async function proxy(request: NextRequest) {
   if (adminMatch) {
     const locale = adminMatch[1];
     const rest = adminMatch[2] ?? '';
-    // login + set-password are reachable WITHOUT a prior server session: login is
-    // the entry point, and set-password receives its session from the invite/reset
-    // token in the URL fragment (which the edge can't see) — the client
-    // establishes it after load. Redirecting them to login would break both.
+    // These admin routes are reachable WITHOUT a prior server session:
+    //  • login            — the entry point.
+    //  • auth/confirm      — verifies the invite/reset token (verifyOtp) and only
+    //                        THEN establishes a session; redirecting it to login
+    //                        first would mean the token is never verified.
+    //  • set-password      — loaded after auth/confirm has set the session.
+    // Redirecting any of them to login would break the password-setup flow.
     const isPublicAdminRoute =
       rest === 'login' ||
       rest.startsWith('login/') ||
+      rest === 'auth/confirm' ||
+      rest.startsWith('auth/confirm/') ||
       rest === 'set-password' ||
       rest.startsWith('set-password/');
     // DECISION C (P4): edge does session presence only — role/ownership scoping
