@@ -45,7 +45,10 @@ export default function ProfilePage() {
     try {
       const { error: err } = await createClient().auth.updateUser({ email: newEmail })
       if (err) {
-        setError(t('emailFailed'))
+        // Surface the actual Supabase reason (e.g. a rate-limit cooldown, or
+        // "email already registered") alongside the friendly message — otherwise
+        // the cause is hidden and changes look like they fail for no reason.
+        setError(err.message ? `${t('emailFailed')} (${err.message})` : t('emailFailed'))
       } else {
         setToast(t('emailSaved'))
         setNewEmail('')
