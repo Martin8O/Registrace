@@ -11,10 +11,26 @@ export type AdminRole = "ADMIN" | "SUPER_ADMIN";
 
 export type AdminContext = {
   userId: string; // = Supabase Auth user id (UUID), matches User.id (invariant 12)
+  email: string; // the acting user's email (used for the owner check below)
   role: AdminRole;
+  isOwner: boolean; // top-level account(s) per OWNER_EMAILS — may manage the SUPER_ADMIN tier
   centerIds: string[]; // centres this user administers (via UserCenter)
   ip: string | null; // client IP of the request that resolved this context (P4 — audit trail)
 };
+
+// The "owner" tier: only these accounts may create/modify/remove SUPER_ADMINs
+// (other super-admins manage ADMINs only — they cannot touch each other). The
+// owner is configured by email via the OWNER_EMAILS env (comma-separated,
+// case-insensitive). Empty/unset → no owner → nobody can manage super-admins
+// (fail-closed). Email basis (not a DB flag) keeps it config-only, no migration.
+export function isOwnerEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const owners = (process.env.OWNER_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return owners.includes(email.toLowerCase());
+}
 
 // Read the client IP from the current request headers (P4). getAdminContext is
 // only ever called inside a request (route handlers / api/auth/me), so headers()
@@ -68,9 +84,12 @@ export async function getAdminContext(): Promise<AdminContext | null> {
     }
   }
 
+  const email = user.email ?? dbUser.email;
   return {
     userId: dbUser.id,
+    email,
     role: dbUser.role,
+    isOwner: isOwnerEmail(email),
     centerIds: dbUser.centers.map((c) => c.centerId),
     ip: await requestIp(),
   };

@@ -24,10 +24,12 @@ export default function UsersManager({
   users,
   centers,
   currentUserId,
+  isOwner,
 }: {
   users: AdminUserListItem[]
   centers: CenterDTO[]
   currentUserId: string
+  isOwner: boolean
 }) {
   const t = useTranslations('admin')
   const locale = useLocale()
@@ -220,13 +222,19 @@ export default function UsersManager({
                     {formatDate(u.createdAt)}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(u)}
-                      className="text-sm font-medium text-primary-600 hover:text-primary-700"
-                    >
-                      {t('users.edit')}
-                    </button>
+                    {/* A super-admin row is editable only by the owner; others
+                        manage admins only (the API enforces this too). */}
+                    {u.role === 'SUPER_ADMIN' && !isOwner ? (
+                      <span className="text-sm text-neutral-400">—</span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => openEdit(u)}
+                        className="text-sm font-medium text-primary-600 hover:text-primary-700"
+                      >
+                        {t('users.edit')}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))
@@ -265,7 +273,8 @@ export default function UsersManager({
                 value={role}
                 onChange={(e) => setRole(e.target.value as AdminUserRole)}
               >
-                {ROLES.map((r) => (
+                {/* Only the owner may assign the SUPER_ADMIN role. */}
+                {(isOwner ? ROLES : ROLES.filter((r) => r !== 'SUPER_ADMIN')).map((r) => (
                   <option key={r} value={r}>
                     {r}
                   </option>

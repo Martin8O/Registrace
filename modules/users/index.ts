@@ -84,6 +84,10 @@ export async function inviteUser(
   ctx: AdminContext,
 ): Promise<{ id: string }> {
   assertSuperAdmin(ctx);
+  // Only the owner may create a SUPER_ADMIN; other super-admins invite ADMINs only.
+  if (input.role === "SUPER_ADMIN" && !ctx.isOwner) {
+    throw new UserManagementError("Only the owner can create a super-admin", 403);
+  }
 
   const supabase = createAdminClient();
   const redirectTo = passwordSetupRedirect();
@@ -157,6 +161,12 @@ export async function updateUser(
 
   const existing = await prisma.user.findUnique({ where: { id }, select: { role: true } });
   if (!existing) throw new UserManagementError("User not found", 404);
+  // The SUPER_ADMIN tier is owner-only: a non-owner cannot modify an existing
+  // super-admin (role or centres) nor promote anyone to super-admin. Other
+  // super-admins manage ADMINs only and cannot touch each other.
+  if ((existing.role === "SUPER_ADMIN" || input.role === "SUPER_ADMIN") && !ctx.isOwner) {
+    throw new UserManagementError("Only the owner can manage super-admins", 403);
+  }
 
   const centerIds = effectiveCenterIds(input.role, input.centerIds);
   await prisma.$transaction(async (tx) => {

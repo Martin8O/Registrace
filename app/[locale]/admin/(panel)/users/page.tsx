@@ -20,5 +20,12 @@ export default async function AdminUsersPage({
 
   const [users, centers] = await Promise.all([listUsers(ctx), getCentersForSelect()])
 
-  return <UsersManager users={users} centers={centers} currentUserId={ctx.userId} />
+  return (
+    <UsersManager
+      users={users}
+      centers={centers}
+      currentUserId={ctx.userId}
+      isOwner={ctx.isOwner}
+    />
+  )
 }
