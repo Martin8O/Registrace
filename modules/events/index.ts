@@ -522,6 +522,10 @@ export async function listAdminEvents(ctx: AdminContext): Promise<AdminEventList
 export type EventEditDTO = EventDetailDTO & {
   centerId: string;
   maxRegistrations: number | null;
+  // How many registrations reference this event (any status, incl. soft-deleted).
+  // A DRAFT with zero is fully editable (centre/dates/pricing/meals); otherwise
+  // those are locked because existing rows depend on the EventDate/EventMeal ids.
+  registrationCount: number;
 };
 
 // Load an event for editing, ownership-scoped. Returns null when the event is
@@ -537,7 +541,16 @@ export async function getEventForEdit(
   });
   if (!event) return null;
   if (ctx.role === "ADMIN" && !ctx.centerIds.includes(event.centerId)) return null;
-  return { ...toEventDetailDTO(event), centerId: event.centerId, maxRegistrations: event.maxRegistrations };
+  // Count ALL registrations (any status, incl. soft-deleted): even a soft-deleted
+  // row's ParticipantMeal references this event's EventMeal ids, so the relations
+  // can only be wiped/replaced when truly nothing points at them.
+  const registrationCount = await prisma.registration.count({ where: { eventId: id } });
+  return {
+    ...toEventDetailDTO(event),
+    centerId: event.centerId,
+    maxRegistrations: event.maxRegistrations,
+    registrationCount,
+  };
 }
 
 // Re-fetch an event for a write and assert the caller may touch it. Missing →
@@ -567,15 +580,54 @@ async function assertEventWritable(id: string, ctx: AdminContext) {
   return event;
 }
 
-// Update an existing event's SCALAR fields only (§0 decision 1). centerId,
-// startDate, endDate and all relations (dates/meals/pricing) are immutable here
-// even if present in the payload — existing registrations reference those ids.
+// Load an event for an update + assert the caller may touch it, returning the
+// scalar pre-image (audit oldData), its status, and how many registrations
+// reference it. Missing → 404; ADMIN-not-owner → 403.
+async function loadEventForUpdate(id: string, ctx: AdminContext) {
+  const event = await prisma.event.findFirst({
+    where: { id, deletedAt: null },
+    select: {
+      centerId: true,
+      title_cs: true,
+      title_en: true,
+      subtitle_cs: true,
+      subtitle_en: true,
+      description_cs: true,
+      description_en: true,
+      contactName: true,
+      contactPhone: true,
+      contactEmail: true,
+      maxRegistrations: true,
+      status: true,
+      _count: { select: { registrations: true } },
+    },
+  });
+  if (!event) throw new EventNotFoundError();
+  if (ctx.role === "ADMIN" && !ctx.centerIds.includes(event.centerId)) throw new EventOwnershipError();
+  const { _count, ...before } = event;
+  return { before, status: event.status, registrationCount: _count.registrations };
+}
+
+// Update an existing event. A DRAFT with zero registrations is fully editable —
+// centre, dates, pricing and meals are replaced wholesale (nothing depends on
+// them yet) — see replaceDraftEventRelations. Otherwise only the scalar fields
+// are writable (§0 decision 1): centre/startDate/endDate/relations are immutable
+// because existing registrations reference those EventDate/EventMeal ids.
 export async function updateEvent(
   id: string,
   input: EventUpdateInput,
   ctx: AdminContext,
 ): Promise<{ id: string }> {
-  const before = await assertEventWritable(id, ctx);
+  const { before, status, registrationCount } = await loadEventForUpdate(id, ctx);
+
+  // The full payload (with relation arrays) only takes effect for an editable
+  // draft; a locked event ignores centre/dates/relations even if they're sent.
+  const relationsEditable = status === "DRAFT" && registrationCount === 0;
+  const hasRelations =
+    input.dates !== undefined && input.pricingRules !== undefined && input.meals !== undefined;
+  if (relationsEditable && hasRelations) {
+    return replaceDraftEventRelations(id, input, before, ctx);
+  }
 
   // Whitelist: only these scalar columns are writable. Anything else in the
   // validated payload (centerId/startDate/endDate) is deliberately ignored.
@@ -611,6 +663,115 @@ export async function updateEvent(
     entityId: id,
     oldData: before, // pre-image of the editable scalars (+ createdBy/status)
     newData: data, // only the fields actually changed
+  });
+
+  return { id };
+}
+
+// Full replace for an editable DRAFT (no registrations): updates scalars +
+// centre + start/end dates, then wipes and recreates the event's dates, pricing
+// rules and meals in one transaction. Safe because nothing references the old
+// EventDate/EventMeal/PricingRule ids yet. numberPrefix is intentionally left
+// frozen (set at create) — a draft has no registration numbers to keep in sync.
+async function replaceDraftEventRelations(
+  id: string,
+  input: EventUpdateInput,
+  before: { centerId: string },
+  ctx: AdminContext,
+): Promise<{ id: string }> {
+  // An ADMIN may only move a draft to one of their own centres (SUPER_ADMIN: any).
+  if (input.centerId && ctx.role === "ADMIN" && !ctx.centerIds.includes(input.centerId)) {
+    throw new EventOwnershipError();
+  }
+
+  const dates = input.dates ?? [];
+  const pricingRules = input.pricingRules ?? [];
+  const meals = input.meals ?? [];
+  const dayLabels = new Map(dates.map((d) => [d.date, { cs: d.label_cs, en: d.label_en }]));
+
+  await prisma.$transaction(async (tx) => {
+    // 1) Scalars + centre + dates + deadline.
+    const data: Prisma.EventUpdateInput = {};
+    if (input.title_cs !== undefined) data.title_cs = input.title_cs;
+    if (input.title_en !== undefined) data.title_en = input.title_en;
+    if (input.subtitle_cs !== undefined) data.subtitle_cs = input.subtitle_cs || null;
+    if (input.subtitle_en !== undefined) data.subtitle_en = input.subtitle_en || null;
+    if (input.description_cs !== undefined) data.description_cs = input.description_cs || null;
+    if (input.description_en !== undefined) data.description_en = input.description_en || null;
+    if (input.contactName !== undefined) data.contactName = input.contactName || null;
+    if (input.contactPhone !== undefined) data.contactPhone = input.contactPhone || null;
+    if (input.contactEmail !== undefined) data.contactEmail = input.contactEmail || null;
+    if (input.maxRegistrations !== undefined) data.maxRegistrations = input.maxRegistrations;
+    if (input.status !== undefined) data.status = input.status;
+    if (input.centerId !== undefined) data.center = { connect: { id: input.centerId } };
+    if (input.startDate !== undefined) data.startDate = input.startDate;
+    if (input.endDate !== undefined) data.endDate = input.endDate;
+    if (input.mealRegistrationDeadline !== undefined) {
+      data.mealRegistrationDeadline = input.mealRegistrationDeadline
+        ? pragueLocalToUtc(input.mealRegistrationDeadline)
+        : null;
+    }
+    await tx.event.update({ where: { id }, data });
+
+    // 2) Wipe old relations (EventMeal first — it references EventDate).
+    await tx.eventMeal.deleteMany({ where: { eventId: id } });
+    await tx.pricingRule.deleteMany({ where: { eventId: id } });
+    await tx.eventDate.deleteMany({ where: { eventId: id } });
+
+    // 3) Recreate them (mirrors createEvent's relation writes).
+    const dateIdByIso = new Map<string, string>();
+    for (const d of dates) {
+      const created = await tx.eventDate.create({
+        data: {
+          eventId: id,
+          date: new Date(d.date),
+          label_cs: d.label_cs,
+          label_en: d.label_en,
+          sortOrder: d.sortOrder,
+        },
+      });
+      dateIdByIso.set(d.date, created.id);
+    }
+    if (pricingRules.length > 0) {
+      await tx.pricingRule.createMany({
+        data: pricingRules.map((r) => ({ eventId: id, ...r })),
+      });
+    }
+    const mealData = meals.flatMap((m) => {
+      const eventDateId = dateIdByIso.get(m.date);
+      if (!eventDateId) return [];
+      const label = dayLabels.get(m.date);
+      return [
+        {
+          eventId: id,
+          eventDateId,
+          mealType: m.mealType,
+          price: m.price,
+          isClosed: m.isClosed,
+          label_cs: `${label?.cs ?? ""} – ${MEAL_LABEL_CS[m.mealType] ?? m.mealType}`,
+          label_en: `${label?.en ?? ""} – ${MEAL_LABEL_EN[m.mealType] ?? m.mealType}`,
+        },
+      ];
+    });
+    if (mealData.length > 0) {
+      await tx.eventMeal.createMany({ data: mealData });
+    }
+  });
+
+  await logAuditEvent({
+    userId: ctx.userId,
+    ip: ctx.ip,
+    action: "event.update",
+    entityType: "Event",
+    entityId: id,
+    oldData: before,
+    newData: {
+      centerId: input.centerId,
+      startDate: input.startDate?.toISOString(),
+      endDate: input.endDate?.toISOString(),
+      status: input.status,
+      replacedRelations: true,
+    },
   });
 
   return { id };

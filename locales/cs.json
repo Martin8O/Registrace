@@ -300,6 +300,13 @@
       "publishConfirmBody": "Akce bude nastavena jako publikovaná a viditelná pro veřejnost. Chcete pokračovat?",
       "publishConfirm": "Ano, publikovat",
       "publishCancel": "Zpět",
+      "success": {
+        "publishedTitle": "Akce zveřejněna",
+        "publishedBody": "Akce byla úspěšně zveřejněna a je nyní viditelná pro veřejnost.",
+        "savedTitle": "Akce uložena",
+        "savedBody": "Akce byla úspěšně uložena.",
+        "toList": "Přejít na seznam akcí"
+      },
       "steps": {
         "basic": "Základní údaje",
         "schedule": "Termín",
@@ -350,7 +357,8 @@
         "childNote": "U dětských kategorií je sazba obvykle 0, ale můžete zadat vlastní denní sazbu i cenu za noc – výpočet vždy přesně odpovídá zadanému ceníku. Slevy za příjezd/odjezd se na děti nevztahují."
       },
       "settings": {
-        "mealDeadlineNote": "Po tomto termínu už nepůjde u akce objednat jídlo (účast a ubytování zůstávají otevřené). Nepovinné. Čas je v českém čase (automaticky SELČ/SEČ).",
+        "mealDeadlineNote": "Po tomto termínu už nepůjde u akce objednat jídlo (účast a ubytování zůstávají otevřené). Nepovinné — bez termínu (prázdné pole) je registrace na jídlo bez časového omezení. Čas je v českém čase (automaticky SELČ/SEČ).",
+        "clearDeadline": "Vymazat termín",
         "noDeadline": "Bez termínu"
       },
       "meals": {
@@ -435,6 +443,8 @@
       "status": "Stav",
       "participants": "Účastníci",
       "meals": "Strava",
+      "priceWord": "cena",
+      "mealWord": "strava",
       "save": "Uložit změny",
       "saved": "Změny uloženy.",
       "saveFailed": "Uložení se nezdařilo. Zkuste to prosím znovu.",

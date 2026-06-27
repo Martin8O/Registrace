@@ -11,7 +11,13 @@ export default function LanguageSwitcher() {
   function switchTo(targetLocale: string) {
     const segments = pathname.split('/')
     segments[1] = targetLocale
-    router.push(segments.join('/'))
+    // Preserve the current query string so switching language stays on the SAME
+    // page state: the event-scoped registrations view (?event=…) and the event
+    // form's step (?step=…) both live in the query, which usePathname() drops.
+    // Read it live from window.location so any in-page history.replaceState
+    // (e.g. the stepper syncing its step) is reflected at click time.
+    const search = typeof window !== 'undefined' ? window.location.search : ''
+    router.push(segments.join('/') + search)
   }
 
   return (

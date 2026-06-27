@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm, type FieldErrors, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -159,39 +159,120 @@ function isoMinusDays(iso: string, n: number): string {
   return d.toISOString().slice(0, 10)
 }
 
+// ── Prefill the editable pricing/meal state from a stored event (draft edit) ──
+// A draft with no registrations is fully editable (§0 decision 1 revised): the
+// 15+/child rates and per-day meals start from the event's saved values instead
+// of the catalogue defaults, so the admin tweaks rather than re-enters them.
+function initialPricing15(
+  editData?: EventStepperEditData,
+): Record<MockPricingType, Pricing15> {
+  const base: Record<MockPricingType, Pricing15> = {
+    STANDARD: { ...DEFAULT_PRICING_15.STANDARD },
+    SUPPORTED: { ...DEFAULT_PRICING_15.SUPPORTED },
+    SURPLUS: { ...DEFAULT_PRICING_15.SURPLUS },
+  }
+  for (const r of editData?.pricingRules ?? []) {
+    if (r.ageCategory === 'AGE_15_PLUS' && (PRICING_TYPES as string[]).includes(r.pricingType)) {
+      base[r.pricingType as MockPricingType] = {
+        dailyRate: r.dailyRate,
+        nightRate: r.nightRate,
+        morningArrivalDiscount: r.morningArrivalDiscount,
+        afternoonArrivalDiscount: r.afternoonArrivalDiscount,
+        eveningArrivalDiscount: r.eveningArrivalDiscount,
+        earlyDepartureDiscount: r.earlyDepartureDiscount,
+      }
+    }
+  }
+  return base
+}
+
+function initialPricingChild(
+  editData?: EventStepperEditData,
+): Record<string, PricingChild> {
+  const base: Record<string, PricingChild> = {
+    AGE_0_3: { dailyRate: 0, nightRate: 0 },
+    AGE_4_7: { dailyRate: 0, nightRate: 0 },
+    AGE_8_14: { dailyRate: 0, nightRate: 0 },
+  }
+  for (const r of editData?.pricingRules ?? []) {
+    if ((CHILD_AGES as string[]).includes(r.ageCategory)) {
+      base[r.ageCategory] = { dailyRate: r.dailyRate, nightRate: r.nightRate }
+    }
+  }
+  return base
+}
+
+function initialMealEdits(editData?: EventStepperEditData): Record<string, MealEdit> {
+  const out: Record<string, MealEdit> = {}
+  if (!editData) return out
+  const isoByDateId = new Map(editData.dates.map((d) => [d.id, d.date]))
+  for (const m of editData.meals) {
+    const date = isoByDateId.get(m.eventDateId)
+    if (!date) continue
+    out[mealKey(date, m.mealType as MealType)] = { price: m.price, excluded: m.isClosed }
+  }
+  return out
+}
+
 export default function EventStepper({
   centers,
   mode = 'create',
   initial,
   editData,
+  canEditRelations = false,
+  initialStep = 0,
 }: {
   centers: CenterOption[]
   mode?: 'create' | 'edit'
   initial?: EventStepperInitial
   editData?: EventStepperEditData
+  // A draft event with no registrations is fully editable: centre, dates,
+  // pricing and meals (not just scalars). Create mode is always fully editable.
+  canEditRelations?: boolean
+  // The step to open on (read from ?step= by the server page) so switching
+  // language keeps the current step instead of jumping back to step 1.
+  initialStep?: number
 }) {
   const t = useTranslations('admin')
   const locale = useLocale()
   const router = useRouter()
   const isEdit = mode === 'edit'
+  // Centre/dates/pricing/meals are immutable only when editing a published event
+  // (or a draft that already has registrations) — see canEditRelations.
+  const relationsLocked = isEdit && !canEditRelations
 
-  const [step, setStep] = useState(0)
+  const [step, setStep] = useState(() =>
+    Math.min(Math.max(0, initialStep), STEP_KEYS.length - 1),
+  )
   const [publishModal, setPublishModal] = useState(false)
+  const [successKind, setSuccessKind] = useState<'published' | 'saved' | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
-  // UI-only state (assembled into the POST payload on save).
-  const [pricing15, setPricing15] = useState<Record<MockPricingType, Pricing15>>({
-    STANDARD: { ...DEFAULT_PRICING_15.STANDARD },
-    SUPPORTED: { ...DEFAULT_PRICING_15.SUPPORTED },
-    SURPLUS: { ...DEFAULT_PRICING_15.SURPLUS },
-  })
-  const [pricingChild, setPricingChild] = useState<Record<string, PricingChild>>({
-    AGE_0_3: { dailyRate: 0, nightRate: 0 },
-    AGE_4_7: { dailyRate: 0, nightRate: 0 },
-    AGE_8_14: { dailyRate: 0, nightRate: 0 },
-  })
-  const [mealEdits, setMealEdits] = useState<Record<string, MealEdit>>({})
+  // Keep the active step in the URL (?step=) without a navigation, so the
+  // language switcher (which re-navigates and remounts this island) can restore
+  // it from the query instead of resetting to step 1.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const sp = new URLSearchParams(window.location.search)
+    if (step === 0) sp.delete('step')
+    else sp.set('step', String(step))
+    const qs = sp.toString()
+    window.history.replaceState(null, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
+  }, [step])
+
+  // UI-only state (assembled into the payload on save). For a fully-editable
+  // draft these prefill from the saved event; otherwise they're catalogue
+  // defaults (create) and unused (locked edit renders read-only from editData).
+  const [pricing15, setPricing15] = useState<Record<MockPricingType, Pricing15>>(
+    () => initialPricing15(editData),
+  )
+  const [pricingChild, setPricingChild] = useState<Record<string, PricingChild>>(
+    () => initialPricingChild(editData),
+  )
+  const [mealEdits, setMealEdits] = useState<Record<string, MealEdit>>(() =>
+    initialMealEdits(editData),
+  )
 
   const {
     register,
@@ -199,6 +280,7 @@ export default function EventStepper({
     watch,
     getValues,
     setValue,
+    trigger,
     formState: { errors },
   } = useForm<EventFormValues, unknown, EventCreateInput>({
     resolver: zodResolver(eventCreateSchema) as unknown as Resolver<
@@ -237,9 +319,9 @@ export default function EventStepper({
   const sortedCenters = centers
 
   // Start date cannot be in the past (not expressible in the schema, so enforced
-  // here + via the input's min). Edit mode exempts it — an existing event may
-  // already have started, and its dates are read-only anyway.
-  const startInPast = !isEdit && startDate !== '' && startDate < todayISO()
+  // here + via the input's min). Only applies when the dates are editable; a
+  // locked edit shows them read-only and an existing event may already have started.
+  const startInPast = !relationsLocked && startDate !== '' && startDate < todayISO()
 
   function getMeal(date: string, meal: MealType): MealEdit {
     return mealEdits[mealKey(date, meal)] ?? { price: DEFAULT_MEAL_PRICE[meal], excluded: false }
@@ -310,32 +392,44 @@ export default function EventStepper({
     setSubmitError(null)
     setSubmitting(true)
     try {
-      // Edit mode persists ONLY the editable scalar fields (§0 decision 1) via
-      // PUT; centre/dates/pricing/meals are immutable and never sent. Create
-      // mode POSTs the full assembled payload.
+      // An empty deadline on EDIT means "clear it" (the server distinguishes ''
+      // = clear from an absent key = leave unchanged), so the new "clear
+      // deadline" button can remove an already-set cut-off.
+      const deadline = data.mealRegistrationDeadline ?? ''
+      // Body shape:
+      //  • create → full assembled payload (POST).
+      //  • edit, fully-editable draft → full payload too (centre/dates/pricing/
+      //    meals are replaceable while no registration depends on them).
+      //  • edit, locked → only the editable scalars (§0 decision 1).
       const url = isEdit ? `/api/admin/events/${editData?.id}` : '/api/admin/events'
-      const body = isEdit
-        ? JSON.stringify({
-            title_cs: data.title_cs,
-            title_en: data.title_en,
-            description_cs: data.description_cs ?? '',
-            description_en: data.description_en ?? '',
-            contactName: data.contactName ?? '',
-            contactPhone: data.contactPhone ?? '',
-            contactEmail: data.contactEmail,
-            maxRegistrations: data.maxRegistrations,
-            mealRegistrationDeadline: data.mealRegistrationDeadline,
-            status: data.status,
-          })
-        : JSON.stringify(buildPayload(data))
+      let body: string
+      if (!isEdit) {
+        body = JSON.stringify(buildPayload(data))
+      } else if (canEditRelations) {
+        body = JSON.stringify({ ...buildPayload(data), mealRegistrationDeadline: deadline })
+      } else {
+        body = JSON.stringify({
+          title_cs: data.title_cs,
+          title_en: data.title_en,
+          description_cs: data.description_cs ?? '',
+          description_en: data.description_en ?? '',
+          contactName: data.contactName ?? '',
+          contactPhone: data.contactPhone ?? '',
+          contactEmail: data.contactEmail,
+          maxRegistrations: data.maxRegistrations,
+          mealRegistrationDeadline: deadline,
+          status: data.status,
+        })
+      }
       const res = await fetch(url, {
         method: isEdit ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body,
       })
       if (isEdit ? res.ok : res.status === 201) {
-        router.push(`/${locale}/admin/events`)
-        router.refresh()
+        // Confirm what happened (published vs. saved) instead of silently
+        // bouncing to the list — the admin gets feedback first.
+        setSuccessKind(data.status === 'PUBLISHED' ? 'published' : 'saved')
         return
       }
       if (res.status === 403) {
@@ -363,9 +457,9 @@ export default function EventStepper({
   // way) asks for confirmation first.
   function attemptSave(forcePublish: boolean) {
     if (forcePublish) setValue('status', 'PUBLISHED')
-    // The start-date-in-the-past guard applies to NEW events only; an existing
-    // event may legitimately have already started (its dates are immutable).
-    if (!isEdit && getValues('startDate') && getValues('startDate') < todayISO()) {
+    // The start-date-in-the-past guard applies whenever the dates are editable
+    // (create or a fully-editable draft); a locked event may already have started.
+    if (!relationsLocked && getValues('startDate') && getValues('startDate') < todayISO()) {
       setStep(1)
       return
     }
@@ -379,6 +473,23 @@ export default function EventStepper({
   function confirmPublish() {
     setPublishModal(false)
     void handleSubmit(onValid, onInvalid)()
+  }
+
+  function goToList() {
+    router.push(`/${locale}/admin/events`)
+    router.refresh()
+  }
+
+  // "Next" advances a step — but leaving the Schedule step (index 1) first
+  // validates the date range so an invalid term (end before start, missing, or a
+  // past start) is caught here, not only at the final save. The schema's
+  // end-after-start refinement runs via trigger(); the past-start guard is local.
+  async function handleNext() {
+    if (step === 1 && !relationsLocked) {
+      const datesOk = await trigger(['startDate', 'endDate'])
+      if (!datesOk || startInPast) return
+    }
+    setStep((s) => Math.min(STEP_KEYS.length - 1, s + 1))
   }
 
   const values = watch()
@@ -415,8 +526,8 @@ export default function EventStepper({
           <StepHeading>{t('eventForm.steps.basic')}</StepHeading>
 
           <TextField label={t('eventForm.fields.center')} error={fieldError('centerId')}>
-            {isEdit ? (
-              // Centre is immutable after creation (§0 decision 1) — show it
+            {relationsLocked ? (
+              // Centre is immutable once a registration depends on it — show it
               // read-only, but keep the value registered so validation passes.
               <>
                 <input type="hidden" {...register('centerId')} />
@@ -491,8 +602,8 @@ export default function EventStepper({
               <input
                 type="date"
                 min={todayISO()}
-                readOnly={isEdit}
-                className={`bdc-input ${isEdit ? 'bg-neutral-50 text-neutral-600' : ''}`}
+                readOnly={relationsLocked}
+                className={`bdc-input ${relationsLocked ? 'bg-neutral-50 text-neutral-600' : ''}`}
                 {...register('startDate')}
               />
             </TextField>
@@ -500,8 +611,8 @@ export default function EventStepper({
               <input
                 type="date"
                 min={startDate || todayISO()}
-                readOnly={isEdit}
-                className={`bdc-input ${isEdit ? 'bg-neutral-50 text-neutral-600' : ''}`}
+                readOnly={relationsLocked}
+                className={`bdc-input ${relationsLocked ? 'bg-neutral-50 text-neutral-600' : ''}`}
                 {...register('endDate')}
               />
             </TextField>
@@ -539,7 +650,7 @@ export default function EventStepper({
         <section className="section-card space-y-6">
           <StepHeading>{t('eventForm.steps.pricing')}</StepHeading>
           <p className="text-sm text-neutral-500">
-            {isEdit ? t('eventForm.editLockedNote') : t('eventForm.pricing.intro')}
+            {relationsLocked ? t('eventForm.editLockedNote') : t('eventForm.pricing.intro')}
           </p>
 
           {/* Children (0–14): admin-editable daily + night rate (default 0). The
@@ -559,7 +670,7 @@ export default function EventStepper({
                   </p>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     {CHILD_FIELDS.map((f) =>
-                      isEdit ? (
+                      relationsLocked ? (
                         <PreviewRow
                           key={f}
                           label={t(`eventForm.fields.${f}`)}
@@ -592,7 +703,7 @@ export default function EventStepper({
             <h3 className="text-sm font-semibold text-neutral-900">
               {t('age.AGE_15_PLUS')}
             </h3>
-            {isEdit
+            {relationsLocked
               ? // Read-only: the stored 15+ pricing rules (immutable after creation).
                 (editData?.pricingRules ?? [])
                   .filter((r) => r.ageCategory === 'AGE_15_PLUS')
@@ -649,10 +760,10 @@ export default function EventStepper({
         <section className="section-card space-y-5">
           <StepHeading>{t('eventForm.steps.meals')}</StepHeading>
           <p className="text-sm text-neutral-500">
-            {isEdit ? t('eventForm.editLockedNote') : t('eventForm.meals.intro')}
+            {relationsLocked ? t('eventForm.editLockedNote') : t('eventForm.meals.intro')}
           </p>
 
-          {isEdit ? (
+          {relationsLocked ? (
             // Read-only: the stored per-day meals (immutable after creation —
             // existing ParticipantMeal rows reference these EventMeal ids).
             <div className="space-y-4">
@@ -812,6 +923,17 @@ export default function EventStepper({
                 setValueAs: (v) => (v === '' || v == null ? undefined : v),
               })}
             />
+            {watch('mealRegistrationDeadline') ? (
+              <button
+                type="button"
+                onClick={() =>
+                  setValue('mealRegistrationDeadline', '', { shouldValidate: false })
+                }
+                className="mt-2 text-sm font-medium text-danger-600 hover:text-danger-700"
+              >
+                {t('eventForm.settings.clearDeadline')}
+              </button>
+            ) : null}
             <p className="mt-1 text-xs text-neutral-500">
               {t('eventForm.settings.mealDeadlineNote')}
             </p>
@@ -959,11 +1081,7 @@ export default function EventStepper({
           {t('eventForm.prev')}
         </button>
         {step < STEP_KEYS.length - 1 && (
-          <button
-            type="button"
-            onClick={() => setStep((s) => Math.min(STEP_KEYS.length - 1, s + 1))}
-            className="btn-primary"
-          >
+          <button type="button" onClick={() => void handleNext()} className="btn-primary">
             {t('eventForm.next')}
           </button>
         )}
@@ -994,6 +1112,27 @@ export default function EventStepper({
               </button>
               <button type="button" onClick={confirmPublish} className="btn-primary">
                 {t('eventForm.publishConfirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Post-save confirmation — what happened (published vs. saved), then on to
+          the list. Replaces the old silent redirect (task: show feedback first). */}
+      {successKind && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 className="font-serif text-xl font-semibold text-neutral-900">
+              {t(`eventForm.success.${successKind}Title`)}
+            </h2>
+            <div className="mt-2 mb-4 h-0.5 w-10 rounded bg-primary-500" />
+            <p className="text-sm text-neutral-600">
+              {t(`eventForm.success.${successKind}Body`)}
+            </p>
+            <div className="mt-6 flex justify-end">
+              <button type="button" onClick={goToList} className="btn-primary">
+                {t('eventForm.success.toList')}
               </button>
             </div>
           </div>

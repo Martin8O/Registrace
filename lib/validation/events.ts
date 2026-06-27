@@ -28,9 +28,13 @@ const eventFields = {
   // Optional meal-ordering cut-off as a Europe/Prague wall-clock "YYYY-MM-DDTHH:mm"
   // string (a <input type="datetime-local"> value). Converted to a UTC instant in
   // the service (createEvent/updateEvent). Window enforced by requireDeadlineInWindow.
+  // An empty string is accepted as an explicit "clear" signal on update (the
+  // service stores null); an absent key on update means "leave unchanged".
   mealRegistrationDeadline: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Invalid datetime")
+    .union([
+      z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Invalid datetime"),
+      z.literal(""),
+    ])
     .optional(),
 };
 
@@ -127,10 +131,21 @@ export const eventCreateWithRelationsSchema = z
     requireDeadlineInWindow(data, ctx);
   });
 
+// Update accepts the scalar fields (all optional) AND, for a fully-editable
+// DRAFT, the same relation arrays as create — the service replaces them only
+// when the event is a draft with no registrations; a locked event ignores them.
 export const eventUpdateSchema = z
-  .object(eventFields)
+  .object({
+    ...eventFields,
+    dates: z.array(eventDateInputSchema).optional(),
+    pricingRules: z.array(pricingRuleInputSchema).optional(),
+    meals: z.array(eventMealInputSchema).optional(),
+  })
   .partial()
-  .superRefine((data, ctx) => requireEndAfterStart(data, ctx));
+  .superRefine((data, ctx) => {
+    requireEndAfterStart(data, ctx);
+    requireDeadlineInWindow(data, ctx);
+  });
 
 export const eventStatusSchema = z.object({
   status: z.enum(eventStatusValues),

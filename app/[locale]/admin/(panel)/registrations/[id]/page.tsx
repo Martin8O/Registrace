@@ -58,48 +58,43 @@ export default async function RegistrationDetailPage({
         </Link>
       </header>
 
-      {/* Pricing-info popup (same as the public event page) — placed above the
-          number + summary so an admin can check the event's price list first. */}
-      <div className="flex justify-end">
-        <PricingInfoButton meals={detail.eventMeals} pricingRules={detail.eventPricingRules} />
-      </div>
-
-      {/* Prominent, centered registration number */}
-      <div className="text-center">
-        <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-          {t('registrationDetail.number')}
-        </p>
-        <p className="mt-1 font-mono text-3xl font-semibold tabular-nums text-neutral-900">
-          {detail.registrationNumber ?? detail.id}
-        </p>
-      </div>
-
-      {/* Read-only summary */}
-      <section className="section-card space-y-5">
-        <ReadOnlyRow label={t('registrationDetail.email')} value={detail.email} />
-        <ReadOnlyRow label={t('registrationDetail.event')} value={eventTitle} />
-        <ReadOnlyRow label={t('registrationDetail.homeCenter')} value={homeCenterName} />
-        <ReadOnlyRow
-          label={t('registrationDetail.arrival')}
-          value={`${arrivalLabel} - ${t(`arrivalTime.${detail.arrivalTime}`).toLowerCase()}`}
-        />
-        <ReadOnlyRow
-          label={t('registrationDetail.departure')}
-          value={`${departureLabel} - ${(detail.earlyDeparture === 'AFTER_BREAKFAST'
-            ? t('registrationDetail.afterBreakfast')
-            : t('registrationDetail.untilEnd')
-          ).toLowerCase()}`}
-        />
-      </section>
-
-      {/* Editable accommodation / status + save / resend (home centre is now
-          display-only — shown read-only in the summary above). */}
+      {/* The number band (number + live status badge + pricing-info popup) and
+          the editable card both live inside RegistrationDetailEditor; the
+          read-only summary is passed as its children so it renders between them. */}
       <RegistrationDetailEditor
         registrationId={detail.id}
         centerId={detail.centerId}
+        registrationNumber={detail.registrationNumber ?? detail.id}
+        numberLabel={t('registrationDetail.number')}
+        pricingButton={
+          <PricingInfoButton meals={detail.eventMeals} pricingRules={detail.eventPricingRules} />
+        }
         initialHasAccommodation={detail.hasAccommodation}
         initialStatus={detail.status}
-      />
+      >
+        {/* Read-only summary — the event name links to that event's registrations
+            page (all info + every registration of the event). */}
+        <section className="section-card space-y-5">
+          <ReadOnlyRow label={t('registrationDetail.email')} value={detail.email} />
+          <ReadOnlyRow
+            label={t('registrationDetail.event')}
+            value={eventTitle}
+            href={`${base}/registrations?event=${detail.event.id}`}
+          />
+          <ReadOnlyRow label={t('registrationDetail.homeCenter')} value={homeCenterName} />
+          <ReadOnlyRow
+            label={t('registrationDetail.arrival')}
+            value={`${arrivalLabel} - ${t(`arrivalTime.${detail.arrivalTime}`).toLowerCase()}`}
+          />
+          <ReadOnlyRow
+            label={t('registrationDetail.departure')}
+            value={`${departureLabel} - ${(detail.earlyDeparture === 'AFTER_BREAKFAST'
+              ? t('registrationDetail.afterBreakfast')
+              : t('registrationDetail.untilEnd')
+            ).toLowerCase()}`}
+          />
+        </section>
+      </RegistrationDetailEditor>
 
       {/* Participants (read-only) — incl. each person's booked meals */}
       <section className="section-card">
@@ -119,8 +114,9 @@ export default async function RegistrationDetailPage({
                 </div>
                 <p className="mt-1 text-sm text-neutral-600">
                   {t(`age.${p.ageCategory}`)}
-                  {p.pricingType && ` · ${t(`pricingType.${p.pricingType}`)}`}
-                  {` · ${t(`mealCategory.${p.mealType}`)}`}
+                  {p.pricingType &&
+                    ` · ${t(`pricingType.${p.pricingType}`)} ${t('registrationDetail.priceWord')}`}
+                  {` · ${t(`mealCategory.${p.mealType}`)} ${t('registrationDetail.mealWord')}`}
                 </p>
                 <div className="mt-3">
                   <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
@@ -150,11 +146,28 @@ export default async function RegistrationDetailPage({
   )
 }
 
-function ReadOnlyRow({ label, value }: { label: string; value: string }) {
+function ReadOnlyRow({
+  label,
+  value,
+  href,
+}: {
+  label: string
+  value: string
+  href?: string
+}) {
   return (
     <div className="flex flex-wrap justify-between gap-2 border-b border-neutral-100 pb-3 last:border-0">
       <span className="text-sm font-medium text-neutral-500">{label}</span>
-      <span className="text-sm text-neutral-900">{value}</span>
+      {href ? (
+        <Link
+          href={href}
+          className="text-right text-sm font-medium text-primary-600 hover:text-primary-700"
+        >
+          {value}
+        </Link>
+      ) : (
+        <span className="text-sm text-neutral-900">{value}</span>
+      )}
     </div>
   )
 }

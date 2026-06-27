@@ -6,21 +6,25 @@ import EventStepper, {
 } from '@/components/admin/EventStepper'
 import { getAdminContext } from '@/modules/auth'
 import {
-  getCentersForSelect,
+  getCentersForAdminSelect,
   getEventForEdit,
   formatPragueDateTimeLocal,
 } from '@/modules/events'
 
 // Edit reuses the create stepper, pre-filled from the real (ownership-scoped)
-// event. Only scalar fields + status are editable (§0 decision 1); centre,
-// dates, pricing and meals render read-only. An ADMIN that doesn't own the event
-// gets notFound() (which also avoids confirming the event exists).
+// event. A DRAFT with no registrations is fully editable (centre/dates/pricing/
+// meals); otherwise those render read-only and only scalars + status are
+// editable (§0 decision 1). An ADMIN that doesn't own the event gets notFound()
+// (which also avoids confirming the event exists).
 export default async function EditEventPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string; id: string }>
+  searchParams: Promise<{ step?: string }>
 }) {
   const { locale, id } = await params
+  const { step } = await searchParams
   const ctx = await getAdminContext()
   if (!ctx) redirect(`/${locale}/admin/login`)
 
@@ -28,7 +32,10 @@ export default async function EditEventPage({
   if (!event) notFound()
 
   const t = await getTranslations('admin.eventForm')
-  const centers = await getCentersForSelect()
+  // Scope the (now possibly editable) centre dropdown to what the admin may use.
+  const centers = await getCentersForAdminSelect(ctx)
+  const canEditRelations = event.status === 'DRAFT' && event.registrationCount === 0
+  const initialStep = Number(step) >= 0 ? Number(step) : 0
 
   const initial: EventStepperInitial = {
     centerId: event.centerId,
@@ -64,7 +71,14 @@ export default async function EditEventPage({
         </h1>
         <div className="mt-2 h-0.5 w-12 rounded bg-primary-500" />
       </header>
-      <EventStepper centers={centers} mode="edit" initial={initial} editData={editData} />
+      <EventStepper
+        centers={centers}
+        mode="edit"
+        initial={initial}
+        editData={editData}
+        canEditRelations={canEditRelations}
+        initialStep={initialStep}
+      />
     </div>
   )
 }

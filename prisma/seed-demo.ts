@@ -67,8 +67,10 @@ const utcMidnight = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 function csLabel(date: Date): string {
   const o = { timeZone: "Europe/Prague" } as const;
   const wd = new Intl.DateTimeFormat("cs-CZ", { weekday: "long", ...o }).format(date);
-  const d = new Intl.DateTimeFormat("cs-CZ", { day: "numeric", ...o }).format(date);
-  const m = new Intl.DateTimeFormat("cs-CZ", { month: "numeric", ...o }).format(date);
+  // Czech `day/month: "numeric"` already emits a trailing dot ("29."), so strip
+  // it before re-adding our own — otherwise the label reads "29.. 12." (double dot).
+  const d = new Intl.DateTimeFormat("cs-CZ", { day: "numeric", ...o }).format(date).replace(/\.$/, "");
+  const m = new Intl.DateTimeFormat("cs-CZ", { month: "numeric", ...o }).format(date).replace(/\.$/, "");
   return `${cap(wd)} ${d}. ${m}.`;
 }
 function enLabel(date: Date): string {

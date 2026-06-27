@@ -300,6 +300,13 @@
       "publishConfirmBody": "The event will be set to published and visible to the public. Continue?",
       "publishConfirm": "Yes, publish",
       "publishCancel": "Back",
+      "success": {
+        "publishedTitle": "Event published",
+        "publishedBody": "The event was published successfully and is now visible to the public.",
+        "savedTitle": "Event saved",
+        "savedBody": "The event was saved successfully.",
+        "toList": "Go to event list"
+      },
       "steps": {
         "basic": "Basic info",
         "schedule": "Schedule",
@@ -350,7 +357,8 @@
         "childNote": "Child categories are usually 0, but you can set your own daily and night rate — the calculation always follows the price list you enter exactly. Arrival/departure discounts do not apply to children."
       },
       "settings": {
-        "mealDeadlineNote": "After this time, meals can no longer be ordered for the event (participation and accommodation stay open). Optional. The time is Czech local time (SELČ/SEČ handled automatically).",
+        "mealDeadlineNote": "After this time, meals can no longer be ordered for the event (participation and accommodation stay open). Optional — with no deadline (empty field) meal registration has no time limit. The time is Czech local time (SELČ/SEČ handled automatically).",
+        "clearDeadline": "Clear deadline",
         "noDeadline": "No deadline"
       },
       "meals": {
@@ -435,6 +443,8 @@
       "status": "Status",
       "participants": "Participants",
       "meals": "Meals",
+      "priceWord": "price",
+      "mealWord": "meal",
       "save": "Save changes",
       "saved": "Changes saved.",
       "saveFailed": "Could not save. Please try again.",

@@ -14,10 +14,14 @@ import { getCentersForAdminSelect } from '@/modules/events'
 // instead of an empty picker.
 export default async function NewEventPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>
+  searchParams: Promise<{ step?: string }>
 }) {
   const { locale } = await params
+  const { step } = await searchParams
+  const initialStep = Number(step) >= 0 ? Number(step) : 0
   const ctx = await getAdminContext()
   if (!ctx) redirect(`/${locale}/admin/login`)
 
@@ -35,7 +39,7 @@ export default async function NewEventPage({
       {centers.length === 0 ? (
         <div className="section-card text-neutral-600">{t('noCenters')}</div>
       ) : (
-        <EventStepper centers={centers} />
+        <EventStepper centers={centers} initialStep={initialStep} />
       )}
     </div>
   )
