@@ -24,7 +24,7 @@
     "section_stay": "Pobyt",
     "section_participants": "Účastníci",
     "section_contact": "Kontaktní údaje",
-    "arrival_morning": "Ráno",
+    "arrival_morning": "Dopoledne",
     "arrival_afternoon": "Odpoledne",
     "arrival_evening": "Večer",
     "early_none": "Bez dřívějšího odjezdu",
@@ -54,6 +54,18 @@
       "required": "Toto pole je povinné",
       "submit": "Registraci se nepodařilo odeslat. Zkuste to prosím znovu.",
       "capacity": "Kapacita akce je již naplněna."
+    },
+    "participationModal": {
+      "title": "Výpočet ceny za účast – účastník {number}",
+      "openLabel": "Zobrazit výpočet ceny za účast",
+      "base": "Účast: {days, plural, one {# den} few {# dny} other {# dní}} × {rate} Kč",
+      "arrivalDiscount": "Sleva za příjezd ({time})",
+      "earlyDepartureDiscount": "Sleva za dřívější odjezd (po snídani)",
+      "accommodation": "Ubytování: {nights, plural, one {# noc} few {# noci} other {# nocí}} × {rate} Kč",
+      "total": "Cena za účast",
+      "childNote": "V této kategorii se za účast neplatí – účtuje se pouze vybraná strava.",
+      "selectStay": "Pro výpočet ceny za účast nejdříve zvolte datum příjezdu a odjezdu.",
+      "close": "Zavřít"
     },
     "gdprModal": {
       "title": "Ochrana osobních údajů",
@@ -101,6 +113,8 @@
         "age15supported": "Denní sazba 15+ podporovaná",
         "age15surplus": "Denní sazba 15+ nadbytek"
       },
+      "morningArrivalDiscount": "Sleva za dopolední příjezd (15+)",
+      "afternoonArrivalDiscount": "Sleva za odpolední příjezd (15+)",
       "eveningArrivalDiscount": "Sleva za večerní příjezd (15+)",
       "earlyDepartureDiscount": "Sleva za brzký odjezd (15+)",
       "pricePerNight": "Cena za noc (15+)"
@@ -242,7 +256,7 @@
       "DINNER": "Večeře"
     },
     "arrivalTime": {
-      "MORNING": "Ráno",
+      "MORNING": "Dopoledne",
       "AFTERNOON": "Odpoledne",
       "EVENING": "Večer"
     },
@@ -302,7 +316,7 @@
         "status": "Stav",
         "dailyRate": "Denní sazba",
         "nightRate": "Cena za noc",
-        "morningArrivalDiscount": "Sleva za ranní příjezd",
+        "morningArrivalDiscount": "Sleva za dopolední příjezd",
         "afternoonArrivalDiscount": "Sleva za odpolední příjezd",
         "eveningArrivalDiscount": "Sleva za večerní příjezd",
         "earlyDepartureDiscount": "Sleva za dřívější odjezd",
@@ -323,7 +337,7 @@
         "intro": "Cenová pravidla se uloží spolu s akcí.",
         "ageCategory": "Věková kategorie",
         "pricingType": "Typ ceny",
-        "lockedZeroNote": "Děti 0–14 mají denní sazbu vždy 0 (neměnné pravidlo)."
+        "childNote": "U dětských kategorií je sazba obvykle 0, ale můžete zadat vlastní denní sazbu i cenu za noc – výpočet vždy přesně odpovídá zadanému ceníku. Slevy za příjezd/odjezd se na děti nevztahují."
       },
       "meals": {
         "intro": "Každý den akce nabízí snídani, oběd a večeři. Cenu lze upravit; jídlo, které není v nabídce, vyřaďte — tím se určí počáteční a koncové jídlo akce.",

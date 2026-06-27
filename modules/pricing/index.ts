@@ -8,6 +8,16 @@
 // are SUBTRACTED, accommodation adds nightRate × (days − 1), and participation is
 // floored at 0 (SESSION_BOOTSTRAP §D.7). All values are whole-CZK integers
 // (invariant 10); inputs are already integers, so no rounding is introduced.
+//
+// Participation is DATA-DRIVEN per participant (REVISED invariant 15): the engine
+// no longer hard-codes ages 0–14 to 0. Instead each participant's price comes
+// from the matching PricingRule's dailyRate. Young children (0–3/4–7) carry a
+// 0-rate rule → 0; ages 8–14 follow the event's configured rate (0 in most
+// events, but real BDC courses can charge them, e.g. 100 CZK/day); 15+ uses the
+// tier rate. This matches the authoritative regserver.bdc.cz pricing, where the
+// 8–14 daily rate is a real, sometimes-non-zero value. Arrival/early-departure
+// discounts apply only to 15+ purely because child rules carry 0 discounts — not
+// via any age branch in the engine.
 
 export type PricingParticipantInput = {
   ageCategory: string;
@@ -63,8 +73,6 @@ export type PricingResult = {
   totalPrice: number;
 };
 
-const CHILD_AGES = new Set(["AGE_0_3", "AGE_4_7", "AGE_8_14"]);
-
 // Inclusive day count between the arrival and departure event-dates, by their
 // sortOrder. Returns 0 when either id is unknown or the order is degenerate
 // (departure before arrival) — calculate-price calls us mid-edit, where the stay
@@ -82,9 +90,13 @@ function participationDays(
   return days > 0 ? days : 0;
 }
 
-// Participation price for one 15+ participant. Children never reach here
-// (invariant 15: participation is always 0 for ages 0–14). A missing rule or a
-// degenerate stay yields 0 — graceful, never throws.
+// Participation price for one participant, DATA-DRIVEN by the matching PricingRule
+// (revised invariant 15 — see header). The rule's dailyRate decides who pays:
+// young children (0–3/4–7) carry a 0-rate rule → 0; ages 8–14 follow the event's
+// configured rate (0 in most events, but e.g. 100 in a course that charges them);
+// 15+ uses the tier rate. Arrival/early-departure discounts and night rate also
+// come from the rule, so a category meant to have no discounts simply carries 0s.
+// A missing rule or a degenerate stay yields 0 — graceful, never throws.
 function participationPriceFor(
   participant: PricingParticipantInput,
   input: PricingInput,
@@ -129,7 +141,11 @@ function mealPriceFor(participant: PricingParticipantInput, input: PricingInput)
 
 export function calculatePricing(input: PricingInput): PricingResult {
   const participants = input.participants.map((p) => {
-    const participationPrice = CHILD_AGES.has(p.ageCategory) ? 0 : participationPriceFor(p, input);
+    // Participation is fully data-driven: the matching rule's dailyRate (0 for
+    // young children, the configured rate for 8–14, the tier rate for 15+) — no
+    // age is hard-coded to 0 anymore (revised invariant 15). Meals apply to every
+    // age regardless (children still pay for selected meals).
+    const participationPrice = participationPriceFor(p, input);
     const mealPrice = mealPriceFor(p, input);
     return {
       participationPrice,

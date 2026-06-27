@@ -1,27 +1,8 @@
 import { notFound } from 'next/navigation'
-import { getTranslations } from 'next-intl/server'
 import PricingInfoButton from '@/components/public/PricingInfoButton'
 import RegistrationForm from '@/components/public/RegistrationForm'
-import {
-  getCentersForSelect,
-  getPublicEventForDetail,
-  type EventStatusValue,
-} from '@/modules/events'
+import { getCentersForSelect, getPublicEventForDetail } from '@/modules/events'
 import { formatDateRangeShort } from '@/lib/utils/formatDate'
-
-const badgeVariants: Record<EventStatusValue, string> = {
-  PUBLISHED: 'bg-gold-100 text-gold-800 border border-gold-300',
-  DRAFT: 'bg-muted-bg text-muted-fg border border-muted-border',
-  CLOSED: 'bg-neutral-200 text-neutral-600 border border-neutral-300',
-  ARCHIVED: 'bg-neutral-200 text-neutral-600 border border-neutral-300',
-}
-
-const badgeLabelKey: Record<EventStatusValue, string> = {
-  PUBLISHED: 'published',
-  DRAFT: 'draft',
-  CLOSED: 'closed',
-  ARCHIVED: 'archived',
-}
 
 export default async function EventPage({
   params,
@@ -29,7 +10,6 @@ export default async function EventPage({
   params: Promise<{ locale: string; id: string }>
 }) {
   const { locale, id } = await params
-  const tBadge = await getTranslations('badge')
 
   // PUBLIC read: only publicly-visible events resolve here (P1 audit H1).
   // DRAFT / past events 404 instead of leaking detail + contact PII.
@@ -57,10 +37,7 @@ export default async function EventPage({
         <p className="mt-4 text-neutral-600 leading-relaxed">{description}</p>
       )}
 
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <span className={`badge ${badgeVariants[event.status]}`}>
-          {tBadge(badgeLabelKey[event.status])}
-        </span>
+      <div className="mt-4 flex items-center justify-end">
         <PricingInfoButton meals={event.meals} pricingRules={event.pricingRules} />
       </div>
 
@@ -69,6 +46,7 @@ export default async function EventPage({
         dates={event.dates}
         meals={event.meals}
         centers={centers}
+        pricingRules={event.pricingRules}
       />
     </div>
   )

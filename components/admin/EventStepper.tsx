@@ -91,6 +91,12 @@ const PRICING15_FIELDS: (keyof Pricing15)[] = [
   'earlyDepartureDiscount',
 ]
 
+// Children carry only a daily + night rate (arrival/departure discounts are a
+// 15+-only concept — mirrors the real BDC price list). Both default to 0 but are
+// admin-editable so the engine charges exactly what the price list says.
+type PricingChild = { dailyRate: number; nightRate: number }
+const CHILD_FIELDS: (keyof PricingChild)[] = ['dailyRate', 'nightRate']
+
 const FIELD_STEP: Record<keyof EventFormValues, number> = {
   centerId: 0,
   title_cs: 0,
@@ -109,28 +115,32 @@ const FIELD_STEP: Record<keyof EventFormValues, number> = {
 // Default catalogue 15+ prices — prefill only, editable per event. Mirrors the
 // sample values shown in the public "Informace o cenách" (and the seed event),
 // same pattern as DEFAULT_MEAL_PRICE for meals. Real engine defaults are P5.
+// Arrival discounts MUST be monotonic (morning ≤ afternoon ≤ evening): the later
+// you arrive, the more of the day you miss, so the larger the discount. A
+// non-monotonic set makes a later arrival cost MORE — illogical (engine subtracts
+// each discount in modules/pricing).
 const DEFAULT_PRICING_15: Record<MockPricingType, Pricing15> = {
   STANDARD: {
     dailyRate: 200,
     nightRate: 150,
-    morningArrivalDiscount: 50,
-    afternoonArrivalDiscount: 30,
+    morningArrivalDiscount: 30,
+    afternoonArrivalDiscount: 50,
     eveningArrivalDiscount: 80,
     earlyDepartureDiscount: 50,
   },
   SUPPORTED: {
     dailyRate: 100,
     nightRate: 100,
-    morningArrivalDiscount: 30,
-    afternoonArrivalDiscount: 20,
+    morningArrivalDiscount: 20,
+    afternoonArrivalDiscount: 30,
     eveningArrivalDiscount: 50,
     earlyDepartureDiscount: 30,
   },
   SURPLUS: {
     dailyRate: 300,
     nightRate: 200,
-    morningArrivalDiscount: 50,
-    afternoonArrivalDiscount: 30,
+    morningArrivalDiscount: 30,
+    afternoonArrivalDiscount: 50,
     eveningArrivalDiscount: 80,
     earlyDepartureDiscount: 50,
   },
@@ -164,6 +174,11 @@ export default function EventStepper({
     STANDARD: { ...DEFAULT_PRICING_15.STANDARD },
     SUPPORTED: { ...DEFAULT_PRICING_15.SUPPORTED },
     SURPLUS: { ...DEFAULT_PRICING_15.SURPLUS },
+  })
+  const [pricingChild, setPricingChild] = useState<Record<string, PricingChild>>({
+    AGE_0_3: { dailyRate: 0, nightRate: 0 },
+    AGE_4_7: { dailyRate: 0, nightRate: 0 },
+    AGE_8_14: { dailyRate: 0, nightRate: 0 },
   })
   const [mealEdits, setMealEdits] = useState<Record<string, MealEdit>>({})
 
@@ -224,6 +239,8 @@ export default function EventStepper({
   }
   const updatePricing15 = (type: MockPricingType, patch: Partial<Pricing15>) =>
     setPricing15((prev) => ({ ...prev, [type]: { ...prev[type], ...patch } }))
+  const updatePricingChild = (age: string, patch: Partial<PricingChild>) =>
+    setPricingChild((prev) => ({ ...prev, [age]: { ...prev[age]!, ...patch } }))
 
   function fieldError(name: keyof EventFormValues): string | null {
     const err = errors[name]
@@ -239,7 +256,7 @@ export default function EventStepper({
   }
 
   // Assemble the full create payload: validated scalars + derived dates + the
-  // 15+ pricing rows (plus the locked STANDARD/0 child rows) + per-day meals.
+  // 15+ pricing rows + the per-age child rows (admin-set daily/night) + meals.
   function buildPayload(data: EventCreateInput) {
     return {
       ...data,
@@ -253,8 +270,9 @@ export default function EventStepper({
         ...CHILD_AGES.map((age) => ({
           ageCategory: age,
           pricingType: 'STANDARD' as const,
-          dailyRate: 0,
-          nightRate: 0,
+          dailyRate: pricingChild[age]?.dailyRate ?? 0,
+          nightRate: pricingChild[age]?.nightRate ?? 0,
+          // Discounts are 15+-only (mirrors the BDC price list) — children: 0.
           morningArrivalDiscount: 0,
           afternoonArrivalDiscount: 0,
           eveningArrivalDiscount: 0,
@@ -510,20 +528,49 @@ export default function EventStepper({
             {isEdit ? t('eventForm.editLockedNote') : t('eventForm.pricing.intro')}
           </p>
 
-          <div className="space-y-2">
-            {CHILD_AGES.map((age) => (
-              <div
-                key={age}
-                className="flex items-center justify-between rounded-lg bg-stone-200 px-4 py-2.5"
-              >
-                <span className="text-sm font-medium text-neutral-700">
-                  {t(`age.${age}`)}
-                </span>
-                <span className="price-amount">{t('eventForm.fields.dailyRate')}: 0</span>
-              </div>
-            ))}
+          {/* Children (0–14): admin-editable daily + night rate (default 0). The
+              engine charges exactly what's entered (no age is hard-coded to 0). */}
+          <div className="space-y-4">
+            {CHILD_AGES.map((age) => {
+              const stored = (editData?.pricingRules ?? []).find(
+                (r) => r.ageCategory === age,
+              )
+              return (
+                <div
+                  key={age}
+                  className="rounded-xl border border-neutral-200 bg-stone-50 p-4"
+                >
+                  <p className="mb-3 text-sm font-semibold text-primary-700">
+                    {t(`age.${age}`)}
+                  </p>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {CHILD_FIELDS.map((f) =>
+                      isEdit ? (
+                        <PreviewRow
+                          key={f}
+                          label={t(`eventForm.fields.${f}`)}
+                          value={String(stored?.[f] ?? 0)}
+                        />
+                      ) : (
+                        <TextField key={f} label={t(`eventForm.fields.${f}`)}>
+                          <input
+                            type="number"
+                            min={0}
+                            className="bdc-input"
+                            value={pricingChild[age]![f]}
+                            onChange={(e) =>
+                              updatePricingChild(age, { [f]: Number(e.target.value) || 0 })
+                            }
+                          />
+                        </TextField>
+                      ),
+                    )}
+                  </div>
+                </div>
+              )
+            })}
             <p className="text-xs text-neutral-500">
-              {t('eventForm.pricing.lockedZeroNote')}
+              {t('eventForm.pricing.childNote')}
             </p>
           </div>
 

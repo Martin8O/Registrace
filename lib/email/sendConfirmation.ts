@@ -67,7 +67,7 @@ const TEXT: Record<Lang, Record<string, string>> = {
     gdpr: "Vaše osobní údaje zpracováváme v souladu se zásadami ochrany osobních údajů (kontakt: info@bdc.cz).",
     yes: "ano",
     no: "ne",
-    MORNING: "ráno",
+    MORNING: "dopoledne",
     AFTERNOON: "odpoledne",
     EVENING: "večer",
     NONE: "ne",

@@ -120,10 +120,16 @@ type RuleSeed = {
   morningArrivalDiscount: number; afternoonArrivalDiscount: number;
   eveningArrivalDiscount: number; earlyDepartureDiscount: number;
 };
-function pricingRules(p: Record<(typeof PRICING_TYPES)[number], Adult15>): RuleSeed[] {
-  const child = (ageCategory: AgeCategory): RuleSeed => ({
+// `age814Daily` lets an event charge ages 8–14 a per-day participation rate
+// (revised invariant 15 — real BDC courses like "MLK" do this). Children always
+// have zero discounts + zero night rate (those are a 15+-only concept).
+function pricingRules(
+  p: Record<(typeof PRICING_TYPES)[number], Adult15>,
+  age814Daily = 0,
+): RuleSeed[] {
+  const child = (ageCategory: AgeCategory, dailyRate = 0): RuleSeed => ({
     ageCategory, pricingType: "STANDARD",
-    dailyRate: 0, nightRate: 0,
+    dailyRate, nightRate: 0,
     morningArrivalDiscount: 0, afternoonArrivalDiscount: 0,
     eveningArrivalDiscount: 0, earlyDepartureDiscount: 0,
   });
@@ -137,7 +143,7 @@ function pricingRules(p: Record<(typeof PRICING_TYPES)[number], Adult15>): RuleS
     };
   };
   return [
-    child("AGE_0_3"), child("AGE_4_7"), child("AGE_8_14"),
+    child("AGE_0_3"), child("AGE_4_7"), child("AGE_8_14", age814Daily),
     adult("STANDARD"), adult("SUPPORTED"), adult("SURPLUS"),
   ];
 }
@@ -159,6 +165,12 @@ type EventSpec = {
   regCount: number;
   mealPrices: Record<MealType, number>;
   pricing: Record<(typeof PRICING_TYPES)[number], Adult15>;
+  // Per-day participation rate for ages 8–14 (default 0). Non-zero on courses
+  // that charge older children, e.g. the real BDC "MLK" (100 CZK/day).
+  age814Daily?: number;
+  // Explicit meals per day index (overrides the default residential pattern).
+  // Lets a faithful BDC copy place meals exactly as the source event does.
+  mealsByDay?: MealType[][];
 };
 
 const EVENTS: EventSpec[] = [
@@ -184,9 +196,9 @@ const EVENTS: EventSpec[] = [
     regCount: 17,
     mealPrices: { BREAKFAST: 80, LUNCH: 120, DINNER: 120 },
     pricing: {
-      STANDARD: { daily: 250, night: 180, mA: 50, aA: 30, eA: 80, ed: 60 },
-      SUPPORTED: { daily: 150, night: 120, mA: 30, aA: 20, eA: 50, ed: 40 },
-      SURPLUS: { daily: 350, night: 240, mA: 50, aA: 30, eA: 80, ed: 60 },
+      STANDARD: { daily: 250, night: 180, mA: 30, aA: 50, eA: 80, ed: 60 },
+      SUPPORTED: { daily: 150, night: 120, mA: 20, aA: 30, eA: 50, ed: 40 },
+      SURPLUS: { daily: 350, night: 240, mA: 30, aA: 50, eA: 80, ed: 60 },
     },
   },
   {
@@ -211,9 +223,9 @@ const EVENTS: EventSpec[] = [
     regCount: 19,
     mealPrices: { BREAKFAST: 90, LUNCH: 130, DINNER: 130 },
     pricing: {
-      STANDARD: { daily: 300, night: 200, mA: 60, aA: 40, eA: 90, ed: 70 },
-      SUPPORTED: { daily: 180, night: 140, mA: 40, aA: 25, eA: 60, ed: 45 },
-      SURPLUS: { daily: 420, night: 280, mA: 60, aA: 40, eA: 90, ed: 70 },
+      STANDARD: { daily: 300, night: 200, mA: 40, aA: 60, eA: 90, ed: 70 },
+      SUPPORTED: { daily: 180, night: 140, mA: 25, aA: 40, eA: 60, ed: 45 },
+      SURPLUS: { daily: 420, night: 280, mA: 40, aA: 60, eA: 90, ed: 70 },
     },
   },
   {
@@ -238,9 +250,9 @@ const EVENTS: EventSpec[] = [
     regCount: 11,
     mealPrices: { BREAKFAST: 85, LUNCH: 125, DINNER: 125 },
     pricing: {
-      STANDARD: { daily: 280, night: 190, mA: 50, aA: 30, eA: 80, ed: 60 },
-      SUPPORTED: { daily: 170, night: 130, mA: 30, aA: 20, eA: 55, ed: 40 },
-      SURPLUS: { daily: 390, night: 260, mA: 50, aA: 30, eA: 80, ed: 60 },
+      STANDARD: { daily: 280, night: 190, mA: 30, aA: 50, eA: 80, ed: 60 },
+      SUPPORTED: { daily: 170, night: 130, mA: 20, aA: 30, eA: 55, ed: 40 },
+      SURPLUS: { daily: 390, night: 260, mA: 30, aA: 50, eA: 80, ed: 60 },
     },
   },
   {
@@ -265,9 +277,83 @@ const EVENTS: EventSpec[] = [
     regCount: 13,
     mealPrices: { BREAKFAST: 75, LUNCH: 115, DINNER: 115 },
     pricing: {
-      STANDARD: { daily: 230, night: 170, mA: 50, aA: 30, eA: 70, ed: 50 },
-      SUPPORTED: { daily: 140, night: 110, mA: 30, aA: 20, eA: 45, ed: 35 },
-      SURPLUS: { daily: 330, night: 230, mA: 50, aA: 30, eA: 70, ed: 50 },
+      STANDARD: { daily: 230, night: 170, mA: 30, aA: 50, eA: 70, ed: 50 },
+      SUPPORTED: { daily: 140, night: 110, mA: 20, aA: 30, eA: 45, ed: 35 },
+      SURPLUS: { daily: 330, night: 230, mA: 30, aA: 50, eA: 70, ed: 50 },
+    },
+  },
+  // ── Faithful copies of the LIVE regserver.bdc.cz/tenovice events (prices from
+  //    Martin's screenshots; dates/meals from the live registration forms). Used
+  //    to verify our engine matches theirs. NB: MLK charges ages 8–14 (100/day),
+  //    night rate is 0 on both (accommodation adds nothing), arrival discounts are
+  //    monotonic (morning ≤ afternoon ≤ evening). Descriptions are concise — the
+  //    source pages carry only a title/subtitle. ──
+  {
+    key: "mlk",
+    status: "PUBLISHED",
+    centerName: "Těnovice",
+    creator: "admin",
+    numberPrefix: "26005",
+    title_cs: "MLK 2026 – Meditační letní kurz Těnovice",
+    title_en: "MLK 2026 – Meditation Summer Course Těnovice",
+    subtitle_cs: "Meditační letní kurz",
+    subtitle_en: "Meditation summer course",
+    description_cs:
+      "Hlavní letní meditační kurz v těnovickém centru. Čtyřdenní pobyt (pátek–pondělí) s vedenými meditacemi, přednáškami a společným vegetariánským jídlem. Otevřený začátečníkům i pokročilým. Ubytování v areálu, s sebou vlastní spacák a karimatku.",
+    description_en:
+      "The main summer meditation course at the Těnovice centre. A four-day stay (Friday–Monday) with guided meditations, talks and shared vegetarian meals. Open to beginners and advanced practitioners. On-site accommodation; bring your own sleeping bag and mat.",
+    contactName: "Ondra Rozum",
+    contactPhone: "+420 724 051 765",
+    contactEmail: "tenovice@bdc.cz",
+    days: ["2026-07-03", "2026-07-04", "2026-07-05", "2026-07-06"],
+    maxRegistrations: 60,
+    regCount: 10,
+    mealPrices: { BREAKFAST: 80, LUNCH: 130, DINNER: 130 },
+    // Friday: dinner only (course starts Fri evening). Monday: breakfast + lunch.
+    mealsByDay: [
+      ["DINNER"],
+      ["BREAKFAST", "LUNCH", "DINNER"],
+      ["BREAKFAST", "LUNCH", "DINNER"],
+      ["BREAKFAST", "LUNCH"],
+    ],
+    age814Daily: 100,
+    pricing: {
+      STANDARD: { daily: 600, night: 0, mA: 0, aA: 200, eA: 200, ed: 400 },
+      SUPPORTED: { daily: 300, night: 0, mA: 0, aA: 200, eA: 200, ed: 400 },
+      SURPLUS: { daily: 800, night: 0, mA: 0, aA: 200, eA: 200, ed: 400 },
+    },
+  },
+  {
+    key: "prep",
+    status: "PUBLISHED",
+    centerName: "Těnovice",
+    creator: "admin",
+    numberPrefix: "26006",
+    title_cs: "2. přípravný víkend MLK – Těnovice",
+    title_en: "2nd MLK preparatory weekend – Těnovice",
+    subtitle_cs: "Přípravný víkend na letní kurz",
+    subtitle_en: "Preparatory weekend for the summer course",
+    description_cs:
+      "Víkendové setkání k přípravě hlavního letního kurzu (MLK) v Těnovicích, pátek–neděle. Společná organizace, úklid, meditace a jídlo. Vhodné pro všechny, kdo chtějí pomoci s přípravou centra.",
+    description_en:
+      "A weekend gathering to prepare the main summer course (MLK) at Těnovice, Friday–Sunday. Shared organisation, cleaning, meditation and meals. Suitable for anyone who wants to help prepare the centre.",
+    contactName: "Ondra Rozum",
+    contactPhone: "+420 724 051 765",
+    contactEmail: "tenovice@bdc.cz",
+    days: ["2026-06-26", "2026-06-27", "2026-06-28"],
+    maxRegistrations: 30,
+    regCount: 10,
+    mealPrices: { BREAKFAST: 80, LUNCH: 120, DINNER: 120 },
+    // Friday: dinner only. Sunday: breakfast + lunch (leave after lunch).
+    mealsByDay: [
+      ["DINNER"],
+      ["BREAKFAST", "LUNCH", "DINNER"],
+      ["BREAKFAST", "LUNCH"],
+    ],
+    pricing: {
+      STANDARD: { daily: 100, night: 0, mA: 0, aA: 0, eA: 100, ed: 100 },
+      SUPPORTED: { daily: 30, night: 0, mA: 0, aA: 0, eA: 100, ed: 100 },
+      SURPLUS: { daily: 200, night: 0, mA: 0, aA: 0, eA: 100, ed: 100 },
     },
   },
 ];
@@ -368,7 +454,7 @@ async function main() {
   console.log(`  Participants:  ${participantCount}`);
   console.log(`  Centres:       ${centers.length}  → KEEP`);
   console.log(`  Users/admins:  ${users.length}  → KEEP  (super: ${superAdmin?.email ?? "—"}, admins: ${admins.length})`);
-  console.log("\nWould create 4 events:");
+  console.log(`\nWould create ${EVENTS.length} events:`);
   for (const e of EVENTS) {
     const c = centerByName.get(e.centerName);
     console.log(
@@ -401,7 +487,7 @@ async function main() {
     const dayDates = spec.days.map(utcMidnight);
     const startDate = dayDates[0]!;
     const endDate = dayDates[dayDates.length - 1]!;
-    const rules = pricingRules(spec.pricing);
+    const rules = pricingRules(spec.pricing, spec.age814Daily ?? 0);
 
     const event = await prisma.event.create({
       data: {
@@ -431,7 +517,8 @@ async function main() {
         data: { eventId: event.id, date, label_cs: csLabel(date), label_en: enLabel(date), sortOrder },
       });
       dates.push({ id: ed.id, index: i, sortOrder });
-      for (const mt of mealsForDay(i, lastIndex)) {
+      const dayMeals = spec.mealsByDay ? (spec.mealsByDay[i] ?? []) : mealsForDay(i, lastIndex);
+      for (const mt of dayMeals) {
         const m = await prisma.eventMeal.create({
           data: {
             eventId: event.id, eventDateId: ed.id, mealType: mt,

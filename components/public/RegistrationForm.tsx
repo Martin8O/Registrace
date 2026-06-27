@@ -19,7 +19,8 @@ import {
 import { getAvailableMealIds } from '@/lib/utils/mealAvailability'
 import { useDebounce } from '@/lib/utils/useDebounce'
 import GdprModal from './GdprModal'
-import type { CenterDTO, EventDateDTO, EventMealDTO } from '@/lib/types'
+import ParticipationPriceModal from './ParticipationPriceModal'
+import type { CenterDTO, EventDateDTO, EventMealDTO, PricingRuleDTO } from '@/lib/types'
 
 // gdprConsent is `z.literal(true)` in the schema, but the checkbox must start
 // unchecked — so the form's working type loosens just that one field to boolean.
@@ -45,6 +46,7 @@ type Props = {
   dates: EventDateDTO[]
   meals: EventMealDTO[]
   centers: CenterDTO[]
+  pricingRules: PricingRuleDTO[]
 }
 
 const AGE_CATEGORIES = ['AGE_0_3', 'AGE_4_7', 'AGE_8_14', 'AGE_15_PLUS'] as const
@@ -87,7 +89,7 @@ function formatCzk(value: number): string {
   return `${value} CZK`
 }
 
-export default function RegistrationForm({ eventId, dates, meals, centers }: Props) {
+export default function RegistrationForm({ eventId, dates, meals, centers, pricingRules }: Props) {
   const t = useTranslations('form')
   const locale = useLocale()
 
@@ -144,6 +146,8 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
   const [submitted, setSubmitted] = useState(false)
   const [submitError, setSubmitError] = useState<'submit' | 'capacity' | null>(null)
   const [gdprOpen, setGdprOpen] = useState(false)
+  // Which participant's participation-price breakdown popup is open (index | null).
+  const [participationInfo, setParticipationInfo] = useState<number | null>(null)
 
   // idempotencyKey (invariant 14): generated client-side on mount to avoid an
   // SSR/CSR hydration mismatch — kept in form state, never rendered to the DOM.
@@ -176,6 +180,14 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
   const arrivalOrder = orderById.get(arrivalDateId)
   const departureOrder = orderById.get(departureDateId)
   const sameDay = arrivalOrder !== undefined && arrivalOrder === departureOrder
+
+  // Inclusive participation-day count (mirrors the engine's participationDays):
+  // 0 while the stay is incomplete or degenerate. Used only by the informational
+  // participation-price breakdown popup.
+  const stayDays =
+    arrivalOrder !== undefined && departureOrder !== undefined && departureOrder >= arrivalOrder
+      ? departureOrder - arrivalOrder + 1
+      : 0
 
   useEffect(() => {
     if (arrivalOrder === undefined || departureOrder === undefined) return
@@ -519,10 +531,29 @@ export default function RegistrationForm({ eventId, dates, meals, centers }: Pro
                   <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
                     {t('pricing_info')}
                   </p>
-                  <PriceRow label={t('participation_price')} value={pricing?.participationPrice ?? 0} />
+                  <PriceRow
+                    label={t('participation_price')}
+                    value={pricing?.participationPrice ?? 0}
+                    onInfo={() => setParticipationInfo(i)}
+                    infoLabel={t('participationModal.openLabel')}
+                  />
                   <PriceRow label={t('meal_price')} value={pricing?.mealPrice ?? 0} />
                   <PriceRow label={t('participant_subtotal')} value={pricing?.subtotal ?? 0} />
                 </div>
+
+                <ParticipationPriceModal
+                  isOpen={participationInfo === i}
+                  onClose={() => setParticipationInfo(null)}
+                  participantNumber={i + 1}
+                  ageCategory={age ?? 'AGE_15_PLUS'}
+                  pricingType={allValues.participants?.[i]?.pricingType}
+                  pricingRules={pricingRules}
+                  days={stayDays}
+                  arrivalTime={arrivalTime}
+                  arrivalTimeLabel={arrivalTime ? t(arrivalLabelKey[arrivalTime] ?? arrivalTime) : ''}
+                  earlyDeparture={earlyDeparture}
+                  hasAccommodation={allValues.hasAccommodation ?? false}
+                />
               </div>
             )
           })}
@@ -657,10 +688,33 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-function PriceRow({ label, value }: { label: string; value: number }) {
+function PriceRow({
+  label,
+  value,
+  onInfo,
+  infoLabel,
+}: {
+  label: string
+  value: number
+  onInfo?: () => void
+  infoLabel?: string
+}) {
   return (
     <div className="price-field">
-      <span className="text-sm text-neutral-700">{label}</span>
+      <span className="flex items-center gap-1.5 text-sm text-neutral-700">
+        {label}
+        {onInfo && (
+          <button
+            type="button"
+            onClick={onInfo}
+            aria-label={infoLabel ?? label}
+            title={infoLabel ?? label}
+            className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-primary-400 text-[10px] font-bold leading-none text-primary-600 transition hover:bg-primary-50"
+          >
+            i
+          </button>
+        )}
+      </span>
       <span className="price-amount">{formatCzk(value)}</span>
     </div>
   )

@@ -784,7 +784,7 @@ const PRICING_LABELS: Record<ExportLang, Record<string, string>> = {
   en: { STANDARD: "Standard", SUPPORTED: "Supported", SURPLUS: "Surplus" },
 };
 const ARRIVAL_TIME_LABELS: Record<ExportLang, Record<string, string>> = {
-  cs: { MORNING: "Ráno", AFTERNOON: "Odpoledne", EVENING: "Večer" },
+  cs: { MORNING: "Dopoledne", AFTERNOON: "Odpoledne", EVENING: "Večer" },
   en: { MORNING: "Morning", AFTERNOON: "Afternoon", EVENING: "Evening" },
 };
 

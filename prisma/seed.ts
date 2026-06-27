@@ -54,14 +54,16 @@ const sampleMeals = [
 ];
 
 // PricingType applies only to AGE_15_PLUS; ages 0–14 are always dailyRate 0
-// (invariant 15). *Discount fields are subtracted from the total downstream.
+// (invariant 15). *Discount fields are subtracted from the total downstream;
+// arrival discounts are monotonic (morning ≤ afternoon ≤ evening) so a later
+// arrival never costs more than an earlier one.
 const samplePricingRules = [
   { ageCategory: "AGE_0_3" as const, pricingType: "STANDARD" as const, dailyRate: 0, nightRate: 0, morningArrivalDiscount: 0, afternoonArrivalDiscount: 0, eveningArrivalDiscount: 0, earlyDepartureDiscount: 0 },
   { ageCategory: "AGE_4_7" as const, pricingType: "STANDARD" as const, dailyRate: 0, nightRate: 0, morningArrivalDiscount: 0, afternoonArrivalDiscount: 0, eveningArrivalDiscount: 0, earlyDepartureDiscount: 0 },
   { ageCategory: "AGE_8_14" as const, pricingType: "STANDARD" as const, dailyRate: 0, nightRate: 0, morningArrivalDiscount: 0, afternoonArrivalDiscount: 0, eveningArrivalDiscount: 0, earlyDepartureDiscount: 0 },
-  { ageCategory: "AGE_15_PLUS" as const, pricingType: "STANDARD" as const, dailyRate: 200, nightRate: 150, morningArrivalDiscount: 50, afternoonArrivalDiscount: 30, eveningArrivalDiscount: 80, earlyDepartureDiscount: 50 },
-  { ageCategory: "AGE_15_PLUS" as const, pricingType: "SUPPORTED" as const, dailyRate: 100, nightRate: 100, morningArrivalDiscount: 30, afternoonArrivalDiscount: 20, eveningArrivalDiscount: 50, earlyDepartureDiscount: 30 },
-  { ageCategory: "AGE_15_PLUS" as const, pricingType: "SURPLUS" as const, dailyRate: 300, nightRate: 200, morningArrivalDiscount: 50, afternoonArrivalDiscount: 30, eveningArrivalDiscount: 80, earlyDepartureDiscount: 50 },
+  { ageCategory: "AGE_15_PLUS" as const, pricingType: "STANDARD" as const, dailyRate: 200, nightRate: 150, morningArrivalDiscount: 30, afternoonArrivalDiscount: 50, eveningArrivalDiscount: 80, earlyDepartureDiscount: 50 },
+  { ageCategory: "AGE_15_PLUS" as const, pricingType: "SUPPORTED" as const, dailyRate: 100, nightRate: 100, morningArrivalDiscount: 20, afternoonArrivalDiscount: 30, eveningArrivalDiscount: 50, earlyDepartureDiscount: 30 },
+  { ageCategory: "AGE_15_PLUS" as const, pricingType: "SURPLUS" as const, dailyRate: 300, nightRate: 200, morningArrivalDiscount: 30, afternoonArrivalDiscount: 50, eveningArrivalDiscount: 80, earlyDepartureDiscount: 50 },
 ];
 
 async function seedSampleEvent() {

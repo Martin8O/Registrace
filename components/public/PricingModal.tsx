@@ -45,6 +45,8 @@ export default function PricingModal({ isOpen, onClose, meals, pricingRules }: P
   push(t('dailyRate.age15standard'), std15?.dailyRate)
   push(t('dailyRate.age15supported'), rule('AGE_15_PLUS', 'SUPPORTED')?.dailyRate)
   push(t('dailyRate.age15surplus'), rule('AGE_15_PLUS', 'SURPLUS')?.dailyRate)
+  push(t('morningArrivalDiscount'), std15?.morningArrivalDiscount)
+  push(t('afternoonArrivalDiscount'), std15?.afternoonArrivalDiscount)
   push(t('eveningArrivalDiscount'), std15?.eveningArrivalDiscount)
   push(t('earlyDepartureDiscount'), std15?.earlyDepartureDiscount)
   push(t('pricePerNight'), std15?.nightRate)

@@ -1,21 +1,7 @@
 import Link from 'next/link'
 import { getTranslations } from 'next-intl/server'
-import { getPublishedEvents, type EventStatusValue } from '@/modules/events'
+import { getPublishedEvents } from '@/modules/events'
 import { formatDateRangeShort } from '@/lib/utils/formatDate'
-
-const badgeVariants: Record<EventStatusValue, string> = {
-  PUBLISHED: 'bg-gold-100 text-gold-800 border border-gold-300',
-  DRAFT: 'bg-muted-bg text-muted-fg border border-muted-border',
-  CLOSED: 'bg-neutral-200 text-neutral-600 border border-neutral-300',
-  ARCHIVED: 'bg-neutral-200 text-neutral-600 border border-neutral-300',
-}
-
-const badgeLabelKey: Record<EventStatusValue, string> = {
-  PUBLISHED: 'published',
-  DRAFT: 'draft',
-  CLOSED: 'closed',
-  ARCHIVED: 'archived',
-}
 
 export default async function HomePage({
   params,
@@ -24,7 +10,6 @@ export default async function HomePage({
 }) {
   const { locale } = await params
   const t = await getTranslations('home')
-  const tBadge = await getTranslations('badge')
 
   const publishedEvents = await getPublishedEvents()
 
@@ -60,12 +45,6 @@ export default async function HomePage({
                 {subtitle !== null && (
                   <p className="mt-3 text-neutral-600">{subtitle}</p>
                 )}
-
-                <div className="mt-4">
-                  <span className={`badge ${badgeVariants[event.status]}`}>
-                    {tBadge(badgeLabelKey[event.status])}
-                  </span>
-                </div>
 
                 <div className="mt-5">
                   <Link

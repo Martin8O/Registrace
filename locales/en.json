@@ -55,6 +55,18 @@
       "submit": "The registration could not be submitted. Please try again.",
       "capacity": "The event is already at full capacity."
     },
+    "participationModal": {
+      "title": "Participation price — participant {number}",
+      "openLabel": "Show participation price breakdown",
+      "base": "Participation: {days, plural, one {# day} other {# days}} × {rate} CZK",
+      "arrivalDiscount": "Arrival discount ({time})",
+      "earlyDepartureDiscount": "Early departure discount (after breakfast)",
+      "accommodation": "Accommodation: {nights, plural, one {# night} other {# nights}} × {rate} CZK",
+      "total": "Participation price",
+      "childNote": "This category has no participation charge — only the selected meals are charged.",
+      "selectStay": "Select the arrival and departure dates first to see the participation price breakdown.",
+      "close": "Close"
+    },
     "gdprModal": {
       "title": "Personal data protection",
       "intro": "When you register for an event we process your personal data in accordance with the GDPR. Below is the essential information on how we handle it.",
@@ -101,6 +113,8 @@
         "age15supported": "Daily rate age 15+ supported",
         "age15surplus": "Daily rate age 15+ surplus"
       },
+      "morningArrivalDiscount": "Morning arrival discount (15+)",
+      "afternoonArrivalDiscount": "Afternoon arrival discount (15+)",
       "eveningArrivalDiscount": "Evening arrival discount (15+)",
       "earlyDepartureDiscount": "Early departure discount (15+)",
       "pricePerNight": "Price per night (15+)"
@@ -323,7 +337,7 @@
         "intro": "Pricing rules are saved with the event.",
         "ageCategory": "Age category",
         "pricingType": "Price type",
-        "lockedZeroNote": "Children 0–14 always have a daily rate of 0 (fixed rule)."
+        "childNote": "Child categories are usually 0, but you can set your own daily and night rate — the calculation always follows the price list you enter exactly. Arrival/departure discounts do not apply to children."
       },
       "meals": {
         "intro": "Each event day offers breakfast, lunch and dinner. Edit the price; exclude any meal that isn't offered — this sets the event's starting and ending meal.",

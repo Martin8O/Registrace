@@ -59,7 +59,7 @@ next-intl 4 (i18n) · Zod 4 (validation — only lib) · React Hook Form · Rese
 12. User.id = @db.Uuid (matches Supabase Auth auth.users.id UUID format).
 13. Supabase needs two connection strings: pooled DATABASE_URL (port 6543) and direct DIRECT_URL (port 5432).
 14. Registration submission = idempotent (client sends UUID v4 idempotencyKey).
-15. PricingType applies only to AGE_15_PLUS. Age 0–14 always dailyRate = 0.
+15. PricingType applies only to AGE_15_PLUS. Pricing is **data-driven**: the engine charges every age by its PricingRule's `dailyRate` (no age hard-coded to 0). Children default to 0 in the form, but an admin may set a non-zero rate per event (e.g. real BDC "MLK" charges ages 8–14). Arrival/departure discounts apply to 15+ only because child rules carry 0 discounts — not via an age branch. (Revised M30; was "ages 0–14 always dailyRate = 0".)
 16. User cancellation not supported — admins only. Deliberate product decision.
 17. Export endpoint = POST (not GET), filters in body.
 18. Honeypot field on registration form, validated server-side.

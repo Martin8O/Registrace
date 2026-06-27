@@ -60,18 +60,24 @@ const adult = (pricingType = "STANDARD", mealIds: string[] = []): PricingPartici
 const one = (p: PricingParticipantInput, overrides: Partial<PricingInput> = {}) =>
   calculatePricing(input([p], overrides)).participants[0];
 
-// ─── Children: participation always 0 (invariant 15) ──────────────────────────
+// ─── Children: participation is DATA-DRIVEN (revised invariant 15) ─────────────
+// No age is hard-coded to 0. A child pays 0 only because its rule's dailyRate is
+// 0 (or no rule matches). The default fixture defines only 15+ rules, so children
+// fall through to "no rule → 0".
 
-describe("children pay no participation price", () => {
-  it("AGE_0_3 → 0 regardless of pricingType", () => {
-    // pricingType is invalid for a child per Zod, but the engine must still zero it.
+describe("children pay no participation when their rule rate is 0 / absent", () => {
+  it("AGE_0_3 → 0 (no matching rule)", () => {
     expect(one({ ageCategory: "AGE_0_3", pricingType: "SURPLUS", mealIds: [] })?.participationPrice).toBe(0);
   });
-  it("AGE_4_7 → 0", () => {
+  it("AGE_4_7 → 0 (no matching rule)", () => {
     expect(one({ ageCategory: "AGE_4_7", mealIds: [] })?.participationPrice).toBe(0);
   });
-  it("AGE_8_14 → 0", () => {
+  it("AGE_8_14 → 0 (no matching rule)", () => {
     expect(one({ ageCategory: "AGE_8_14", mealIds: [] })?.participationPrice).toBe(0);
+  });
+  it("AGE_8_14 with an explicit 0-rate rule → 0", () => {
+    const rules = [{ ageCategory: "AGE_8_14", pricingType: "STANDARD", dailyRate: 0, ...discounts, nightRate: 0, morningArrivalDiscount: 0, afternoonArrivalDiscount: 0, eveningArrivalDiscount: 0, earlyDepartureDiscount: 0 }];
+    expect(one({ ageCategory: "AGE_8_14", mealIds: [] }, { pricingRules: rules })?.participationPrice).toBe(0);
   });
   it("a child still pays for selected meals", () => {
     expect(one({ ageCategory: "AGE_8_14", mealIds: ["m_b", "m_l"] })).toEqual({
@@ -79,6 +85,37 @@ describe("children pay no participation price", () => {
       mealPrice: 200,
       subtotal: 200,
     });
+  });
+});
+
+// ─── Ages 8–14 ARE charged when the event configures a non-zero rate ──────────
+// Mirrors the real BDC "MLK" course (8–14 daily 100, no discounts, night 0).
+
+describe("ages 8–14 follow their configured rate", () => {
+  // 8–14 rule carries a real dailyRate but zero discounts/night (discounts are a
+  // 15+-only concept, expressed as zeros on the child rule, not an engine branch).
+  const child814 = [
+    {
+      ageCategory: "AGE_8_14", pricingType: "STANDARD", dailyRate: 100, nightRate: 0,
+      morningArrivalDiscount: 0, afternoonArrivalDiscount: 0, eveningArrivalDiscount: 0, earlyDepartureDiscount: 0,
+    },
+  ];
+  it("charged dailyRate × days → 100 × 3 = 300", () => {
+    expect(one({ ageCategory: "AGE_8_14", mealIds: [] }, { pricingRules: child814 })?.participationPrice).toBe(300);
+  });
+  it("no arrival discount applied (rule discounts are 0) → still 100 × 3 = 300", () => {
+    expect(
+      one({ ageCategory: "AGE_8_14", mealIds: [] }, { pricingRules: child814, arrivalTime: "EVENING" })?.participationPrice,
+    ).toBe(300);
+  });
+  it("no night charge even with accommodation (nightRate 0) → 100 × 2 = 200", () => {
+    expect(
+      one({ ageCategory: "AGE_8_14", mealIds: [] }, {
+        pricingRules: child814,
+        departureDateId: "d_sat",
+        hasAccommodation: true,
+      })?.participationPrice,
+    ).toBe(200);
   });
 });
 
