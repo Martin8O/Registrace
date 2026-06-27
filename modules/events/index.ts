@@ -66,6 +66,10 @@ export type EventDetailDTO = PublishedEventDTO & {
   contactName: string | null;
   contactPhone: string | null;
   contactEmail: string | null;
+  // Meal-ordering cut-off as a UTC ISO string (or null = no deadline). The public
+  // form compares it against `now` to close meal selection; the admin edit form
+  // converts it to a Prague wall-clock datetime-local for display.
+  mealRegistrationDeadline: string | null;
   dates: EventDateDTO[];
   meals: EventMealDTO[];
   pricingRules: PricingRuleDTO[];
@@ -108,6 +112,37 @@ function pragueWallClockToUtc(year: number, month: number, day: number, hour: nu
   const naive = Date.UTC(year, month - 1, day, hour, 0, 0);
   const offset = pragueOffsetMinutes(new Date(naive));
   return new Date(naive - offset * 60000);
+}
+
+// Convert a Europe/Prague wall-clock "YYYY-MM-DDTHH:mm" (a <input
+// type="datetime-local"> value) into the matching UTC instant — handles SELČ/SEČ
+// automatically by reading the zone offset at that instant. Returns null for a
+// malformed string.
+export function pragueLocalToUtc(local: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(local);
+  if (!m) return null;
+  const [, y, mo, d, h, mi] = m.map(Number) as [number, number, number, number, number, number];
+  const naive = Date.UTC(y, mo - 1, d, h, mi, 0);
+  const offset = pragueOffsetMinutes(new Date(naive));
+  return new Date(naive - offset * 60000);
+}
+
+// Inverse: a UTC instant → Europe/Prague wall-clock "YYYY-MM-DDTHH:mm" (for
+// prefilling the datetime-local input in the edit form).
+export function formatPragueDateTimeLocal(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Prague",
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
+  let hour = get("hour");
+  if (hour === "24") hour = "00";
+  return `${get("year")}-${get("month")}-${get("day")}T${hour}:${get("minute")}`;
 }
 
 // Lifecycle derive-on-read (no scheduler needed for the public list): a PUBLISHED
@@ -178,6 +213,9 @@ function toEventDetailDTO(event: EventDetailRow): EventDetailDTO {
     contactName: event.contactName,
     contactPhone: event.contactPhone,
     contactEmail: event.contactEmail,
+    mealRegistrationDeadline: event.mealRegistrationDeadline
+      ? event.mealRegistrationDeadline.toISOString()
+      : null,
     startDate: toIsoDay(event.startDate),
     endDate: toIsoDay(event.endDate),
     status: event.status,
@@ -351,6 +389,9 @@ export async function createEvent(
         contactEmail: input.contactEmail || null,
         status: input.status,
         maxRegistrations: input.maxRegistrations ?? null,
+        mealRegistrationDeadline: input.mealRegistrationDeadline
+          ? pragueLocalToUtc(input.mealRegistrationDeadline)
+          : null,
         centerId: input.centerId,
         createdBy: ctx.userId,
         startDate: input.startDate,
@@ -549,6 +590,11 @@ export async function updateEvent(
   if (input.contactPhone !== undefined) data.contactPhone = input.contactPhone || null;
   if (input.contactEmail !== undefined) data.contactEmail = input.contactEmail || null;
   if (input.maxRegistrations !== undefined) data.maxRegistrations = input.maxRegistrations;
+  if (input.mealRegistrationDeadline !== undefined) {
+    data.mealRegistrationDeadline = input.mealRegistrationDeadline
+      ? pragueLocalToUtc(input.mealRegistrationDeadline)
+      : null;
+  }
   if (input.status !== undefined) data.status = input.status;
 
   // No writable field present (e.g. a payload of only immutable centerId/dates):

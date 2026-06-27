@@ -41,6 +41,7 @@ function fakeRows() {
           fullName: "Jan Novák",
           ageCategory: "AGE_15_PLUS",
           pricingType: "STANDARD",
+          mealType: "MEAT",
           participationPrice: 200,
           mealPrice: 100,
           totalPrice: 300,
@@ -50,6 +51,7 @@ function fakeRows() {
           fullName: "Eva Malá",
           ageCategory: "AGE_8_14",
           pricingType: "STANDARD",
+          mealType: "VEGETARIAN",
           participationPrice: 0,
           mealPrice: 50,
           totalPrice: 50,
@@ -69,8 +71,8 @@ describe("buildRegistrationExport", () => {
     expect(headers[0]).toBe("Č. registrace");
     expect(headers).toContain("Centrum akce");
     expect(headers).toContain("Domovské centrum");
-    // 14 base columns + 2 participants × 7 = 28
-    expect(headers).toHaveLength(28);
+    // 14 base columns + 2 participants × 8 = 30 (8 = the diet column was added)
+    expect(headers).toHaveLength(30);
 
     const row = rows[0]!;
     expect(row[0]).toBe("260020001");
@@ -82,14 +84,16 @@ describe("buildRegistrationExport", () => {
     expect(row[11]).toBe("Ano"); // accommodation YES → Ano
     expect(row[12]).toBe(300); // total stays a number
     expect(row[13]).toBe(2); // participant count
-    // Participant 1 (15+): name=14, age=15, type=16 … meals=20
+    // Participant 1 (15+): name=14, age=15, type=16, diet=17 … meals=21
     expect(row[14]).toBe("Jan Novák");
     expect(row[15]).toBe("15 let a více");
     expect(row[16]).toBe("Standardní");
-    expect(row[20]).toBe("Pá oběd"); // joined meal labels
-    // Participant 2 (child): name=21 … type=23
-    expect(row[21]).toBe("Eva Malá");
-    expect(row[23]).toBe(""); // pricingType omitted for under-15 (invariant 15)
+    expect(row[17]).toBe("Masitá"); // diet (MEAT)
+    expect(row[21]).toBe("Pá oběd"); // joined meal labels
+    // Participant 2 (child): name=22, type=24, diet=25
+    expect(row[22]).toBe("Eva Malá");
+    expect(row[24]).toBe(""); // pricingType omitted for under-15 (invariant 15)
+    expect(row[25]).toBe("Vegetariánská"); // diet shown for every age
   });
 
   it("localizes to English when lang = en", async () => {
@@ -105,6 +109,6 @@ describe("buildRegistrationExport", () => {
     h.findMany.mockResolvedValue([]);
     const { headers, rows } = await buildRegistrationExport({}, ctx, "cs");
     expect(rows).toHaveLength(0);
-    expect(headers).toHaveLength(21); // 14 base + 1 group × 7
+    expect(headers).toHaveLength(22); // 14 base + 1 group × 8
   });
 });

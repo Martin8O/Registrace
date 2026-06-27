@@ -39,6 +39,10 @@
     "price_supported": "Podporovaná",
     "price_surplus": "Nadbytek",
     "meals": "Strava",
+    "meal_type": "Typ stravy",
+    "meal_meat": "Masitá",
+    "meal_vegetarian": "Vegetariánská",
+    "meals_closed_notice": "Registrace stravy už byla pro tuto akci uzavřena.",
     "meal_breakfast": "Snídaně",
     "meal_lunch": "Oběd",
     "meal_dinner": "Večeře",
@@ -52,6 +56,7 @@
       "fullName": "Jméno musí mít alespoň 2 znaky",
       "gdpr": "Pro pokračování je nutný souhlas se zpracováním osobních údajů",
       "required": "Toto pole je povinné",
+      "mealType": "Zvolte typ stravy",
       "submit": "Registraci se nepodařilo odeslat. Zkuste to prosím znovu.",
       "capacity": "Kapacita akce je již naplněna."
     },
@@ -260,6 +265,10 @@
       "AFTERNOON": "Odpoledne",
       "EVENING": "Večer"
     },
+    "mealCategory": {
+      "MEAT": "Masitá",
+      "VEGETARIAN": "Vegetariánská"
+    },
     "events": {
       "title": "Akce",
       "new": "Nová akce",
@@ -313,6 +322,7 @@
         "startDate": "Datum začátku",
         "endDate": "Datum konce",
         "maxRegistrations": "Maximální počet registrací",
+        "mealRegistrationDeadline": "Možnost registrovat se na jídlo do",
         "status": "Stav",
         "dailyRate": "Denní sazba",
         "nightRate": "Cena za noc",
@@ -338,6 +348,10 @@
         "ageCategory": "Věková kategorie",
         "pricingType": "Typ ceny",
         "childNote": "U dětských kategorií je sazba obvykle 0, ale můžete zadat vlastní denní sazbu i cenu za noc – výpočet vždy přesně odpovídá zadanému ceníku. Slevy za příjezd/odjezd se na děti nevztahují."
+      },
+      "settings": {
+        "mealDeadlineNote": "Po tomto termínu už nepůjde u akce objednat jídlo (účast a ubytování zůstávají otevřené). Nepovinné. Čas je v českém čase (automaticky SELČ/SEČ).",
+        "noDeadline": "Bez termínu"
       },
       "meals": {
         "intro": "Každý den akce nabízí snídani, oběd a večeři. Cenu lze upravit; jídlo, které není v nabídce, vyřaďte — tím se určí počáteční a koncové jídlo akce.",
@@ -365,6 +379,7 @@
         "startInPast": "Datum začátku nemůže být v minulosti",
         "date": "Neplatné datum",
         "maxRegistrations": "Musí být kladné celé číslo",
+        "mealDeadline": "Termín musí být max. týden před začátkem a nejpozději v den konce akce.",
         "forbidden": "Nemáte oprávnění vytvářet akce pro toto centrum.",
         "submitFailed": "Uložení se nezdařilo. Zkuste to prosím znovu."
       }
@@ -378,6 +393,14 @@
       "showingEvent": "Akce: {event}",
       "clearEvent": "Zrušit filtr akce",
       "mealStatsTitle": "Počty jídel k přípravě",
+      "mealStatsDay": "Den",
+      "mealStatsMeal": "Jídlo",
+      "mealStatsTotal": "Celkem",
+      "mealStatsMeat": "Masitá",
+      "mealStatsVege": "Vege",
+      "accommodationStatsTitle": "Počet ubytovaných na místě (po nocích)",
+      "accommodationNight": "Noc",
+      "accommodationCount": "Počet osob",
       "searchLabel": "Hledat registraci",
       "searchPlaceholder": "Hledat číslo registrace…",
       "exportCsv": "Export CSV",

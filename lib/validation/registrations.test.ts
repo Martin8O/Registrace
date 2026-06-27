@@ -15,7 +15,7 @@ const validSubmit = {
   centerId: "c1",
   email: "jan@example.cz",
   gdprConsent: true,
-  participants: [{ fullName: "Jan Novák", ageCategory: "AGE_15_PLUS", pricingType: "STANDARD", mealIds: [] }],
+  participants: [{ fullName: "Jan Novák", ageCategory: "AGE_15_PLUS", pricingType: "STANDARD", mealType: "MEAT", mealIds: [] }],
 };
 
 describe("registrationSubmitSchema", () => {
@@ -32,6 +32,7 @@ describe("registrationSubmitSchema", () => {
       fullName: "Ab",
       ageCategory: "AGE_15_PLUS",
       pricingType: "STANDARD",
+      mealType: "MEAT",
       mealIds: [],
     }));
     expect(registrationSubmitSchema.safeParse({ ...validSubmit, participants }).success).toBe(false);
@@ -48,9 +49,25 @@ describe("registrationSubmitSchema", () => {
   it("rejects pricingType on a child (only AGE_15_PLUS may carry it)", () => {
     const payload = {
       ...validSubmit,
-      participants: [{ fullName: "Dítě", ageCategory: "AGE_4_7", pricingType: "STANDARD", mealIds: [] }],
+      participants: [{ fullName: "Dítě", ageCategory: "AGE_4_7", pricingType: "STANDARD", mealType: "MEAT", mealIds: [] }],
     };
     expect(registrationSubmitSchema.safeParse(payload).success).toBe(false);
+  });
+
+  it("rejects a participant without a meal type (must choose one)", () => {
+    const payload = {
+      ...validSubmit,
+      participants: [{ fullName: "Jan Novák", ageCategory: "AGE_15_PLUS", pricingType: "STANDARD", mealIds: [] }],
+    };
+    expect(registrationSubmitSchema.safeParse(payload).success).toBe(false);
+  });
+
+  it("accepts VEGETARIAN as a meal type", () => {
+    const payload = {
+      ...validSubmit,
+      participants: [{ fullName: "Jan Novák", ageCategory: "AGE_15_PLUS", pricingType: "STANDARD", mealType: "VEGETARIAN", mealIds: [] }],
+    };
+    expect(registrationSubmitSchema.safeParse(payload).success).toBe(true);
   });
 
   it("rejects an invalid email", () => {

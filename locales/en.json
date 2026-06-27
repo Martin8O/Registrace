@@ -39,6 +39,10 @@
     "price_supported": "Supported",
     "price_surplus": "Surplus",
     "meals": "Meals",
+    "meal_type": "Meal type",
+    "meal_meat": "Meat",
+    "meal_vegetarian": "Vegetarian",
+    "meals_closed_notice": "Meal registration is already closed for this event.",
     "meal_breakfast": "Breakfast",
     "meal_lunch": "Lunch",
     "meal_dinner": "Dinner",
@@ -52,6 +56,7 @@
       "fullName": "Name must be at least 2 characters",
       "gdpr": "Consent is required to continue",
       "required": "This field is required",
+      "mealType": "Choose a meal type",
       "submit": "The registration could not be submitted. Please try again.",
       "capacity": "The event is already at full capacity."
     },
@@ -260,6 +265,10 @@
       "AFTERNOON": "Afternoon",
       "EVENING": "Evening"
     },
+    "mealCategory": {
+      "MEAT": "Meat",
+      "VEGETARIAN": "Vegetarian"
+    },
     "events": {
       "title": "Events",
       "new": "New event",
@@ -313,6 +322,7 @@
         "startDate": "Start date",
         "endDate": "End date",
         "maxRegistrations": "Maximum registrations",
+        "mealRegistrationDeadline": "Meal registration open until",
         "status": "Status",
         "dailyRate": "Daily rate",
         "nightRate": "Price per night",
@@ -338,6 +348,10 @@
         "ageCategory": "Age category",
         "pricingType": "Price type",
         "childNote": "Child categories are usually 0, but you can set your own daily and night rate — the calculation always follows the price list you enter exactly. Arrival/departure discounts do not apply to children."
+      },
+      "settings": {
+        "mealDeadlineNote": "After this time, meals can no longer be ordered for the event (participation and accommodation stay open). Optional. The time is Czech local time (SELČ/SEČ handled automatically).",
+        "noDeadline": "No deadline"
       },
       "meals": {
         "intro": "Each event day offers breakfast, lunch and dinner. Edit the price; exclude any meal that isn't offered — this sets the event's starting and ending meal.",
@@ -365,6 +379,7 @@
         "startInPast": "Start date cannot be in the past",
         "date": "Invalid date",
         "maxRegistrations": "Must be a positive whole number",
+        "mealDeadline": "The deadline must be at most a week before the start and no later than the end day.",
         "forbidden": "You are not allowed to create events for this centre.",
         "submitFailed": "Saving failed. Please try again."
       }
@@ -378,6 +393,14 @@
       "showingEvent": "Event: {event}",
       "clearEvent": "Clear event filter",
       "mealStatsTitle": "Meals to prepare",
+      "mealStatsDay": "Day",
+      "mealStatsMeal": "Meal",
+      "mealStatsTotal": "Total",
+      "mealStatsMeat": "Meat",
+      "mealStatsVege": "Vege",
+      "accommodationStatsTitle": "On-site accommodation (per night)",
+      "accommodationNight": "Night",
+      "accommodationCount": "People",
       "searchLabel": "Search registration",
       "searchPlaceholder": "Search registration no.…",
       "exportCsv": "Export CSV",

@@ -33,6 +33,7 @@ import {
   type ArrivalTime,
   type EarlyDeparture,
   type RegistrationStatus,
+  type MealCategory,
 } from "../generated/prisma";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { randomUUID } from "node:crypto";
@@ -637,6 +638,7 @@ async function main() {
                 fullName: p.fullName,
                 ageCategory: p.ageCategory as AgeCategory,
                 pricingType: (p.ageCategory === "AGE_15_PLUS" ? p.pricingType : "STANDARD") as PricingType,
+                mealType: (chance(0.7) ? "MEAT" : "VEGETARIAN") as MealCategory,
                 participationPrice: priced.participationPrice,
                 mealPrice: priced.mealPrice,
                 totalPrice: priced.subtotal,

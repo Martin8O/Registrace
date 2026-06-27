@@ -5,7 +5,11 @@ import EventStepper, {
   type EventStepperEditData,
 } from '@/components/admin/EventStepper'
 import { getAdminContext } from '@/modules/auth'
-import { getCentersForSelect, getEventForEdit } from '@/modules/events'
+import {
+  getCentersForSelect,
+  getEventForEdit,
+  formatPragueDateTimeLocal,
+} from '@/modules/events'
 
 // Edit reuses the create stepper, pre-filled from the real (ownership-scoped)
 // event. Only scalar fields + status are editable (§0 decision 1); centre,
@@ -38,6 +42,10 @@ export default async function EditEventPage({
     startDate: event.startDate,
     endDate: event.endDate,
     maxRegistrations: event.maxRegistrations ?? undefined,
+    // UTC ISO → Prague wall-clock for the datetime-local input.
+    mealRegistrationDeadline: event.mealRegistrationDeadline
+      ? formatPragueDateTimeLocal(new Date(event.mealRegistrationDeadline))
+      : '',
     status: event.status,
   }
 

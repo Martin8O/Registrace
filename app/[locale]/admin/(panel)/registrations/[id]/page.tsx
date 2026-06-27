@@ -5,6 +5,7 @@ import { getAdminContext } from '@/modules/auth'
 import { getRegistrationForDetail } from '@/modules/registrations'
 import { getCentersForSelect } from '@/modules/events'
 import RegistrationDetailEditor from '@/components/admin/RegistrationDetailEditor'
+import PricingInfoButton from '@/components/public/PricingInfoButton'
 
 // Server component: loads one registration (ownership-scoped → notFound for a
 // missing / not-owned id), renders the read-only summary + participants, and
@@ -32,6 +33,13 @@ export default async function RegistrationDetailPage({
   const eventTitle = `${lang === 'cs' ? detail.event.centerName_cs : detail.event.centerName_en} — ${lang === 'cs' ? detail.event.title_cs : detail.event.title_en}`
   const arrivalLabel = lang === 'cs' ? detail.arrivalLabel_cs : detail.arrivalLabel_en
   const departureLabel = lang === 'cs' ? detail.departureLabel_cs : detail.departureLabel_en
+  // Registrant's home centre is display-only here (admins don't change it).
+  const homeCenter = centers.find((c) => c.id === detail.centerId)
+  const homeCenterName = homeCenter
+    ? lang === 'cs'
+      ? homeCenter.name_cs
+      : homeCenter.name_en
+    : detail.centerId
 
   return (
     <div className="space-y-6">
@@ -50,6 +58,12 @@ export default async function RegistrationDetailPage({
         </Link>
       </header>
 
+      {/* Pricing-info popup (same as the public event page) — placed above the
+          number + summary so an admin can check the event's price list first. */}
+      <div className="flex justify-end">
+        <PricingInfoButton meals={detail.eventMeals} pricingRules={detail.eventPricingRules} />
+      </div>
+
       {/* Prominent, centered registration number */}
       <div className="text-center">
         <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
@@ -64,6 +78,7 @@ export default async function RegistrationDetailPage({
       <section className="section-card space-y-5">
         <ReadOnlyRow label={t('registrationDetail.email')} value={detail.email} />
         <ReadOnlyRow label={t('registrationDetail.event')} value={eventTitle} />
+        <ReadOnlyRow label={t('registrationDetail.homeCenter')} value={homeCenterName} />
         <ReadOnlyRow
           label={t('registrationDetail.arrival')}
           value={`${arrivalLabel} - ${t(`arrivalTime.${detail.arrivalTime}`).toLowerCase()}`}
@@ -77,11 +92,11 @@ export default async function RegistrationDetailPage({
         />
       </section>
 
-      {/* Editable center / accommodation / status + save / resend */}
+      {/* Editable accommodation / status + save / resend (home centre is now
+          display-only — shown read-only in the summary above). */}
       <RegistrationDetailEditor
         registrationId={detail.id}
-        centers={centers}
-        initialCenterId={detail.centerId}
+        centerId={detail.centerId}
         initialHasAccommodation={detail.hasAccommodation}
         initialStatus={detail.status}
       />
@@ -105,6 +120,7 @@ export default async function RegistrationDetailPage({
                 <p className="mt-1 text-sm text-neutral-600">
                   {t(`age.${p.ageCategory}`)}
                   {p.pricingType && ` · ${t(`pricingType.${p.pricingType}`)}`}
+                  {` · ${t(`mealCategory.${p.mealType}`)}`}
                 </p>
                 <div className="mt-3">
                   <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">

@@ -6,6 +6,7 @@ const ageCategoryValues = ["AGE_0_3", "AGE_4_7", "AGE_8_14", "AGE_15_PLUS"] as c
 const pricingTypeValues = ["STANDARD", "SUPPORTED", "SURPLUS"] as const;
 const arrivalTimeValues = ["MORNING", "AFTERNOON", "EVENING"] as const;
 const earlyDepartureValues = ["NONE", "AFTER_BREAKFAST"] as const;
+const mealCategoryValues = ["MEAT", "VEGETARIAN"] as const;
 
 // ─── Participant schemas ──────────────────────────────────────────────────────
 
@@ -20,6 +21,9 @@ const calculateParticipantSchema = z.object({
 
 const submitParticipantSchema = calculateParticipantSchema.extend({
   fullName: z.string().min(2).max(100),
+  // Required diet choice ("musí si zvolit jedno") — meat or vegetarian. Price is
+  // identical for both, so it stays out of the calculate-price schema.
+  mealType: z.enum(mealCategoryValues),
 });
 
 // ─── Shared base fields ───────────────────────────────────────────────────────

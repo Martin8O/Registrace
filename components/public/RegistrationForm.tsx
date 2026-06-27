@@ -22,12 +22,18 @@ import GdprModal from './GdprModal'
 import ParticipationPriceModal from './ParticipationPriceModal'
 import type { CenterDTO, EventDateDTO, EventMealDTO, PricingRuleDTO } from '@/lib/types'
 
-// gdprConsent is `z.literal(true)` in the schema, but the checkbox must start
-// unchecked — so the form's working type loosens just that one field to boolean.
-// The zodResolver still enforces literal-true on submit (invariant 18 honeypot +
-// GDPR). Everything else mirrors the schema's inferred type exactly.
-type RegistrationFormValues = Omit<RegistrationSubmitInput, 'gdprConsent'> & {
+// The working form type loosens two fields the user must actively choose so they
+// can start UNSELECTED, while the zodResolver still enforces them on submit:
+//  - gdprConsent: `z.literal(true)` in the schema, but the checkbox starts unchecked.
+//  - participant.mealType: a required enum, but the diet radios start unselected
+//    ("musí si zvolit jedno"). Everything else mirrors the schema's inferred type.
+type RegistrationParticipantValue = Omit<
+  RegistrationSubmitInput['participants'][number],
+  'mealType'
+> & { mealType?: 'MEAT' | 'VEGETARIAN' }
+type RegistrationFormValues = Omit<RegistrationSubmitInput, 'gdprConsent' | 'participants'> & {
   gdprConsent: boolean
+  participants: RegistrationParticipantValue[]
 }
 
 // Shape we read from /calculate-price. The stub returns { totalPrice: 0,
@@ -47,13 +53,22 @@ type Props = {
   meals: EventMealDTO[]
   centers: CenterDTO[]
   pricingRules: PricingRuleDTO[]
+  // UTC ISO meal-ordering cut-off (or null). Past it, meal selection is disabled
+  // (the server is authoritative — it strips meals submitted after the deadline).
+  mealRegistrationDeadline: string | null
 }
 
 const AGE_CATEGORIES = ['AGE_0_3', 'AGE_4_7', 'AGE_8_14', 'AGE_15_PLUS'] as const
 const PRICING_TYPES = ['STANDARD', 'SUPPORTED', 'SURPLUS'] as const
 const ARRIVAL_TIMES = ['MORNING', 'AFTERNOON', 'EVENING'] as const
 const EARLY_DEPARTURE = ['NONE', 'AFTER_BREAKFAST'] as const
+const MEAL_TYPES = ['MEAT', 'VEGETARIAN'] as const
 const MAX_PARTICIPANTS = 10
+
+const mealTypeLabelKey: Record<string, string> = {
+  MEAT: 'meal_meat',
+  VEGETARIAN: 'meal_vegetarian',
+}
 
 const ageLabelKey: Record<string, string> = {
   AGE_0_3: 'age_0_3',
@@ -82,16 +97,31 @@ const mealLabelKey: Record<string, string> = {
 }
 
 function makeParticipant(): RegistrationFormValues['participants'][number] {
-  return { fullName: '', ageCategory: 'AGE_15_PLUS', pricingType: 'STANDARD', mealIds: [] }
+  // mealType starts undefined — the registrant must actively choose meat/vege.
+  return { fullName: '', ageCategory: 'AGE_15_PLUS', pricingType: 'STANDARD', mealType: undefined, mealIds: [] }
 }
 
 function formatCzk(value: number): string {
   return `${value} CZK`
 }
 
-export default function RegistrationForm({ eventId, dates, meals, centers, pricingRules }: Props) {
+export default function RegistrationForm({
+  eventId,
+  dates,
+  meals,
+  centers,
+  pricingRules,
+  mealRegistrationDeadline,
+}: Props) {
   const t = useTranslations('form')
   const locale = useLocale()
+
+  // Meal ordering closed once the deadline has passed (computed at mount; the
+  // server re-checks and strips meals submitted after the cut-off).
+  const mealsClosed = useMemo(
+    () => mealRegistrationDeadline !== null && Date.now() >= Date.parse(mealRegistrationDeadline),
+    [mealRegistrationDeadline],
+  )
 
   const sortedDates = useMemo(
     () => [...dates].sort((a, b) => a.sortOrder - b.sortOrder),
@@ -163,12 +193,14 @@ export default function RegistrationForm({ eventId, dates, meals, centers, prici
 
   const availableMealIds = useMemo(
     () =>
-      getAvailableMealIds(
-        { arrivalDateId, arrivalTime, departureDateId, earlyDeparture },
-        dates,
-        meals,
-      ),
-    [arrivalDateId, arrivalTime, departureDateId, earlyDeparture, dates, meals],
+      mealsClosed
+        ? new Set<string>()
+        : getAvailableMealIds(
+            { arrivalDateId, arrivalTime, departureDateId, earlyDeparture },
+            dates,
+            meals,
+          ),
+    [mealsClosed, arrivalDateId, arrivalTime, departureDateId, earlyDeparture, dates, meals],
   )
 
   // ─── Stay-order constraints ───
@@ -219,6 +251,18 @@ export default function RegistrationForm({ eventId, dates, meals, centers, prici
       }
     })
   }, [availableMealIds, getValues, setValue])
+
+  // Past the meal deadline the diet choice is blocked (the selector is hidden).
+  // mealType is schema-required, so fill a harmless placeholder (it's irrelevant —
+  // no meals can be ordered) to keep the form valid. fields.length re-runs it for
+  // newly added participants.
+  useEffect(() => {
+    if (!mealsClosed) return
+    const parts = getValues('participants')
+    parts.forEach((p, i) => {
+      if (!p.mealType) setValue(`participants.${i}.mealType`, 'MEAT', { shouldDirty: false })
+    })
+  }, [mealsClosed, fields.length, getValues, setValue])
 
   // ─── Debounced server price call (presentation only — no client math) ───
   const allValues = watch()
@@ -479,7 +523,26 @@ export default function RegistrationForm({ eventId, dates, meals, centers, prici
                   </Field>
                 )}
 
+                {!mealsClosed && (
+                  <Field label={t('meal_type')}>
+                    <PillRadioGroup
+                      name={`participants.${i}.mealType`}
+                      options={MEAL_TYPES}
+                      labelFor={(v) => t(mealTypeLabelKey[v] ?? v)}
+                      register={register}
+                    />
+                    {errors.participants?.[i]?.mealType && (
+                      <p className="mt-1 text-sm text-danger-600">{t('errors.mealType')}</p>
+                    )}
+                  </Field>
+                )}
+
                 <Field label={t('meals')}>
+                  {mealsClosed ? (
+                    <p className="rounded-lg border border-neutral-200 bg-stone-50 px-3 py-2 text-sm text-neutral-500">
+                      {t('meals_closed_notice')}
+                    </p>
+                  ) : (
                   <div className="space-y-5">
                     {sortedDates.map((d) => {
                       const slots = meals.filter(
@@ -524,6 +587,7 @@ export default function RegistrationForm({ eventId, dates, meals, centers, prici
                       )
                     })}
                   </div>
+                  )}
                 </Field>
 
                 {/* Read-only prices — server-authoritative (invariant 3) */}

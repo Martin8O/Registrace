@@ -7,7 +7,7 @@
 
 import { prisma } from "@/lib/db";
 import { calculatePricing } from "@/modules/pricing";
-import { isPubliclyVisible } from "@/modules/events";
+import { isPubliclyVisible, type EventMealDTO, type PricingRuleDTO } from "@/modules/events";
 import { sendRegistrationConfirmation, type ConfirmationEmailData } from "@/lib/email";
 import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/modules/auth";
@@ -147,10 +147,22 @@ export async function submitRegistration(
   // ParticipantMeal has @@unique([participantId, eventMealId]).
   const mealById = new Map(event.meals.map((m) => [m.id, m]));
 
+  // Meal-ordering deadline (server-authoritative): once it has passed, no meals
+  // may be booked for this event. Strip every participant's meal selection so the
+  // pricing, persisted ParticipantMeal rows, and email all agree (the public form
+  // also disables the checkboxes, but the server is the gate).
+  const mealsClosed =
+    event.mealRegistrationDeadline !== null &&
+    Date.now() >= event.mealRegistrationDeadline.getTime();
+  const participantsInput = input.participants.map((p) => ({
+    ...p,
+    mealIds: mealsClosed ? [] : p.mealIds,
+  }));
+
   // Server-authoritative recompute via the pricing seam (invariants 3–4). The
-  // client sends no prices and none would be trusted. Zeros until P5.
+  // client sends no prices and none would be trusted.
   const pricing = calculatePricing({
-    participants: input.participants.map((p) => ({
+    participants: participantsInput.map((p) => ({
       ageCategory: p.ageCategory,
       pricingType: p.pricingType,
       mealIds: p.mealIds,
@@ -221,7 +233,7 @@ export async function submitRegistration(
         },
       });
 
-      for (const [i, p] of input.participants.entries()) {
+      for (const [i, p] of participantsInput.entries()) {
         const priced = pricing.participants[i];
         const participant = await tx.participant.create({
           data: {
@@ -231,6 +243,7 @@ export async function submitRegistration(
             // pricingType only applies to 15+ (invariant 15); the column is
             // non-nullable so children keep the STANDARD default.
             pricingType: p.ageCategory === "AGE_15_PLUS" ? (p.pricingType ?? "STANDARD") : "STANDARD",
+            mealType: p.mealType,
             participationPrice: priced?.participationPrice ?? 0,
             mealPrice: priced?.mealPrice ?? 0,
             totalPrice: priced?.subtotal ?? 0,
@@ -286,10 +299,11 @@ export async function submitRegistration(
       earlyDeparture: input.earlyDeparture,
       hasAccommodation: input.hasAccommodation,
       totalPrice: pricing.totalPrice,
-      participants: input.participants.map((p, i) => ({
+      participants: participantsInput.map((p, i) => ({
         fullName: p.fullName,
         ageCategory: p.ageCategory,
         pricingType: p.ageCategory === "AGE_15_PLUS" ? (p.pricingType ?? "STANDARD") : null,
+        mealType: p.mealType,
         subtotal: pricing.participants[i]?.subtotal ?? 0,
         meals: [...new Set(p.mealIds)]
           .map((id) => mealById.get(id))
@@ -353,6 +367,7 @@ type ConfirmationSource = {
     fullName: string;
     ageCategory: string;
     pricingType: string | null; // null → omitted (children, invariant 15)
+    mealType: string; // MEAT | VEGETARIAN
     subtotal: number;
     meals: { label_cs: string; label_en: string }[];
   }>;
@@ -382,6 +397,7 @@ function buildConfirmationEmailData(
       fullName: p.fullName,
       ageCategory: p.ageCategory,
       pricingType: p.pricingType ?? undefined,
+      mealType: p.mealType,
       meals: p.meals.map((m) => pick(m.label_cs, m.label_en)),
       subtotal: p.subtotal,
     })),
@@ -418,6 +434,7 @@ export type AdminRegistrationDetailParticipant = {
   fullName: string;
   ageCategory: string;
   pricingType: string | null;
+  mealType: string; // MEAT | VEGETARIAN
   totalPrice: number;
   meals: { label_cs: string; label_en: string; mealType: string }[];
 };
@@ -442,6 +459,10 @@ export type AdminRegistrationDetailDTO = {
     centerName_cs: string;
     centerName_en: string;
   };
+  // The event's meal slots + pricing rules, so the admin detail can show the same
+  // "Informace o cenách" popup as the public event page (price-list check).
+  eventMeals: EventMealDTO[];
+  eventPricingRules: PricingRuleDTO[];
   participants: AdminRegistrationDetailParticipant[];
 };
 
@@ -449,7 +470,8 @@ export type DayMealStat = {
   dateId: string;
   label_cs: string;
   label_en: string;
-  meals: { mealType: string; count: number }[];
+  // count = total portions; meat + vege split by each booker's diet choice.
+  meals: { mealType: string; count: number; meat: number; vege: number }[];
 };
 
 // Centre/role filter fragment shared by the admin reads. ADMIN is scoped to the
@@ -494,7 +516,7 @@ export async function getRegistrationForDetail(
   const r = await prisma.registration.findFirst({
     where: { id, deletedAt: null, event: { ...ownEventFilter(ctx) } },
     include: {
-      event: { include: { center: true } },
+      event: { include: { center: true, meals: true, pricingRules: true } },
       arrivalDate: true,
       departureDate: true,
       participants: {
@@ -526,10 +548,29 @@ export async function getRegistrationForDetail(
       centerName_cs: r.event.center.name_cs,
       centerName_en: r.event.center.name_en,
     },
+    eventMeals: r.event.meals.map((m) => ({
+      id: m.id,
+      eventDateId: m.eventDateId,
+      mealType: m.mealType,
+      price: m.price,
+      isClosed: m.isClosed,
+    })),
+    eventPricingRules: r.event.pricingRules.map((pr) => ({
+      id: pr.id,
+      ageCategory: pr.ageCategory,
+      pricingType: pr.pricingType,
+      dailyRate: pr.dailyRate,
+      nightRate: pr.nightRate,
+      morningArrivalDiscount: pr.morningArrivalDiscount,
+      afternoonArrivalDiscount: pr.afternoonArrivalDiscount,
+      eveningArrivalDiscount: pr.eveningArrivalDiscount,
+      earlyDepartureDiscount: pr.earlyDepartureDiscount,
+    })),
     participants: r.participants.map((p) => ({
       fullName: p.fullName,
       ageCategory: p.ageCategory,
       pricingType: p.ageCategory === "AGE_15_PLUS" ? p.pricingType : null,
+      mealType: p.mealType,
       totalPrice: p.totalPrice,
       meals: p.meals.map((pm) => ({
         label_cs: pm.eventMeal.label_cs,
@@ -639,6 +680,7 @@ export async function resendConfirmation(
         fullName: p.fullName,
         ageCategory: p.ageCategory,
         pricingType: p.ageCategory === "AGE_15_PLUS" ? p.pricingType : null,
+        mealType: p.mealType,
         subtotal: p.totalPrice,
         meals: p.meals.map((pm) => ({
           label_cs: pm.eventMeal.label_cs,
@@ -697,13 +739,18 @@ export async function getEventMealStats(
           registration: { status: "REGISTERED", deletedAt: null },
         },
       },
-      select: { eventMealId: true },
+      // The booker's diet drives the meat/vege split of each portion.
+      select: { eventMealId: true, participant: { select: { mealType: true } } },
     }),
   ]);
 
-  const countByMeal = new Map<string, number>();
+  const statByMeal = new Map<string, { count: number; meat: number; vege: number }>();
   for (const pm of participantMeals) {
-    countByMeal.set(pm.eventMealId, (countByMeal.get(pm.eventMealId) ?? 0) + 1);
+    const s = statByMeal.get(pm.eventMealId) ?? { count: 0, meat: 0, vege: 0 };
+    s.count += 1;
+    if (pm.participant.mealType === "VEGETARIAN") s.vege += 1;
+    else s.meat += 1;
+    statByMeal.set(pm.eventMealId, s);
   }
 
   const mealsByDate = new Map<string, typeof meals>();
@@ -716,11 +763,63 @@ export async function getEventMealStats(
   const result: DayMealStat[] = [];
   for (const d of dates) {
     const dayMeals = (mealsByDate.get(d.id) ?? [])
-      .map((m) => ({ mealType: m.mealType as string, count: countByMeal.get(m.id) ?? 0 }))
+      .map((m) => {
+        const s = statByMeal.get(m.id) ?? { count: 0, meat: 0, vege: 0 };
+        return { mealType: m.mealType as string, count: s.count, meat: s.meat, vege: s.vege };
+      })
       .sort((a, b) => (MEAL_STAT_ORDER[a.mealType] ?? 0) - (MEAL_STAT_ORDER[b.mealType] ?? 0));
     if (dayMeals.length > 0) {
       result.push({ dateId: d.id, label_cs: d.label_cs, label_en: d.label_en, meals: dayMeals });
     }
+  }
+  return result;
+}
+
+// Per-night on-site accommodation headcount for one event (the "how many beds"
+// panel), ownership-scoped. Accommodation is per-registration (all its
+// participants sleep on site); a registration covers the nights of days
+// [arrival.sortOrder, departure.sortOrder − 1]. The last event day is never a
+// night. Counts REGISTERED, non-deleted registrations with hasAccommodation.
+export type NightStat = {
+  dateId: string;
+  label_cs: string;
+  label_en: string;
+  count: number; // people sleeping on site that night
+};
+
+export async function getEventAccommodationStats(
+  eventId: string,
+  ctx: AdminContext,
+): Promise<NightStat[]> {
+  const event = await prisma.event.findFirst({
+    where: { id: eventId, deletedAt: null, ...ownEventFilter(ctx) },
+    select: { id: true },
+  });
+  if (!event) return [];
+
+  const [dates, regs] = await Promise.all([
+    prisma.eventDate.findMany({ where: { eventId }, orderBy: { sortOrder: "asc" } }),
+    prisma.registration.findMany({
+      where: { eventId, deletedAt: null, status: "REGISTERED", hasAccommodation: true },
+      select: {
+        arrivalDate: { select: { sortOrder: true } },
+        departureDate: { select: { sortOrder: true } },
+        _count: { select: { participants: true } },
+      },
+    }),
+  ]);
+
+  const result: NightStat[] = [];
+  // Each day except the last is a night you can sleep through.
+  for (let i = 0; i < dates.length - 1; i++) {
+    const d = dates[i]!;
+    let count = 0;
+    for (const r of regs) {
+      if (r.arrivalDate.sortOrder <= d.sortOrder && r.departureDate.sortOrder > d.sortOrder) {
+        count += r._count.participants;
+      }
+    }
+    result.push({ dateId: d.id, label_cs: d.label_cs, label_en: d.label_en, count });
   }
   return result;
 }
@@ -744,6 +843,7 @@ const EXPORT_HEADERS: Record<ExportLang, {
   arrival: string; arrivalTime: string; departure: string;
   earlyDeparture: string; accommodation: string; total: string; count: string;
   participant: string; pName: string; pAge: string; pType: string;
+  pDiet: string;
   pParticipation: string; pMeal: string; pTotal: string; pMeals: string;
   yes: string; no: string; sheet: string;
 }> = {
@@ -754,6 +854,7 @@ const EXPORT_HEADERS: Record<ExportLang, {
     earlyDeparture: "Dřívější odjezd", accommodation: "Ubytování",
     total: "Celková cena (Kč)", count: "Počet účastníků",
     participant: "Účastník", pName: "jméno", pAge: "věk", pType: "typ ceny",
+    pDiet: "typ stravy",
     pParticipation: "cena za účast (Kč)", pMeal: "cena za stravu (Kč)",
     pTotal: "celkem (Kč)", pMeals: "strava",
     yes: "Ano", no: "Ne", sheet: "Registrace",
@@ -765,10 +866,16 @@ const EXPORT_HEADERS: Record<ExportLang, {
     earlyDeparture: "Early departure", accommodation: "Accommodation",
     total: "Total price (CZK)", count: "Participants",
     participant: "Participant", pName: "name", pAge: "age", pType: "price type",
+    pDiet: "diet",
     pParticipation: "participation price (CZK)", pMeal: "meal price (CZK)",
     pTotal: "total (CZK)", pMeals: "meals",
     yes: "Yes", no: "No", sheet: "Registrations",
   },
+};
+
+const MEAL_CATEGORY_LABELS: Record<ExportLang, Record<string, string>> = {
+  cs: { MEAT: "Masitá", VEGETARIAN: "Vegetariánská" },
+  en: { MEAT: "Meat", VEGETARIAN: "Vegetarian" },
 };
 
 const REG_STATUS_LABELS: Record<ExportLang, Record<string, string>> = {
@@ -866,6 +973,7 @@ export async function buildRegistrationExport(
       `${L.participant} ${i} — ${L.pName}`,
       `${L.participant} ${i} — ${L.pAge}`,
       `${L.participant} ${i} — ${L.pType}`,
+      `${L.participant} ${i} — ${L.pDiet}`,
       `${L.participant} ${i} — ${L.pParticipation}`,
       `${L.participant} ${i} — ${L.pMeal}`,
       `${L.participant} ${i} — ${L.pTotal}`,
@@ -893,7 +1001,7 @@ export async function buildRegistrationExport(
     for (let i = 0; i < maxParticipants; i++) {
       const p = r.participants[i];
       if (!p) {
-        row.push("", "", "", "", "", "", "");
+        row.push("", "", "", "", "", "", "", "");
         continue;
       }
       const is15 = p.ageCategory === "AGE_15_PLUS";
@@ -901,6 +1009,7 @@ export async function buildRegistrationExport(
         p.fullName,
         AGE_LABELS[lang][p.ageCategory] ?? p.ageCategory,
         is15 ? (PRICING_LABELS[lang][p.pricingType] ?? p.pricingType) : "",
+        MEAL_CATEGORY_LABELS[lang][p.mealType] ?? p.mealType,
         p.participationPrice,
         p.mealPrice,
         p.totalPrice,

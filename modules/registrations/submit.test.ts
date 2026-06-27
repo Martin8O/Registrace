@@ -51,6 +51,7 @@ const fakeEvent = {
   status: "PUBLISHED",
   endDate: new Date("2030-01-01"),
   maxRegistrations: null as number | null,
+  mealRegistrationDeadline: null as Date | null,
   title_cs: "Akce",
   title_en: "Event",
   startDate: new Date("2026-05-01"),
@@ -92,7 +93,7 @@ const validInput: RegistrationSubmitInput = {
   centerId: "c1",
   email: "jan@example.cz",
   gdprConsent: true,
-  participants: [{ fullName: "Jan Novák", ageCategory: "AGE_15_PLUS", pricingType: "STANDARD", mealIds: ["m_b"] }],
+  participants: [{ fullName: "Jan Novák", ageCategory: "AGE_15_PLUS", pricingType: "STANDARD", mealType: "MEAT", mealIds: ["m_b"] }],
 };
 
 const meta = { ipAddress: "127.0.0.1", lang: "cs" as const };

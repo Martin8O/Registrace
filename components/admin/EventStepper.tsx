@@ -38,6 +38,9 @@ type EventFormValues = {
   startDate: string
   endDate: string
   maxRegistrations?: number
+  // Europe/Prague wall-clock "YYYY-MM-DDTHH:mm" (datetime-local). Empty → no
+  // deadline. Converted to a UTC instant in the service.
+  mealRegistrationDeadline?: string
   status: 'DRAFT' | 'PUBLISHED' | 'CLOSED' | 'ARCHIVED'
 }
 
@@ -109,6 +112,7 @@ const FIELD_STEP: Record<keyof EventFormValues, number> = {
   startDate: 1,
   endDate: 1,
   maxRegistrations: 4,
+  mealRegistrationDeadline: 4,
   status: 4,
 }
 
@@ -147,6 +151,13 @@ const DEFAULT_PRICING_15: Record<MockPricingType, Pricing15> = {
 }
 
 const mealKey = (date: string, meal: MealType) => `${date}|${meal}`
+
+// Shift an ISO yyyy-mm-dd by n days (UTC), for the meal-deadline min bound.
+function isoMinusDays(iso: string, n: number): string {
+  const d = new Date(`${iso}T00:00:00.000Z`)
+  d.setUTCDate(d.getUTCDate() - n)
+  return d.toISOString().slice(0, 10)
+}
 
 export default function EventStepper({
   centers,
@@ -207,6 +218,7 @@ export default function EventStepper({
       startDate: initial?.startDate ?? '',
       endDate: initial?.endDate ?? '',
       maxRegistrations: initial?.maxRegistrations,
+      mealRegistrationDeadline: initial?.mealRegistrationDeadline ?? '',
       status: initial?.status ?? 'DRAFT',
     },
   })
@@ -252,6 +264,7 @@ export default function EventStepper({
         : t('eventForm.errors.date')
     if (name === 'startDate') return t('eventForm.errors.date')
     if (name === 'maxRegistrations') return t('eventForm.errors.maxRegistrations')
+    if (name === 'mealRegistrationDeadline') return t('eventForm.errors.mealDeadline')
     return t('eventForm.errors.required')
   }
 
@@ -311,6 +324,7 @@ export default function EventStepper({
             contactPhone: data.contactPhone ?? '',
             contactEmail: data.contactEmail,
             maxRegistrations: data.maxRegistrations,
+            mealRegistrationDeadline: data.mealRegistrationDeadline,
             status: data.status,
           })
         : JSON.stringify(buildPayload(data))
@@ -782,6 +796,26 @@ export default function EventStepper({
               </select>
             </TextField>
           </div>
+
+          {/* Meal-ordering deadline (optional). Prague wall-clock; min = a week
+              before the start, max = the end day (the engine stores UTC). */}
+          <TextField
+            label={t('eventForm.fields.mealRegistrationDeadline')}
+            error={fieldError('mealRegistrationDeadline')}
+          >
+            <input
+              type="datetime-local"
+              className="bdc-input"
+              min={startDate ? `${isoMinusDays(startDate, 7)}T00:00` : undefined}
+              max={endDate ? `${endDate}T23:59` : undefined}
+              {...register('mealRegistrationDeadline', {
+                setValueAs: (v) => (v === '' || v == null ? undefined : v),
+              })}
+            />
+            <p className="mt-1 text-xs text-neutral-500">
+              {t('eventForm.settings.mealDeadlineNote')}
+            </p>
+          </TextField>
         </section>
       )}
 
@@ -816,6 +850,14 @@ export default function EventStepper({
                   .join(' · ')}
               />
             )}
+            <PreviewRow
+              label={t('eventForm.fields.mealRegistrationDeadline')}
+              value={
+                values.mealRegistrationDeadline
+                  ? values.mealRegistrationDeadline.replace('T', ' ')
+                  : t('eventForm.settings.noDeadline')
+              }
+            />
           </PreviewBlock>
 
           <PreviewBlock title={t('eventForm.preview.pricing')}>

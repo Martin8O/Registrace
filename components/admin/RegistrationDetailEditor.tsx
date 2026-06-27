@@ -2,35 +2,31 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useLocale, useTranslations } from 'next-intl'
+import { useTranslations } from 'next-intl'
 import { RegStatusBadge } from '@/components/admin/StatusBadge'
 import type { AdminRegistrationStatus } from '@/modules/registrations'
-import type { CenterDTO } from '@/modules/events'
 
 const REG_STATUSES: AdminRegistrationStatus[] = ['REGISTERED', 'PAID', 'CANCELLED']
 
-// Editable card of the registration detail (home centre / accommodation / status
-// + save + resend). Data + ownership resolved server-side; this island only
-// persists edits via PUT and triggers the resend POST. No price recompute
-// (decision 2 — pricing is P5).
+// Editable card of the registration detail (accommodation / status + save +
+// resend). Data + ownership resolved server-side; this island only persists edits
+// via PUT and triggers the resend POST. The registrant's home centre is NOT
+// editable here (shown read-only in the page summary) — its unchanged id is still
+// sent so the PUT payload stays complete. No price recompute (decision 2).
 export default function RegistrationDetailEditor({
   registrationId,
-  centers,
-  initialCenterId,
+  centerId,
   initialHasAccommodation,
   initialStatus,
 }: {
   registrationId: string
-  centers: CenterDTO[]
-  initialCenterId: string
+  centerId: string
   initialHasAccommodation: boolean
   initialStatus: AdminRegistrationStatus
 }) {
   const t = useTranslations('admin')
-  const locale = useLocale()
   const router = useRouter()
 
-  const [centerId, setCenterId] = useState(initialCenterId)
   const [hasAccommodation, setHasAccommodation] = useState(initialHasAccommodation)
   const [status, setStatus] = useState<AdminRegistrationStatus>(initialStatus)
   const [toast, setToast] = useState<string | null>(null)
@@ -105,24 +101,6 @@ export default function RegistrationDetailEditor({
       )}
 
       <div className="grid grid-cols-1 gap-x-6 gap-y-5 md:grid-cols-2">
-        <div>
-          <label htmlFor="center" className="form-label">
-            {t('registrationDetail.homeCenter')}
-          </label>
-          <select
-            id="center"
-            className="bdc-input"
-            value={centerId}
-            onChange={(e) => setCenterId(e.target.value)}
-          >
-            {centers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {locale === 'cs' ? c.name_cs : c.name_en}
-              </option>
-            ))}
-          </select>
-        </div>
-
         <div>
           <span className="form-label">{t('registrationDetail.accommodation')}</span>
           <div className="flex flex-wrap gap-2">

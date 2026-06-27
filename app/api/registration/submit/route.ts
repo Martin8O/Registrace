@@ -80,6 +80,7 @@ export async function POST(req: NextRequest) {
       fullName: p.fullName,
       ageCategory: p.ageCategory,
       pricingType: p.pricingType,
+      mealType: p.mealType,
       mealIds: p.mealIds,
     })),
   };

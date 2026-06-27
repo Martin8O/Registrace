@@ -25,6 +25,13 @@ const eventFields = {
   maxRegistrations: z.number().int().positive().optional(),
   startDate: z.coerce.date(),
   endDate: z.coerce.date(),
+  // Optional meal-ordering cut-off as a Europe/Prague wall-clock "YYYY-MM-DDTHH:mm"
+  // string (a <input type="datetime-local"> value). Converted to a UTC instant in
+  // the service (createEvent/updateEvent). Window enforced by requireDeadlineInWindow.
+  mealRegistrationDeadline: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Invalid datetime")
+    .optional(),
 };
 
 // ─── Relation child shapes (the full create payload) ────────────────────────────
@@ -73,11 +80,38 @@ function requireEndAfterStart(
   }
 }
 
+// The meal-ordering deadline must sit in a sensible window: not after the event's
+// end date, and not more than a week before its start (both make no sense). Date
+// granularity (the day component of the deadline vs the event days, all UTC).
+function requireDeadlineInWindow(
+  data: { startDate?: Date; endDate?: Date; mealRegistrationDeadline?: string },
+  ctx: z.RefinementCtx
+): void {
+  if (!data.mealRegistrationDeadline || !data.startDate || !data.endDate) return;
+  const deadlineDay = new Date(`${data.mealRegistrationDeadline.slice(0, 10)}T00:00:00.000Z`);
+  if (Number.isNaN(deadlineDay.getTime())) return;
+  const minDay = new Date(data.startDate);
+  minDay.setUTCDate(minDay.getUTCDate() - 7);
+  const endDay = new Date(
+    `${data.endDate.toISOString().slice(0, 10)}T00:00:00.000Z`,
+  );
+  if (deadlineDay < new Date(`${minDay.toISOString().slice(0, 10)}T00:00:00.000Z`) || deadlineDay > endDay) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Meal deadline must be within a week before the start and no later than the end",
+      path: ["mealRegistrationDeadline"],
+    });
+  }
+}
+
 // ─── Public schemas ───────────────────────────────────────────────────────────
 
 export const eventCreateSchema = z
   .object(eventFields)
-  .superRefine((data, ctx) => requireEndAfterStart(data, ctx));
+  .superRefine((data, ctx) => {
+    requireEndAfterStart(data, ctx);
+    requireDeadlineInWindow(data, ctx);
+  });
 
 // Full create payload = the scalar fields (one shared definition) composed with
 // the relation arrays. Used by both the admin form and the POST handler.
@@ -88,7 +122,10 @@ export const eventCreateWithRelationsSchema = z
     pricingRules: z.array(pricingRuleInputSchema),
     meals: z.array(eventMealInputSchema),
   })
-  .superRefine((data, ctx) => requireEndAfterStart(data, ctx));
+  .superRefine((data, ctx) => {
+    requireEndAfterStart(data, ctx);
+    requireDeadlineInWindow(data, ctx);
+  });
 
 export const eventUpdateSchema = z
   .object(eventFields)

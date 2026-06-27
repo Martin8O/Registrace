@@ -12,6 +12,7 @@ export type ConfirmationParticipant = {
   fullName: string;
   ageCategory: string;
   pricingType?: string; // present only for AGE_15_PLUS (invariant 15)
+  mealType: string; // MEAT | VEGETARIAN — diet for the ordered meals
   meals: string[]; // localized meal labels
   subtotal: number; // whole CZK (invariant 10)
 };
@@ -79,6 +80,8 @@ const TEXT: Record<Lang, Record<string, string>> = {
     STANDARD: "standardní cena",
     SUPPORTED: "podporovaná cena",
     SURPLUS: "cena nadbytek",
+    MEAT: "masitá",
+    VEGETARIAN: "vegetariánská",
   },
   en: {
     subject: "Registration confirmation — ",
@@ -119,6 +122,8 @@ const TEXT: Record<Lang, Record<string, string>> = {
     STANDARD: "standard price",
     SUPPORTED: "supported price",
     SURPLUS: "surplus price",
+    MEAT: "meat",
+    VEGETARIAN: "vegetarian",
   },
 };
 
@@ -234,7 +239,10 @@ function buildHtml(data: ConfirmationEmailData, lang: Lang): string {
     .map((p, i) => {
       const bg = i % 2 === 1 ? `background:${C.zebra};` : "";
       const cell = `padding:8px 10px;border-bottom:1px solid ${C.line};font-size:14px;color:${C.text};vertical-align:top;${bg}`;
-      const meals = p.meals.length > 0 ? p.meals.map(esc).join(", ") : t("none_dash");
+      // Diet first (always chosen), then the specific ordered meals (or just the
+      // diet if none were ordered). Keeps the table at five columns.
+      const diet = t(p.mealType);
+      const meals = p.meals.length > 0 ? `${diet} · ${p.meals.map(esc).join(", ")}` : diet;
       const type = p.pricingType ? t(p.pricingType) : t("none_dash");
       return `<tr>
         <td style="${cell}">${esc(p.fullName)}</td>

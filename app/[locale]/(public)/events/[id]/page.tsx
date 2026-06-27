@@ -47,6 +47,7 @@ export default async function EventPage({
         meals={event.meals}
         centers={centers}
         pricingRules={event.pricingRules}
+        mealRegistrationDeadline={event.mealRegistrationDeadline}
       />
     </div>
   )

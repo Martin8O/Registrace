@@ -1,6 +1,10 @@
 import { redirect } from 'next/navigation'
 import { getAdminContext } from '@/modules/auth'
-import { listRegistrations, getEventMealStats } from '@/modules/registrations'
+import {
+  listRegistrations,
+  getEventMealStats,
+  getEventAccommodationStats,
+} from '@/modules/registrations'
 import RegistrationsTable from '@/components/admin/RegistrationsTable'
 
 // Server component: resolves the admin context, loads the role/ownership-scoped
@@ -19,12 +23,18 @@ export default async function AdminRegistrationsPage({
   if (!ctx) redirect(`/${locale}/admin/login`)
 
   const { event: scopedEventId = null } = await searchParams
-  const [rows, mealStats] = await Promise.all([
+  const [rows, mealStats, nightStats] = await Promise.all([
     listRegistrations(ctx),
     scopedEventId ? getEventMealStats(scopedEventId, ctx) : Promise.resolve([]),
+    scopedEventId ? getEventAccommodationStats(scopedEventId, ctx) : Promise.resolve([]),
   ])
 
   return (
-    <RegistrationsTable rows={rows} scopedEventId={scopedEventId} mealStats={mealStats} />
+    <RegistrationsTable
+      rows={rows}
+      scopedEventId={scopedEventId}
+      mealStats={mealStats}
+      nightStats={nightStats}
+    />
   )
 }

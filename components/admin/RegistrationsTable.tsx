@@ -8,6 +8,7 @@ import type {
   AdminRegistrationListItem,
   AdminRegistrationStatus,
   DayMealStat,
+  NightStat,
 } from '@/modules/registrations'
 
 const REG_STATUSES: AdminRegistrationStatus[] = ['REGISTERED', 'PAID', 'CANCELLED']
@@ -33,10 +34,12 @@ export default function RegistrationsTable({
   rows,
   scopedEventId,
   mealStats,
+  nightStats,
 }: {
   rows: AdminRegistrationListItem[]
   scopedEventId: string | null
   mealStats: DayMealStat[]
+  nightStats: NightStat[]
 }) {
   const t = useTranslations('admin')
   const locale = useLocale()
@@ -68,6 +71,8 @@ export default function RegistrationsTable({
 
   // Only surface the meal panel when there is actually something to cook.
   const hasMealData = mealStats.some((d) => d.meals.some((m) => m.count > 0))
+  // Only surface the accommodation panel when someone is actually staying over.
+  const hasNightData = nightStats.some((n) => n.count > 0)
 
   // Centre filter options = distinct event centres that actually have rows.
   const filterCenters = [
@@ -185,27 +190,72 @@ export default function RegistrationsTable({
           <h2 className="font-serif text-lg font-semibold text-neutral-900">
             {t('registrations.mealStatsTitle')}
           </h2>
-          <div className="mt-3 space-y-2">
-            {mealStats.map((day) => (
-              <div
-                key={day.dateId}
-                className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm"
-              >
-                <span className="min-w-[130px] font-medium text-neutral-800">
-                  {locale === 'cs' ? day.label_cs : day.label_en}
-                </span>
-                <span className="flex flex-wrap gap-x-5 gap-y-1 text-neutral-600">
-                  {day.meals.map((m) => (
-                    <span key={m.mealType}>
-                      <span className="font-mono font-semibold tabular-nums text-primary-600">
-                        {m.count}×
-                      </span>{' '}
-                      {t(`mealType.${m.mealType}`)}
-                    </span>
-                  ))}
-                </span>
-              </div>
-            ))}
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 text-left text-neutral-500">
+                  <th className="px-3 py-2 font-medium">{t('registrations.mealStatsDay')}</th>
+                  <th className="px-3 py-2 font-medium">{t('registrations.mealStatsMeal')}</th>
+                  <th className="px-3 py-2 text-right font-medium">{t('registrations.mealStatsTotal')}</th>
+                  <th className="px-3 py-2 text-right font-medium">{t('registrations.mealStatsMeat')}</th>
+                  <th className="px-3 py-2 text-right font-medium">{t('registrations.mealStatsVege')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mealStats.flatMap((day) =>
+                  day.meals.map((m, idx) => (
+                    <tr
+                      key={`${day.dateId}-${m.mealType}`}
+                      className="border-b border-neutral-100 last:border-0"
+                    >
+                      <td className="px-3 py-2 font-medium text-neutral-800">
+                        {idx === 0 ? (locale === 'cs' ? day.label_cs : day.label_en) : ''}
+                      </td>
+                      <td className="px-3 py-2 text-neutral-700">{t(`mealType.${m.mealType}`)}</td>
+                      <td className="px-3 py-2 text-right font-mono font-semibold tabular-nums text-primary-600">
+                        {m.count}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono tabular-nums text-neutral-700">
+                        {m.meat}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono tabular-nums text-neutral-700">
+                        {m.vege}
+                      </td>
+                    </tr>
+                  )),
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {scopedEventId && hasNightData && (
+        <div className="section-card mb-5">
+          <h2 className="font-serif text-lg font-semibold text-neutral-900">
+            {t('registrations.accommodationStatsTitle')}
+          </h2>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 text-left text-neutral-500">
+                  <th className="px-3 py-2 font-medium">{t('registrations.accommodationNight')}</th>
+                  <th className="px-3 py-2 text-right font-medium">{t('registrations.accommodationCount')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {nightStats.map((n) => (
+                  <tr key={n.dateId} className="border-b border-neutral-100 last:border-0">
+                    <td className="px-3 py-2 font-medium text-neutral-800">
+                      {locale === 'cs' ? n.label_cs : n.label_en}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono font-semibold tabular-nums text-primary-600">
+                      {n.count}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

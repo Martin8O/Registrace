@@ -44,6 +44,15 @@ enum MealType {
   DINNER
 }
 
+// Diet choice per participant for the meals they order (mirrors the real BDC
+// form's "masité / vegetariánské"). Default MEAT keeps the additive migration
+// safe for pre-existing rows + any old client still inserting; the form/Zod make
+// it an explicit required choice for new registrations.
+enum MealCategory {
+  MEAT
+  VEGETARIAN
+}
+
 enum RegistrationStatus {
   REGISTERED
   CANCELLED
@@ -113,6 +122,10 @@ model Event {
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
   deletedAt        DateTime?
+  // Optional cut-off after which meals can no longer be ordered for this event
+  // (participation/accommodation stay open). Stored UTC; entered/displayed as
+  // Europe/Prague wall-clock (invariant 11 — handles SELČ/SEČ automatically).
+  mealRegistrationDeadline DateTime?
   // Human-readable registration-number support. `numberPrefix` = frozen YYEEE
   // (event's year + its per-year ordinal, e.g. "26002"); `registrationSeq` is an
   // atomically-incremented per-event registrant counter. A registration's full
@@ -241,6 +254,9 @@ model Participant {
   fullName           String
   ageCategory        AgeCategory
   pricingType        PricingType @default(STANDARD)
+  // Diet for this participant's ordered meals. Default MEAT for migration safety;
+  // the form/Zod require an explicit choice on new registrations.
+  mealType           MealCategory @default(MEAT)
   participationPrice Int         @default(0)
   mealPrice          Int         @default(0)
   totalPrice         Int         @default(0)
