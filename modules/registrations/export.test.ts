@@ -5,10 +5,15 @@ import type { AdminContext } from "@/modules/auth";
 // for real. No live DB exists for tests (Supabase is the only instance) — same
 // strategy as submit.test.ts. findMany ignores its args here; the where-clause /
 // ownership scoping is the DB's job and isn't what this unit asserts.
-const h = vi.hoisted(() => ({ findMany: vi.fn() }));
-vi.mock("@/lib/db", () => ({ prisma: { registration: { findMany: h.findMany } } }));
+const h = vi.hoisted(() => ({ findMany: vi.fn(), eventFindMany: vi.fn() }));
+vi.mock("@/lib/db", () => ({
+  prisma: {
+    registration: { findMany: h.findMany },
+    event: { findMany: h.eventFindMany },
+  },
+}));
 
-import { buildRegistrationExport } from "./index";
+import { buildRegistrationExport, buildRegistrationExportWorkbook } from "./index";
 
 const ctx = {
   role: "SUPER_ADMIN",
@@ -67,48 +72,85 @@ describe("buildRegistrationExport", () => {
     h.findMany.mockResolvedValue(fakeRows());
     const { headers, rows, sheetName } = await buildRegistrationExport({}, ctx, "cs");
 
-    expect(sheetName).toBe("Registrace");
+    expect(sheetName).toBe("Data – vše");
     expect(headers[0]).toBe("Č. registrace");
     expect(headers).toContain("Centrum akce");
     expect(headers).toContain("Domovské centrum");
-    // 14 base columns + 2 participants × 8 = 30 (8 = the diet column was added)
-    expect(headers).toHaveLength(30);
+    expect(headers).not.toContain("Akce"); // event name is now the sheet title, not a column
+    // 13 base columns + 2 participants × 8 = 29 (Akce column removed)
+    expect(headers).toHaveLength(29);
 
     const row = rows[0]!;
     expect(row[0]).toBe("260020001");
-    expect(row[1]).toBe("Letní kurz"); // event title (cs)
-    expect(row[4]).toBe("Praha"); // event centre (cs)
-    expect(row[5]).toBe("Brno"); // home centre
-    expect(row[6]).toBe("Registrován/a"); // status label
-    expect(row[10]).toBe("Ne"); // early departure NONE → Ne
-    expect(row[11]).toBe("Ano"); // accommodation YES → Ano
-    expect(row[12]).toBe(300); // total stays a number
-    expect(row[13]).toBe(2); // participant count
-    // Participant 1 (15+): name=14, age=15, type=16, diet=17 … meals=21
-    expect(row[14]).toBe("Jan Novák");
-    expect(row[15]).toBe("15 let a více");
-    expect(row[16]).toBe("Standardní");
-    expect(row[17]).toBe("Masitá"); // diet (MEAT)
-    expect(row[21]).toBe("Pá oběd"); // joined meal labels
-    // Participant 2 (child): name=22, type=24, diet=25
-    expect(row[22]).toBe("Eva Malá");
-    expect(row[24]).toBe(""); // pricingType omitted for under-15 (invariant 15)
-    expect(row[25]).toBe("Vegetariánská"); // diet shown for every age
+    expect(row[3]).toBe("Praha"); // event centre (cs)
+    expect(row[4]).toBe("Brno"); // home centre
+    expect(row[5]).toBe("Registrován/a"); // status label
+    expect(row[9]).toBe("Ne"); // early departure NONE → Ne
+    expect(row[10]).toBe("Ano"); // accommodation YES → Ano
+    expect(row[11]).toBe(300); // total stays a number
+    expect(row[12]).toBe(2); // participant count
+    // Participant 1 (15+): name=13, age=14, type=15, diet=16 … meals=20
+    expect(row[13]).toBe("Jan Novák");
+    expect(row[14]).toBe("15 let a více");
+    expect(row[15]).toBe("Standardní");
+    expect(row[16]).toBe("Masitá"); // diet (MEAT)
+    expect(row[20]).toBe("Pá oběd"); // joined meal labels
+    // Participant 2 (child): name=21, type=23, diet=24
+    expect(row[21]).toBe("Eva Malá");
+    expect(row[23]).toBe(""); // pricingType omitted for under-15 (invariant 15)
+    expect(row[24]).toBe("Vegetariánská"); // diet shown for every age
   });
 
   it("localizes to English when lang = en", async () => {
     h.findMany.mockResolvedValue(fakeRows());
     const { headers, rows, sheetName } = await buildRegistrationExport({}, ctx, "en");
-    expect(sheetName).toBe("Registrations");
+    expect(sheetName).toBe("Data – all");
     expect(headers[0]).toBe("Reg. no.");
-    expect(rows[0]![1]).toBe("Summer course");
-    expect(rows[0]![6]).toBe("Registered");
+    expect(rows[0]![3]).toBe("Prague"); // event centre (en)
+    expect(rows[0]![5]).toBe("Registered"); // status
   });
 
   it("still emits one participant column group when there are no rows", async () => {
     h.findMany.mockResolvedValue([]);
     const { headers, rows } = await buildRegistrationExport({}, ctx, "cs");
     expect(rows).toHaveLength(0);
-    expect(headers).toHaveLength(22); // 14 base + 1 group × 8
+    expect(headers).toHaveLength(21); // 13 base + 1 group × 8
+  });
+});
+
+describe("buildRegistrationExportWorkbook", () => {
+  it("returns four sheets: full data, selection, meals, accommodation", async () => {
+    h.findMany.mockResolvedValue(fakeRows());
+    h.eventFindMany.mockResolvedValue([]); // no events in scope → empty kitchen sheets
+    const { sheets } = await buildRegistrationExportWorkbook({}, ctx, "cs");
+
+    expect(sheets.map((s) => s.sheetName)).toEqual([
+      "Data – vše",
+      "Data – výběr",
+      "Jídlo",
+      "Ubytování",
+    ]);
+    // Kitchen sheets carry their headers even with no event in scope (no "Akce"
+    // column — the event name is the sheet title now).
+    expect(sheets[2]!.headers).toEqual(["Den", "Jídlo", "Celkem", "Masitá", "Vegetariánská"]);
+    expect(sheets[2]!.rows).toHaveLength(0);
+    expect(sheets[3]!.headers).toEqual(["Noc", "Počet osob"]);
+    expect(sheets[3]!.rows).toHaveLength(0);
+  });
+
+  it("selection sheet = the agreed trimmed columns, sliced from the full sheet", async () => {
+    h.findMany.mockResolvedValue(fakeRows());
+    h.eventFindMany.mockResolvedValue([]);
+    const { sheets } = await buildRegistrationExportWorkbook({}, ctx, "cs");
+    const sel = sheets[1]!;
+
+    expect(sel.headers).toEqual([
+      "Č. registrace", "Stav", "Příjezd", "Čas příjezdu", "Odjezd",
+      "Dřívější odjezd", "Ubytování", "Celková cena (Kč)", "Počet účastníků",
+      "Účastník 1 — jméno",
+    ]);
+    expect(sel.rows[0]).toEqual([
+      "260020001", "Registrován/a", "Pá", "Dopoledne", "Ne", "Ne", "Ano", 300, 2, "Jan Novák",
+    ]);
   });
 });

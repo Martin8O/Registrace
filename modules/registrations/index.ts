@@ -16,7 +16,7 @@ import type {
   RegistrationUpdateInput,
   RegistrationExportInput,
 } from "@/lib/validation";
-import type { ExportTable } from "@/lib/export/csv";
+import type { ExportTable } from "@/lib/export/xlsx";
 
 // ─── Typed errors (handlers map them to HTTP statuses) ────────────────────────
 
@@ -423,6 +423,7 @@ export type AdminRegistrationListItem = {
   createdAt: string; // UTC ISO
   participantCount: number;
   eventId: string;
+  eventStatus: string; // event lifecycle — drives the "hide archived" list filter
   eventTitle_cs: string;
   eventTitle_en: string;
   centerId: string; // event's hosting centre id
@@ -501,6 +502,7 @@ export async function listRegistrations(
     createdAt: r.createdAt.toISOString(),
     participantCount: r._count.participants,
     eventId: r.eventId,
+    eventStatus: r.event.status,
     eventTitle_cs: r.event.title_cs,
     eventTitle_en: r.event.title_en,
     centerId: r.event.centerId,
@@ -713,9 +715,9 @@ export async function resendConfirmation(
 }
 
 // Per-day meal counts for one event (the kitchen "how many to cook" panel),
-// ownership-scoped. Counts ParticipantMeal rows of REGISTERED, non-deleted
-// registrations against each open meal slot. Returns [] for a missing / not-owned
-// event. DB equivalent of the former mock computeMealStats.
+// ownership-scoped. Counts ParticipantMeal rows of active (REGISTERED or PAID),
+// non-deleted registrations against each open meal slot — only CANCELLED guests
+// don't eat. Returns [] for a missing / not-owned event.
 const MEAL_STAT_ORDER: Record<string, number> = { BREAKFAST: 0, LUNCH: 1, DINNER: 2 };
 
 export async function getEventMealStats(
@@ -736,7 +738,7 @@ export async function getEventMealStats(
         eventMeal: { eventId },
         participant: {
           deletedAt: null,
-          registration: { status: "REGISTERED", deletedAt: null },
+          registration: { status: { in: ["REGISTERED", "PAID"] }, deletedAt: null },
         },
       },
       // The booker's diet drives the meat/vege split of each portion.
@@ -779,7 +781,8 @@ export async function getEventMealStats(
 // panel), ownership-scoped. Accommodation is per-registration (all its
 // participants sleep on site); a registration covers the nights of days
 // [arrival.sortOrder, departure.sortOrder − 1]. The last event day is never a
-// night. Counts REGISTERED, non-deleted registrations with hasAccommodation.
+// night. Counts active (REGISTERED or PAID), non-deleted registrations with
+// hasAccommodation — only CANCELLED guests free their bed.
 export type NightStat = {
   dateId: string;
   label_cs: string;
@@ -800,7 +803,12 @@ export async function getEventAccommodationStats(
   const [dates, regs] = await Promise.all([
     prisma.eventDate.findMany({ where: { eventId }, orderBy: { sortOrder: "asc" } }),
     prisma.registration.findMany({
-      where: { eventId, deletedAt: null, status: "REGISTERED", hasAccommodation: true },
+      where: {
+        eventId,
+        deletedAt: null,
+        status: { in: ["REGISTERED", "PAID"] },
+        hasAccommodation: true,
+      },
       select: {
         arrivalDate: { select: { sortOrder: true } },
         departureDate: { select: { sortOrder: true } },
@@ -857,7 +865,7 @@ const EXPORT_HEADERS: Record<ExportLang, {
     pDiet: "typ stravy",
     pParticipation: "cena za účast (Kč)", pMeal: "cena za stravu (Kč)",
     pTotal: "celkem (Kč)", pMeals: "strava",
-    yes: "Ano", no: "Ne", sheet: "Registrace",
+    yes: "Ano", no: "Ne", sheet: "Data – vše",
   },
   en: {
     regNo: "Reg. no.", event: "Event", created: "Created", email: "Email",
@@ -869,8 +877,33 @@ const EXPORT_HEADERS: Record<ExportLang, {
     pDiet: "diet",
     pParticipation: "participation price (CZK)", pMeal: "meal price (CZK)",
     pTotal: "total (CZK)", pMeals: "meals",
-    yes: "Yes", no: "No", sheet: "Registrations",
+    yes: "Yes", no: "No", sheet: "Data – all",
   },
+};
+
+// Labels for the extra XLSX sheets (P7 follow-up): a trimmed quick-reference
+// selection, plus the kitchen meal-prep and on-site accommodation tables. Sheet
+// names stay ≤31 chars and free of Excel's reserved chars (: \ / ? * [ ]).
+const EXPORT_SHEETS: Record<ExportLang, {
+  all: string; selection: string; meals: string; accommodation: string;
+  day: string; meal: string; total: string; meat: string;
+  vege: string; night: string; people: string;
+}> = {
+  cs: {
+    all: "Data – vše", selection: "Data – výběr", meals: "Jídlo", accommodation: "Ubytování",
+    day: "Den", meal: "Jídlo", total: "Celkem", meat: "Masitá",
+    vege: "Vegetariánská", night: "Noc", people: "Počet osob",
+  },
+  en: {
+    all: "Data – all", selection: "Data – selection", meals: "Meals", accommodation: "Accommodation",
+    day: "Day", meal: "Meal", total: "Total", meat: "Meat",
+    vege: "Vegetarian", night: "Night", people: "People",
+  },
+};
+
+const MEAL_TYPE_LABELS: Record<ExportLang, Record<string, string>> = {
+  cs: { BREAKFAST: "Snídaně", LUNCH: "Oběd", DINNER: "Večeře" },
+  en: { BREAKFAST: "Breakfast", LUNCH: "Lunch", DINNER: "Dinner" },
 };
 
 const MEAL_CATEGORY_LABELS: Record<ExportLang, Record<string, string>> = {
@@ -905,11 +938,11 @@ function formatExportDate(d: Date, lang: ExportLang): string {
   }).format(d);
 }
 
-export async function buildRegistrationExport(
-  filters: RegistrationExportFilters,
-  ctx: AdminContext,
-  lang: ExportLang,
-): Promise<ExportTable> {
+// The registration WHERE used by both the export row query and the "which events
+// are in scope" lookup (the meal-prep / accommodation sheets). One source of
+// truth keeps the extra sheets aligned with the rows the admin is actually
+// exporting, under the same ownership scope (ownEventFilter).
+function exportRegistrationWhere(filters: RegistrationExportFilters, ctx: AdminContext) {
   const search = filters.search?.trim();
 
   // Optional created-date range → UTC-day boundaries. The admin UI doesn't
@@ -919,26 +952,34 @@ export async function buildRegistrationExport(
   if (filters.dateFrom) createdAt.gte = new Date(`${filters.dateFrom}T00:00:00.000Z`);
   if (filters.dateTo) createdAt.lte = new Date(`${filters.dateTo}T23:59:59.999Z`);
 
-  const rows = await prisma.registration.findMany({
-    where: {
+  return {
+    deletedAt: null,
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(createdAt.gte || createdAt.lte ? { createdAt } : {}),
+    ...(search
+      ? {
+          OR: [
+            { registrationNumber: { contains: search, mode: "insensitive" as const } },
+            { email: { contains: search, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+    event: {
       deletedAt: null,
-      ...(filters.status ? { status: filters.status } : {}),
-      ...(createdAt.gte || createdAt.lte ? { createdAt } : {}),
-      ...(search
-        ? {
-            OR: [
-              { registrationNumber: { contains: search, mode: "insensitive" } },
-              { email: { contains: search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-      event: {
-        deletedAt: null,
-        ...ownEventFilter(ctx),
-        ...(filters.eventId ? { id: filters.eventId } : {}),
-        ...(filters.centerId ? { centerId: filters.centerId } : {}),
-      },
+      ...ownEventFilter(ctx),
+      ...(filters.eventId ? { id: filters.eventId } : {}),
+      ...(filters.centerId ? { centerId: filters.centerId } : {}),
     },
+  };
+}
+
+export async function buildRegistrationExport(
+  filters: RegistrationExportFilters,
+  ctx: AdminContext,
+  lang: ExportLang,
+): Promise<ExportTable> {
+  const rows = await prisma.registration.findMany({
+    where: exportRegistrationWhere(filters, ctx),
     include: {
       event: { include: { center: true } },
       center: true, // registrant's HOME centre
@@ -963,8 +1004,10 @@ export async function buildRegistrationExport(
     Math.max(1, ...rows.map((r) => r.participants.length)),
   );
 
+  // The event name is no longer a column — it's now the per-event sheet title (the
+  // export is always scoped to a single event), set by buildRegistrationExportWorkbook.
   const headers: string[] = [
-    L.regNo, L.event, L.created, L.email, L.eventCenter, L.homeCenter, L.status,
+    L.regNo, L.created, L.email, L.eventCenter, L.homeCenter, L.status,
     L.arrival, L.arrivalTime, L.departure, L.earlyDeparture, L.accommodation,
     L.total, L.count,
   ];
@@ -984,7 +1027,6 @@ export async function buildRegistrationExport(
   const dataRows: (string | number)[][] = rows.map((r) => {
     const row: (string | number)[] = [
       r.registrationNumber ?? "",
-      pick(r.event.title_cs, r.event.title_en),
       formatExportDate(r.createdAt, lang),
       r.email,
       pick(r.event.center.name_cs, r.event.center.name_en),
@@ -1020,4 +1062,113 @@ export async function buildRegistrationExport(
   });
 
   return { headers, rows: dataRows, sheetName: L.sheet };
+}
+
+// "Data – výběr": the on-site quick-reference columns the team asked for, sliced
+// straight out of the full sheet (no extra query) so the two never drift. Column
+// indices into the full-sheet header order above (Akce column removed): reg-no(0),
+// status(5), arrival(6), arrival-time(7), departure(8), early-departure(9),
+// accommodation(10), total(11), count(12), participant-1 name(13).
+const SELECTION_COLUMN_INDICES = [0, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+
+function buildSelectionSheet(main: ExportTable, lang: ExportLang): ExportTable {
+  const headers = SELECTION_COLUMN_INDICES.map((i) => main.headers[i] ?? "");
+  const rows = main.rows.map((r) => SELECTION_COLUMN_INDICES.map((i) => r[i] ?? ""));
+  return { headers, rows, sheetName: EXPORT_SHEETS[lang].selection };
+}
+
+// "Jídlo" + "Ubytování": the kitchen meal-prep and on-site bed-count tables for the
+// exported event. Reuses the same ownership-scoped aggregates the admin sees on the
+// event's registrations page (getEventMealStats / getEventAccommodationStats), so
+// the sheets match the on-screen panels — both now count active (REGISTERED + PAID)
+// guests. The export is always scoped to one event; events without an eventId
+// filter (none, in practice) simply yield empty kitchen sheets.
+async function buildMealAndAccommodationSheets(
+  eventId: string | undefined,
+  ctx: AdminContext,
+  lang: ExportLang,
+): Promise<{ meals: ExportTable; accommodation: ExportTable }> {
+  const S = EXPORT_SHEETS[lang];
+  const pick = (cs: string, en: string) => (lang === "cs" ? cs : en);
+
+  const [mealStats, nightStats] = eventId
+    ? await Promise.all([
+        getEventMealStats(eventId, ctx),
+        getEventAccommodationStats(eventId, ctx),
+      ])
+    : [[], []];
+
+  const mealRows: (string | number)[][] = [];
+  for (const day of mealStats) {
+    for (const m of day.meals) {
+      mealRows.push([
+        pick(day.label_cs, day.label_en),
+        MEAL_TYPE_LABELS[lang][m.mealType] ?? m.mealType,
+        m.count,
+        m.meat,
+        m.vege,
+      ]);
+    }
+  }
+  const accRows: (string | number)[][] = nightStats.map((n) => [
+    pick(n.label_cs, n.label_en),
+    n.count,
+  ]);
+
+  return {
+    meals: {
+      sheetName: S.meals,
+      headers: [S.day, S.meal, S.total, S.meat, S.vege],
+      rows: mealRows,
+    },
+    accommodation: {
+      sheetName: S.accommodation,
+      headers: [S.night, S.people],
+      rows: accRows,
+    },
+  };
+}
+
+// The event's "Centre — Title" label, ownership-scoped, for the per-event sheet
+// titles. Undefined if the event isn't found / not owned.
+async function scopedEventLabel(
+  eventId: string,
+  ctx: AdminContext,
+  lang: ExportLang,
+): Promise<string | undefined> {
+  const ev = await prisma.event.findFirst({
+    where: { id: eventId, deletedAt: null, ...ownEventFilter(ctx) },
+    select: {
+      title_cs: true,
+      title_en: true,
+      center: { select: { name_cs: true, name_en: true } },
+    },
+  });
+  if (!ev) return undefined;
+  const pick = (cs: string, en: string) => (lang === "cs" ? cs : en);
+  return `${pick(ev.center.name_cs, ev.center.name_en)} — ${pick(ev.title_cs, ev.title_en)}`;
+}
+
+// The full multi-sheet workbook for the (Excel-only) export, always scoped to one
+// event: full data, the trimmed selection, and the kitchen meal-prep +
+// accommodation tables. The event name is the title of every sheet.
+export async function buildRegistrationExportWorkbook(
+  filters: RegistrationExportFilters,
+  ctx: AdminContext,
+  lang: ExportLang,
+): Promise<{ sheets: ExportTable[] }> {
+  const main = await buildRegistrationExport(filters, ctx, lang);
+  const selection = buildSelectionSheet(main, lang);
+  const { meals, accommodation } = await buildMealAndAccommodationSheets(
+    filters.eventId,
+    ctx,
+    lang,
+  );
+  const title = filters.eventId
+    ? await scopedEventLabel(filters.eventId, ctx, lang)
+    : undefined;
+
+  const sheets = [main, selection, meals, accommodation];
+  for (const sheet of sheets) sheet.title = title;
+  return { sheets };
 }

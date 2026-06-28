@@ -5,18 +5,32 @@
 // maintained and audit-clean. The advisory class is parser-side anyway and we
 // only ever WRITE workbooks (never parse untrusted uploads).
 //
-// Output: a single sheet, bold + frozen header row, roughly auto-sized columns.
+// Output: one worksheet per table. An optional `title` row (the event name) sits
+// above a bold + frozen header row; columns are roughly auto-sized.
 
 import ExcelJS from "exceljs";
-import type { ExportTable } from "@/lib/export/csv";
 
-export async function toXlsx(table: ExportTable): Promise<Buffer> {
-  const wb = new ExcelJS.Workbook();
+// One logical sheet: an optional title (event name), a header row, and data rows.
+export type ExportTable = {
+  sheetName: string;
+  title?: string;
+  headers: string[];
+  rows: (string | number)[][];
+};
+
+function addSheet(wb: ExcelJS.Workbook, table: ExportTable): void {
   const ws = wb.addWorksheet(table.sheetName);
 
+  let headerRowIdx = 1;
+  if (table.title) {
+    ws.addRow([table.title]);
+    ws.getRow(1).font = { bold: true, size: 13 };
+    headerRowIdx = 2;
+  }
+
   ws.addRow(table.headers);
-  ws.getRow(1).font = { bold: true };
-  ws.views = [{ state: "frozen", ySplit: 1 }];
+  ws.getRow(headerRowIdx).font = { bold: true };
+  ws.views = [{ state: "frozen", ySplit: headerRowIdx }];
 
   for (const row of table.rows) ws.addRow(row);
 
@@ -30,6 +44,11 @@ export async function toXlsx(table: ExportTable): Promise<Buffer> {
     }
     col.width = Math.min(45, Math.max(10, max + 2));
   });
+}
 
+// Accepts one table or several — each becomes its own worksheet, in order.
+export async function toXlsx(tables: ExportTable | ExportTable[]): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook();
+  for (const table of Array.isArray(tables) ? tables : [tables]) addSheet(wb, table);
   return Buffer.from(await wb.xlsx.writeBuffer());
 }

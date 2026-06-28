@@ -91,6 +91,16 @@ body {
   @apply bg-stone-100 font-sans text-neutral-700 antialiased;
 }
 
+/* Tailwind v4's Preflight no longer sets cursor:pointer on buttons. Restore the
+   expected hand cursor app-wide so buttons styled as links (Export, the "i"
+   info button, etc.) read as clickable — disabled buttons keep the default. */
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: default;
+}
+
 /* BDC component classes */
 @layer components {
   .bdc-input {

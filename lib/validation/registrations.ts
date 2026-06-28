@@ -110,10 +110,10 @@ export const registrationUpdateSchema = z.object({
 // Filters mirror the admin registrations list (event scope, hosting centre,
 // status, on-site search by reg number / email) plus an optional created-date
 // range; the export re-applies them server-side under the SAME role/ownership
-// scope (a client never widens what it may see). `format` picks CSV vs Excel;
-// `lang` localizes the file's labels — the admin's UI language, with an EN-UI
-// prompt offering Czech (see RegistrationsTable).
-const exportFormatValues = ["csv", "excel"] as const;
+// scope (a client never widens what it may see). The export is XLSX-only (CSV was
+// dropped); `lang` localizes the file's labels to the admin's UI language. In
+// practice it's always scoped to one event (eventId set) — see AdminEventsTable.
+const exportFormatValues = ["excel"] as const;
 const exportLangValues = ["cs", "en"] as const;
 
 export const registrationExportSchema = z.object({
@@ -123,7 +123,7 @@ export const registrationExportSchema = z.object({
   dateFrom: z.string().max(10).optional(), // YYYY-MM-DD, inclusive (UTC-day boundary)
   dateTo: z.string().max(10).optional(), // YYYY-MM-DD, inclusive
   search: z.string().max(100).optional(),
-  format: z.enum(exportFormatValues),
+  format: z.enum(exportFormatValues).default("excel"),
   lang: z.enum(exportLangValues).default("cs"),
 });
 

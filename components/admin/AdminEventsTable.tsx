@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useLocale, useTranslations } from 'next-intl'
 import { EventStatusBadge } from '@/components/admin/StatusBadge'
+import { downloadRegistrationsExport } from '@/lib/admin/exportRegistrations'
 import type { AdminEventListItem } from '@/modules/events'
 
 type StatusValue = AdminEventListItem['status']
@@ -23,9 +24,31 @@ export default function AdminEventsTable({ events }: { events: AdminEventListIte
   const base = `/${locale}/admin`
 
   const [statusFilter, setStatusFilter] = useState<'ALL' | StatusValue>('ALL')
+  // Direct per-row XLSX export (single event, admin's UI language). `exportingId`
+  // marks the row while the file is being generated; once it's handed to the
+  // browser, the browser's own download UI (save dialog / download bar) is the
+  // confirmation — we don't claim "downloaded" while a save dialog may still be open.
+  const [exportingId, setExportingId] = useState<string | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   const filtered =
     statusFilter === 'ALL' ? events : events.filter((e) => e.status === statusFilter)
+
+  async function handleExport(eventId: string) {
+    setExportError(null)
+    setExportingId(eventId)
+    try {
+      const ok = await downloadRegistrationsExport(
+        { eventId },
+        locale === 'en' ? 'en' : 'cs',
+      )
+      if (!ok) setExportError(t('registrations.exportFailed'))
+    } catch {
+      setExportError(t('registrations.exportFailed'))
+    } finally {
+      setExportingId(null)
+    }
+  }
 
   return (
     <>
@@ -48,15 +71,21 @@ export default function AdminEventsTable({ events }: { events: AdminEventListIte
         </select>
       </div>
 
+      {exportError && (
+        <div className="mb-4 rounded-lg border border-danger-500/40 bg-danger-50 p-3 text-sm text-danger-700">
+          {exportError}
+        </div>
+      )}
+
       <div className="section-card overflow-x-auto p-0">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-neutral-200 text-left text-neutral-500">
               <th className="px-4 py-3 font-medium">{t('events.table.title')}</th>
-              <th className="px-4 py-3 font-medium">{t('events.table.status')}</th>
-              <th className="px-4 py-3 font-medium">{t('events.table.start')}</th>
-              <th className="px-4 py-3 font-medium">{t('events.table.end')}</th>
-              <th className="px-4 py-3 text-right font-medium">
+              <th className="px-4 py-3 text-center font-medium">{t('events.table.status')}</th>
+              <th className="px-4 py-3 text-center font-medium">{t('events.table.start')}</th>
+              <th className="px-4 py-3 text-center font-medium">{t('events.table.end')}</th>
+              <th className="px-4 py-3 text-center font-medium">
                 {t('events.table.actions')}
               </th>
             </tr>
@@ -81,17 +110,17 @@ export default function AdminEventsTable({ events }: { events: AdminEventListIte
                     <td className="px-4 py-3 font-medium text-neutral-900">
                       {centerName} — {title}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-center">
                       <EventStatusBadge status={event.status} />
                     </td>
-                    <td className="px-4 py-3 tabular-nums text-neutral-600">
+                    <td className="px-4 py-3 text-center tabular-nums text-neutral-600">
                       {formatDate(event.startDate)}
                     </td>
-                    <td className="px-4 py-3 tabular-nums text-neutral-600">
+                    <td className="px-4 py-3 text-center tabular-nums text-neutral-600">
                       {formatDate(event.endDate)}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center justify-end gap-3 whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-3 whitespace-nowrap">
                         {/* Edit only for DRAFT / PUBLISHED (validate-only until
                             PUT is wired in a later phase). */}
                         {event.status === 'DRAFT' || event.status === 'PUBLISHED' ? (
@@ -110,8 +139,18 @@ export default function AdminEventsTable({ events }: { events: AdminEventListIte
                           href={`${base}/registrations?event=${event.id}`}
                           className="text-sm font-medium text-primary-600 hover:text-primary-700"
                         >
-                          {t('events.viewRegistrations')}
+                          {t('events.details')}
                         </Link>
+                        <button
+                          type="button"
+                          onClick={() => handleExport(event.id)}
+                          disabled={exportingId !== null}
+                          className="text-sm font-medium text-primary-600 hover:text-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {exportingId === event.id
+                            ? t('registrations.exporting')
+                            : t('events.export')}
+                        </button>
                       </div>
                     </td>
                   </tr>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useLocale, useTranslations } from 'next-intl'
 import { RegStatusBadge } from '@/components/admin/StatusBadge'
+import { downloadRegistrationsExport } from '@/lib/admin/exportRegistrations'
 import type {
   AdminRegistrationListItem,
   AdminRegistrationStatus,
@@ -19,17 +20,14 @@ function formatDate(iso: string): string {
   return `${Number(day)}. ${Number(month)}. ${year}`
 }
 
-// The server sets the real filename via Content-Disposition (date-stamped); fall
-// back to a sensible default if the header is unavailable.
-function filenameFromHeader(header: string | null, format: 'csv' | 'excel'): string {
-  const match = header?.match(/filename="?([^"]+)"?/i)
-  return match?.[1] ?? `registrations.${format === 'excel' ? 'xlsx' : 'csv'}`
-}
-
 // Client island over the server-loaded registration rows. Data + ownership
 // scoping are resolved server-side (listRegistrations); meal stats are computed
-// server-side too (getEventMealStats) and passed in. This island only owns the
-// centre/status filters + the event-scope presentation.
+// server-side too (getEventMealStats) and passed in. This island owns the
+// centre/status/archive filters + the event-scoped presentation.
+//
+// Export lives ONLY in the event-scoped view (reached via an event's "Detaily"):
+// the global all-registrations list — which mixes every event incl. historical —
+// has no export. The events list offers a direct per-row export instead.
 export default function RegistrationsTable({
   rows,
   scopedEventId,
@@ -47,15 +45,16 @@ export default function RegistrationsTable({
 
   const [centerFilter, setCenterFilter] = useState<'ALL' | string>('ALL')
   const [statusFilter, setStatusFilter] = useState<'ALL' | AdminRegistrationStatus>('ALL')
+  // Historical registrations from archived events clutter the global list — hide
+  // them by default, with a toggle to bring them back. (Drafts never have public
+  // registrations, so the only noise worth filtering is the archive.)
+  const [showArchived, setShowArchived] = useState(false)
   // On-site search by registration number (the team types the number to find a
   // registrant). Matches the email too, as a convenience. Already role/ownership
   // scoped server-side, so this only narrows the rows this admin may see.
   const [search, setSearch] = useState('')
 
-  // Export state. `exporting` = which button is mid-download; `langChoice` holds
-  // the pending format while the EN-UI language prompt is open (CS UI skips it).
-  const [exporting, setExporting] = useState<'csv' | 'excel' | null>(null)
-  const [langChoice, setLangChoice] = useState<'csv' | 'excel' | null>(null)
+  const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
 
   const centerName = (r: AdminRegistrationListItem) =>
@@ -88,61 +87,36 @@ export default function RegistrationsTable({
       // Centre filter applies only on a direct visit; when scoped to an event the
       // centre is already fixed, so it's ignored.
       (!!scopedEventId || centerFilter === 'ALL' || r.centerId === centerFilter) &&
+      // Hide archived-event registrations on the global list unless asked for.
+      (!!scopedEventId || showArchived || r.eventStatus !== 'ARCHIVED') &&
       (statusFilter === 'ALL' || r.status === statusFilter) &&
       (q === '' ||
         (r.registrationNumber?.toLowerCase().includes(q) ?? false) ||
         r.email.toLowerCase().includes(q)),
   )
 
-  // Send exactly the filters the admin currently sees (the server re-applies them
-  // under the same ownership scope, so the file matches the on-screen table). The
-  // centre filter is omitted when scoped to one event (the UI hides it then too).
-  function currentExportFilters() {
-    return {
-      eventId: scopedEventId ?? undefined,
-      centerId: !scopedEventId && centerFilter !== 'ALL' ? centerFilter : undefined,
-      status: statusFilter !== 'ALL' ? statusFilter : undefined,
-      search: q || undefined,
-    }
-  }
-
-  function handleExportClick(format: 'csv' | 'excel') {
+  async function handleExport() {
+    if (!scopedEventId) return
     setExportError(null)
-    if (locale === 'en') {
-      setLangChoice(format) // EN UI → ask which language first
-      return
-    }
-    void runExport(format, 'cs') // CS UI → straight to a Czech file
-  }
-
-  async function runExport(format: 'csv' | 'excel', exportLang: 'cs' | 'en') {
-    setLangChoice(null)
-    setExporting(format)
-    setExportError(null)
+    setExporting(true)
     try {
-      const res = await fetch('/api/admin/registrations/export', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...currentExportFilters(), format, lang: exportLang }),
-      })
-      if (!res.ok) {
-        setExportError(t('registrations.exportFailed'))
-        return
-      }
-      // Stream the file body to a download via a temporary object URL.
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filenameFromHeader(res.headers.get('content-disposition'), format)
-      document.body.appendChild(a)
-      a.click()
-      a.remove()
-      URL.revokeObjectURL(url)
+      // Send exactly the filters the admin currently sees (the server re-applies
+      // them under the same ownership scope). Always one event; file language =
+      // the admin's UI language. Once generated, the browser's own download UI is
+      // the confirmation — we don't claim "downloaded" (a save dialog may be open).
+      const ok = await downloadRegistrationsExport(
+        {
+          eventId: scopedEventId,
+          status: statusFilter !== 'ALL' ? statusFilter : undefined,
+          search: q || undefined,
+        },
+        locale === 'en' ? 'en' : 'cs',
+      )
+      if (!ok) setExportError(t('registrations.exportFailed'))
     } catch {
       setExportError(t('registrations.exportFailed'))
     } finally {
-      setExporting(null)
+      setExporting(false)
     }
   }
 
@@ -303,26 +277,30 @@ export default function RegistrationsTable({
           </select>
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => handleExportClick('csv')}
-            disabled={filtered.length === 0 || exporting !== null}
-            className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {exporting === 'csv' ? t('registrations.exporting') : t('registrations.exportCsv')}
-          </button>
-          <button
-            type="button"
-            onClick={() => handleExportClick('excel')}
-            disabled={filtered.length === 0 || exporting !== null}
-            className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {exporting === 'excel'
-              ? t('registrations.exporting')
-              : t('registrations.exportExcel')}
-          </button>
-        </div>
+        {!scopedEventId && (
+          <label className="flex items-center gap-2 text-sm font-medium text-neutral-600">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-neutral-300 text-primary-600"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+            />
+            {t('registrations.showArchived')}
+          </label>
+        )}
+
+        {scopedEventId && (
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={filtered.length === 0 || exporting}
+              className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {exporting ? t('registrations.exporting') : t('registrations.exportExcel')}
+            </button>
+          </div>
+        )}
       </div>
 
       {exportError && (
@@ -389,46 +367,6 @@ export default function RegistrationsTable({
           </tbody>
         </table>
       </div>
-
-      {langChoice && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/60 p-4 backdrop-blur-sm"
-          onClick={() => setLangChoice(null)}
-        >
-          <div
-            className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="font-serif text-xl font-semibold text-neutral-900">
-              {t('registrations.exportLangTitle')}
-            </h2>
-            <div className="mt-2 mb-5 h-0.5 w-10 rounded bg-primary-500" />
-            <div className="flex flex-wrap justify-end gap-3">
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setLangChoice(null)}
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => runExport(langChoice, 'cs')}
-              >
-                {t('registrations.exportLangCzech')}
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={() => runExport(langChoice, 'en')}
-              >
-                {t('registrations.exportLangEnglish')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
