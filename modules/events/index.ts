@@ -329,6 +329,17 @@ export class EventNotFoundError extends Error {
   }
 }
 
+// Thrown when a manual status change would hide a live event from people who
+// already hold its public link — un-publishing (→ DRAFT) an event that already
+// has registrations. Handlers map it to HTTP 409. (Other transitions stay open;
+// public visibility is otherwise time-bounded by isPubliclyVisible.)
+export class EventStatusTransitionError extends Error {
+  constructor(message = "Cannot unpublish an event that already has registrations") {
+    super(message);
+    this.name = "EventStatusTransitionError";
+  }
+}
+
 export type AdminEventListItem = {
   id: string;
   title_cs: string;
@@ -553,33 +564,6 @@ export async function getEventForEdit(
   };
 }
 
-// Re-fetch an event for a write and assert the caller may touch it. Missing →
-// EventNotFoundError (404); ADMIN-not-owner → EventOwnershipError (403). Returns
-// the pre-image of the editable scalars + status so the caller can record it as
-// audit `oldData` (P4) without a second round-trip.
-async function assertEventWritable(id: string, ctx: AdminContext) {
-  const event = await prisma.event.findFirst({
-    where: { id, deletedAt: null },
-    select: {
-      centerId: true,
-      title_cs: true,
-      title_en: true,
-      subtitle_cs: true,
-      subtitle_en: true,
-      description_cs: true,
-      description_en: true,
-      contactName: true,
-      contactPhone: true,
-      contactEmail: true,
-      maxRegistrations: true,
-      status: true,
-    },
-  });
-  if (!event) throw new EventNotFoundError();
-  if (ctx.role === "ADMIN" && !ctx.centerIds.includes(event.centerId)) throw new EventOwnershipError();
-  return event;
-}
-
 // Load an event for an update + assert the caller may touch it, returning the
 // scalar pre-image (audit oldData), its status, and how many registrations
 // reference it. Missing → 404; ADMIN-not-owner → 403.
@@ -784,7 +768,15 @@ export async function setEventStatus(
   status: EventStatusValue,
   ctx: AdminContext,
 ): Promise<{ id: string }> {
-  const before = await assertEventWritable(id, ctx);
+  const { before, registrationCount } = await loadEventForUpdate(id, ctx);
+
+  // Guard the one transition that harms registrants: un-publishing a live event
+  // (PUBLISHED/CLOSED → DRAFT) that already has registrations would hide it from
+  // everyone holding its public link. Every other transition stays permitted.
+  if (status === "DRAFT" && before.status !== "DRAFT" && registrationCount > 0) {
+    throw new EventStatusTransitionError();
+  }
+
   await prisma.event.update({ where: { id }, data: { status } });
 
   await logAuditEvent({

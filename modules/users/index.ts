@@ -239,8 +239,14 @@ export async function resetUserPassword(
 ): Promise<{ sent: boolean; error?: string }> {
   assertSuperAdmin(ctx);
 
-  const user = await prisma.user.findUnique({ where: { id }, select: { email: true } });
+  const user = await prisma.user.findUnique({ where: { id }, select: { email: true, role: true } });
   if (!user) throw new UserManagementError("User not found", 404);
+  // The SUPER_ADMIN tier is owner-only here too — mirror updateUser/removeUser so
+  // a non-owner super-admin cannot trigger a password-reset email for another
+  // super-admin (or the owner). Other super-admins manage ADMINs only.
+  if (user.role === "SUPER_ADMIN" && !ctx.isOwner) {
+    throw new UserManagementError("Only the owner can manage super-admins", 403);
+  }
 
   const supabase = createAdminClient();
   const redirectTo = passwordSetupRedirect();

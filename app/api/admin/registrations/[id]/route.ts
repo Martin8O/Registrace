@@ -7,6 +7,7 @@ import {
   updateRegistration,
   RegistrationNotFoundError,
   RegistrationForbiddenError,
+  RegistrationCenterInvalidError,
 } from "@/modules/registrations";
 
 // GET — one registration (full detail), ownership-scoped. Missing/not-owned → 404.
@@ -48,6 +49,9 @@ export async function PUT(
     }
     if (err instanceof RegistrationNotFoundError) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    if (err instanceof RegistrationCenterInvalidError) {
+      return NextResponse.json({ error: "Unknown or inactive center" }, { status: 422 });
     }
     throw err;
   }

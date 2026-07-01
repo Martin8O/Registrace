@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdminContext } from "@/app/api/_lib/guard";
 import { validationError } from "@/app/api/_lib/http";
 import { eventStatusSchema } from "@/lib/validation";
-import { setEventStatus, EventNotFoundError, EventOwnershipError } from "@/modules/events";
+import {
+  setEventStatus,
+  EventNotFoundError,
+  EventOwnershipError,
+  EventStatusTransitionError,
+} from "@/modules/events";
 
 // PATCH — change an event's lifecycle status, ownership-scoped. 400 invalid,
 // 403 not-owner, 404 missing. Manual transition only (cron = deploy concern).
@@ -29,6 +34,9 @@ export async function PATCH(
     }
     if (err instanceof EventNotFoundError) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    if (err instanceof EventStatusTransitionError) {
+      return NextResponse.json({ error: err.message }, { status: 409 });
     }
     throw err;
   }

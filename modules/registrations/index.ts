@@ -60,6 +60,16 @@ export class RegistrationForbiddenError extends Error {
   }
 }
 
+// Admin edit sets a home centre that doesn't exist or is no longer active → 422.
+// (Access scoping rides on event.centerId; this only keeps the informational
+// Registration.centerId — used on the confirmation/export — from going stale.)
+export class RegistrationCenterInvalidError extends Error {
+  constructor(message = "Unknown or inactive center") {
+    super(message);
+    this.name = "RegistrationCenterInvalidError";
+  }
+}
+
 export type SubmitMeta = {
   ipAddress: string | null; // stored for rate-limiting only (P4)
   lang: "cs" | "en"; // confirmation-email language
@@ -185,26 +195,35 @@ export async function submitRegistration(
   let registrationNumber: string | null;
   try {
     const result = await prisma.$transaction(async (tx) => {
-      // Capacity re-checked inside the transaction so concurrent submits can't
-      // both pass the gate → 409.
-      if (event.maxRegistrations !== null) {
-        const taken = await tx.registration.count({
-          where: { eventId: event.id, deletedAt: null },
-        });
-        if (taken >= event.maxRegistrations) {
-          throw new RegistrationCapacityError();
-        }
-      }
-
-      // Allocate the human-readable registration number atomically: the
-      // per-event counter is incremented and read INSIDE this transaction, so
-      // concurrent submits get distinct ordinals — and a rolled-back submit
-      // (capacity 409 / idempotency race) releases its number with the txn.
+      // Take a row lock on the Event FIRST, by doing the atomic counter
+      // increment up front. Under READ COMMITTED two concurrent submits would
+      // otherwise both run a non-locking count(), both see capacity-1, and both
+      // insert → over-booking past maxRegistrations (security audit race
+      // finding). Locking the Event row here serializes them at the gate, so the
+      // count() below sees every prior committed insert. A rollback (capacity 409
+      // / idempotency race) releases both the number AND the lock with the txn.
       const counter = await tx.event.update({
         where: { id: event.id },
         data: { registrationSeq: { increment: 1 } },
         select: { registrationSeq: true, numberPrefix: true },
       });
+
+      // Capacity re-checked inside the transaction (now race-free, see above).
+      // Only live registrations count — CANCELLED ones free their slot, matching
+      // the meal/accommodation stats (which already exclude CANCELLED). Without
+      // the status filter a cancelled registration would consume a seat forever.
+      if (event.maxRegistrations !== null) {
+        const taken = await tx.registration.count({
+          where: {
+            eventId: event.id,
+            deletedAt: null,
+            status: { in: ["REGISTERED", "PAID"] },
+          },
+        });
+        if (taken >= event.maxRegistrations) {
+          throw new RegistrationCapacityError();
+        }
+      }
       // Registrant ordinal padded to 4 digits (supports up to 9999/event; a
       // rare overflow past 9999 still works, the number just grows by a digit).
       const registrationNumber = counter.numberPrefix
@@ -611,6 +630,16 @@ export async function updateRegistration(
   ctx: AdminContext,
 ): Promise<{ id: string }> {
   const before = await assertRegistrationWritable(id, ctx);
+  // The new home centre must exist AND be active — mirror the public submit's
+  // check (the FK alone would allow re-homing onto a deactivated centre, leaving
+  // a stale label on the confirmation/export). Scoping is unaffected (it rides on
+  // event.centerId), so this is data integrity, not access control.
+  const center = await prisma.center.findFirst({
+    where: { id: input.centerId, isActive: true },
+    select: { id: true },
+  });
+  if (!center) throw new RegistrationCenterInvalidError();
+
   await prisma.registration.update({
     where: { id },
     data: {

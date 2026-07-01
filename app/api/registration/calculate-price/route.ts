@@ -15,7 +15,14 @@ export async function POST(req: NextRequest) {
   const limited = enforceRateLimit(req, { bucket: "price", limit: 60, windowMs: 60_000 });
   if (limited) return limited;
 
-  const body: unknown = await req.json();
+  // Tolerate a malformed/truncated body with a clean 400 (mirrors submit) rather
+  // than letting req.json() throw an unhandled 500.
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
   const result = calculatePriceSchema.safeParse(body);
   if (!result.success) {
     return validationError(result.error);
