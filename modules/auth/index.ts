@@ -13,16 +13,26 @@ export type AdminContext = {
   userId: string; // = Supabase Auth user id (UUID), matches User.id (invariant 12)
   email: string; // the acting user's email (used for the owner check below)
   role: AdminRole;
-  isOwner: boolean; // top-level account(s) per OWNER_EMAILS — may manage the SUPER_ADMIN tier
+  isOwner: boolean; // top-level account(s) per OWNER_USER_IDS (preferred) or a VERIFIED OWNER_EMAILS match — may manage the SUPER_ADMIN tier
   centerIds: string[]; // centres this user administers (via UserCenter)
   ip: string | null; // client IP of the request that resolved this context (P4 — audit trail)
 };
 
 // The "owner" tier: only these accounts may create/modify/remove SUPER_ADMINs
-// (other super-admins manage ADMINs only — they cannot touch each other). The
-// owner is configured by email via the OWNER_EMAILS env (comma-separated,
-// case-insensitive). Empty/unset → no owner → nobody can manage super-admins
-// (fail-closed). Email basis (not a DB flag) keeps it config-only, no migration.
+// (other super-admins manage ADMINs only — they cannot touch each other).
+//
+// TWO configuration sources, checked in getAdminContext (see resolveIsOwner):
+//   1. OWNER_USER_IDS — Supabase Auth user UUIDs (comma-separated). PREFERRED,
+//      because a user id is IMMUTABLE: the user cannot change it. This is the
+//      hardened anchor for the owner tier.
+//   2. OWNER_EMAILS — email allowlist (comma-separated, case-insensitive). A
+//      LEGACY fallback: an email is MUTABLE (any admin can change their own
+//      sign-in email on the profile page via auth.updateUser), so an email match
+//      is honoured ONLY when the address is VERIFIED (email_confirmed_at set).
+//      Otherwise an admin could set an unconfirmed owner email and inherit owner
+//      powers. Even verified, ownership then rests on Supabase's "Secure email
+//      change" config — prefer OWNER_USER_IDS in production.
+// Both empty/unset → no owner → nobody can manage super-admins (fail-closed).
 export function isOwnerEmail(email: string | null | undefined): boolean {
   if (!email) return false;
   const owners = (process.env.OWNER_EMAILS ?? "")
@@ -30,6 +40,18 @@ export function isOwnerEmail(email: string | null | undefined): boolean {
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
   return owners.includes(email.toLowerCase());
+}
+
+// Immutable owner anchor: is this Supabase Auth user id in the OWNER_USER_IDS
+// allowlist? A user id cannot be changed by the user, so unlike the email path
+// this needs no confirmation check.
+export function isOwnerUserId(userId: string | null | undefined): boolean {
+  if (!userId) return false;
+  const ids = (process.env.OWNER_USER_IDS ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return ids.includes(userId.toLowerCase());
 }
 
 // Read the client IP from the current request headers (P4). getAdminContext is
@@ -85,11 +107,19 @@ export async function getAdminContext(): Promise<AdminContext | null> {
   }
 
   const email = user.email ?? dbUser.email;
+  // Owner tier: the immutable user-id allowlist first; fall back to the email
+  // allowlist ONLY for a VERIFIED email. `email_confirmed_at` is set by Supabase
+  // once the address is confirmed (invite/reset flow, or a "Secure email change"
+  // confirmation) — requiring it closes the "set an unconfirmed owner email on
+  // the profile page → inherit owner powers" path. isOwnerEmail alone (mutable,
+  // unverified) is never sufficient.
+  const emailVerified = Boolean(user.email_confirmed_at);
+  const isOwner = isOwnerUserId(user.id) || (emailVerified && isOwnerEmail(email));
   return {
     userId: dbUser.id,
     email,
     role: dbUser.role,
-    isOwner: isOwnerEmail(email),
+    isOwner,
     centerIds: dbUser.centers.map((c) => c.centerId),
     ip: await requestIp(),
   };

@@ -118,6 +118,41 @@ describe("buildRegistrationExport", () => {
   });
 });
 
+describe("buildRegistrationExport — ownership scoping (cross-center IDOR regression)", () => {
+  const admin = {
+    role: "ADMIN",
+    userId: "admin-a",
+    ip: null,
+    centerIds: ["center-A"],
+  } as unknown as AdminContext;
+
+  it("keeps the ADMIN ownership filter even when the body supplies a foreign centerId", async () => {
+    h.findMany.mockResolvedValue([]);
+    // A scoped ADMIN tries to export another centre by passing its id in filters.
+    await buildRegistrationExport({ centerId: "center-B" }, admin, "cs");
+
+    const where = h.findMany.mock.calls.at(-1)![0].where;
+    // The ownership scope must NOT be overwritten by the client centerId — both
+    // constraints coexist under AND, so the query can only ever return rows whose
+    // event centre is in the admin's own centres (∩ {center-B} = ∅ here).
+    expect(where.event.AND).toContainEqual({ centerId: { in: ["center-A"] } });
+    expect(where.event.AND).toContainEqual({ centerId: "center-B" });
+    // Regression guard: the foreign centerId must never sit on event.centerId
+    // directly (that was the overwrite that leaked cross-center PII).
+    expect(where.event.centerId).toBeUndefined();
+  });
+
+  it("a SUPER_ADMIN may legitimately filter by any centre (no ownership scope)", async () => {
+    h.findMany.mockResolvedValue([]);
+    await buildRegistrationExport({ centerId: "center-B" }, ctx, "cs"); // ctx = SUPER_ADMIN
+
+    const where = h.findMany.mock.calls.at(-1)![0].where;
+    // ownEventFilter is {} for SUPER_ADMIN → AND holds only the client filter.
+    expect(where.event.AND).toContainEqual({});
+    expect(where.event.AND).toContainEqual({ centerId: "center-B" });
+  });
+});
+
 describe("buildRegistrationExportWorkbook", () => {
   it("returns four sheets: full data, selection, meals, accommodation", async () => {
     h.findMany.mockResolvedValue(fakeRows());

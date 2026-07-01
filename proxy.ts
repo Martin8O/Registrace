@@ -1,9 +1,10 @@
 import createMiddleware from 'next-intl/middleware';
 import { defineRouting } from 'next-intl/routing';
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
 import { clientIp, rateLimit, rateLimitResponse } from '@/lib/security/rate-limit';
 import { isMutating, isSameOrigin, csrfFailureResponse } from '@/lib/security/csrf';
+import { buildCsp, generateNonce } from '@/lib/security/csp';
 
 const routing = defineRouting({
   locales: ['cs', 'en'],
@@ -55,7 +56,30 @@ export async function proxy(request: NextRequest) {
 
   // ── Page branch: next-intl routing first (locale prefixing/redirects), then
   //    refresh the Supabase session and carry its cookies onto the response. ──
-  const response = handleI18nRouting(request);
+  // Content-Security-Policy is set HERE (per request), not in next.config.ts,
+  // because production uses a per-request nonce so 'unsafe-inline' can be dropped
+  // from script-src (the static policy gave CSP no real XSS mitigation). In
+  // production we forward the nonce to the renderer via request headers so Next
+  // tags its own inline scripts with it (Next reads the nonce from the request
+  // CSP header); next-intl carries those headers through its rewrite. In dev we
+  // keep the permissive no-nonce policy so HMR is untouched. The other security
+  // headers stay static in next.config.ts.
+  const isDev = process.env.NODE_ENV !== 'production';
+  let i18nRequest = request;
+  let csp: string;
+  if (isDev) {
+    csp = buildCsp({ isDev: true });
+  } else {
+    const nonce = generateNonce();
+    csp = buildCsp({ nonce, isDev: false });
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set('x-nonce', nonce);
+    requestHeaders.set('content-security-policy', csp);
+    i18nRequest = new NextRequest(request, { headers: requestHeaders });
+  }
+
+  const response = handleI18nRouting(i18nRequest);
+  response.headers.set('content-security-policy', csp);
   const { supabaseResponse, user } = await updateSession(request);
   supabaseResponse.cookies.getAll().forEach((cookie) => {
     response.cookies.set(cookie);
@@ -89,6 +113,7 @@ export async function proxy(request: NextRequest) {
       supabaseResponse.cookies.getAll().forEach((cookie) => {
         redirect.cookies.set(cookie);
       });
+      redirect.headers.set('content-security-policy', csp);
       return redirect;
     }
   }

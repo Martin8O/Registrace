@@ -995,9 +995,20 @@ function exportRegistrationWhere(filters: RegistrationExportFilters, ctx: AdminC
       : {}),
     event: {
       deletedAt: null,
-      ...ownEventFilter(ctx),
       ...(filters.eventId ? { id: filters.eventId } : {}),
-      ...(filters.centerId ? { centerId: filters.centerId } : {}),
+      // Ownership scope AND any client-supplied centre filter must BOTH hold.
+      // They are combined via `AND` (not spread onto one object) because both
+      // ownEventFilter() and the client filter write the SAME `centerId` key —
+      // spreading them let the later (body-controlled) value silently overwrite
+      // the ownership key `{ in: ctx.centerIds }`, a cross-center IDOR: a scoped
+      // ADMIN could export another centre's registrations (PII) just by sending
+      // that centre's id. Under `AND` a foreign centerId simply yields 0 rows.
+      // For a SUPER_ADMIN ownEventFilter() is {} so this reduces to the plain
+      // client filter (SUPER_ADMIN may legitimately filter by any centre).
+      AND: [
+        ownEventFilter(ctx),
+        ...(filters.centerId ? [{ centerId: filters.centerId }] : []),
+      ],
     },
   };
 }
