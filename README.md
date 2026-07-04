@@ -4,7 +4,7 @@
 
 # Registrace
 
-**Bilingual (🇨🇿 / 🇬🇧) event‑registration platform for Diamond Way Buddhism (BDC) centres.**
+**Bilingual (CZ / EN) event‑registration platform for Diamond Way Buddhism (BDC) centres.**
 
 Public visitors register themselves and fellow participants for meditation and community
 events; the app prices the stay server‑side and emails a bilingual confirmation. Centre
