@@ -85,8 +85,9 @@ single source of orientation for anyone joining the project.
 ## Screenshots
 
 > All screenshots use the demo dataset (`prisma/seed-demo.ts`) — fictional families on the
-> RFC‑2606 reserved `example.*` domains. No real personal data is shown; the audit‑log IP
-> column is redacted.
+> RFC‑2606 reserved `example.*` domains. The **admin email addresses and the audit‑log IP
+> column are blurred here on purpose** for privacy: they are shown normally to admins in the
+> running app — only these public screenshots hide them.
 
 ### Visitor side
 
