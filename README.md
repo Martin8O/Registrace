@@ -552,9 +552,13 @@ its findings fixed.
 
 ## License & credits
 
-**License.** This is a bespoke application built for Buddhismus
-Diamantové cesty (BDC); it is not licensed for redistribution or reuse. The BDC name, logo and
-visual identity belong to their respective owners.
+Licensed under the **MIT License** — see [`LICENSE`](LICENSE). The code is open to read, learn
+from and reuse.
+
+The **Buddhismus Diamantové cesty (BDC)** name, logo and visual identity belong to BDC and are
+**not** covered by the MIT grant, which applies to the source code only.
 
 Built with Next.js, Prisma, Supabase, next‑intl, Zod, React Hook Form, Resend, exceljs, Tailwind
 CSS and Vitest.
+
+Designed and built by **Martin Svoboda** — [svobodamartin.dev](https://svobodamartin.dev).
