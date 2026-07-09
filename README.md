@@ -144,6 +144,11 @@ single source of orientation for anyone joining the project.
   </tr>
 </table>
 
+<p align="center">
+  <img src="docs/screenshots/admin-registrations-kitchen.png" width="80%" alt="Per-event kitchen and accommodation totals" /><br/>
+  <em>Per‑event kitchen &amp; accommodation planning — meat/veg counts per meal and headcount per night, ready for the kitchen and accommodation teams.</em>
+</p>
+
 ---
 
 ## Feature highlights
