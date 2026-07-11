@@ -9,6 +9,14 @@ import { buildCsp, generateNonce } from '@/lib/security/csp';
 const routing = defineRouting({
   locales: ['cs', 'en'],
   defaultLocale: 'cs',
+  // NEXT_LOCALE cookie hardening: next-intl doesn't set Secure by default, which
+  // MDN Observatory flags (−5, "cookie without Secure flag"). Secure only in prod
+  // — a Secure cookie over http://localhost would be dropped in dev. sameSite:lax
+  // keeps the locale surviving top-level navigations from external links.
+  localeCookie: {
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+  },
 });
 
 const handleI18nRouting = createMiddleware(routing);
