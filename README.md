@@ -531,8 +531,6 @@ docs/screenshots/              README images
 
 | Document | What's in it |
 |---|---|
-| [`DEVELOPMENT_HISTORY_en.md`](DEVELOPMENT_HISTORY_en.md) | Full chronological build log (English), milestone by milestone. |
-| [`DEVELOPMENT_HISTORY.md`](DEVELOPMENT_HISTORY.md) | The same log in Czech. |
 | [`CLAUDE.md`](CLAUDE.md) | Project constitution — architectural invariants and conventions. |
 | [`AGENTS.md`](AGENTS.md) | Note on this project's Next.js version for AI coding agents. |
 | [`.env.example`](.env.example) | Documented environment‑variable template. |

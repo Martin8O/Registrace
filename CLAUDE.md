@@ -6,8 +6,8 @@ participants; the app prices the stay and emails a confirmation. Admins manage e
 registrations, and exports.
 
 > This file is the always-loaded **constitution**: stable rules + navigation only.
-> Point-in-time status, milestone logs, and deep reference live in `local/` and
-> `DEVELOPMENT_HISTORY*.md` (see below). Do not paste build status into this file.
+> Point-in-time status, milestone logs, and deep reference live in `local/`
+> (see below). Do not paste build status into this file.
 
 ## Session Start Protocol
 At the start of every new session, before any other action:
@@ -36,8 +36,8 @@ when moving to a new machine). This overrides the default Claude Code auto-memor
 - `Step B*.md` — finalized, ready-to-run prompts per phase (incl. full B4.5 token spec).
 - `wiki/` — project memory files (MEMORY.md index + individual memory files).
 
-Build history (committed, repo root): `DEVELOPMENT_HISTORY.md` (CZ) + `DEVELOPMENT_HISTORY_en.md`
-(EN) — full chronological per-milestone log.
+Build history (`local/`, gitignored): `local/DEVELOPMENT_HISTORY.md` (CZ) +
+`local/DEVELOPMENT_HISTORY_en.md` (EN) — full chronological per-milestone log.
 
 ## Tech stack
 Next.js 16 App Router · TypeScript strict · Prisma 7 ORM · Supabase (Postgres hosting + Auth) ·
@@ -69,7 +69,7 @@ next-intl 4 (i18n) · Zod 4 (validation — only lib) · React Hook Form · Rese
   (morningArrivalDiscount, afternoonArrivalDiscount, eveningArrivalDiscount, earlyDepartureDiscount).
 
 ## Roles
-- **SUPER_ADMIN** (Martin) — full access to everything; assigns center admins via User
+- **SUPER_ADMIN** — full access to everything; assigns center admins via User
   Management; can manage events for any center.
 - **ADMIN** — center-scoped; can create/manage events of their assigned centre(s)
   (`Event.centerId ∈ their UserCenter`). A centre may have several admins who all manage its
@@ -96,7 +96,7 @@ Keep these distinct — different UI elements, never merge one into the other:
 
 ## Current status & frozen files
 - Build phase, progress, and the milestone log are owned by `local/SESSION_BOOTSTRAP.md` (§B)
-  and `DEVELOPMENT_HISTORY*.md`. Read them for current state — **do not restate status here.**
+  and `local/DEVELOPMENT_HISTORY*.md`. Read them for current state — **do not restate status here.**
 - **Schema/validation/API unfrozen as of B7** — `prisma/schema.prisma`, `lib/validation/*`,
   and `app/api/*` are now live and editable. Change the schema only via a Prisma migration
   (driver-adapter pattern; `DIRECT_URL` for migrate). (`lib/mock/*` is presentation scaffolding

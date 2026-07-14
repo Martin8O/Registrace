@@ -207,7 +207,7 @@ export async function removeUser(id: string, ctx: AdminContext): Promise<{ id: s
   const user = await prisma.user.findUnique({ where: { id }, select: { email: true, role: true } });
   if (!user) throw new UserManagementError("User not found", 404);
   // A super-admin can never be removed — not by themselves (above) and not by
-  // another super-admin. Protects the top-level accounts (Martin's request).
+  // another super-admin. Protects the top-level accounts by design.
   if (user.role === "SUPER_ADMIN") {
     throw new UserManagementError("A super-admin account cannot be removed", 403);
   }

@@ -1,8 +1,8 @@
 // One-time admin promotion utility (B7c).
 //
 // getAdminContext() upserts a Prisma `User` row (role ADMIN) on a user's first
-// authenticated admin request. To make Martin a SUPER_ADMIN:
-//   1. Log into the admin panel once (this creates his User row as ADMIN).
+// authenticated admin request. To make a user a SUPER_ADMIN:
+//   1. Log into the admin panel once (this creates their User row as ADMIN).
 //   2. Run:  npx tsx --env-file .env.local prisma/promote-super-admin.ts <email>
 // (Alternatively, run a manual UPDATE in the Supabase SQL editor.)
 //

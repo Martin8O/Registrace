@@ -1,7 +1,7 @@
 // prisma/seed-demo.ts — DEMO / TEST data seeder (one-off, reviewable).
 //
-// Purpose: give Martin a realistic, fully-populated state to click through as
-// user / ADMIN / SUPER_ADMIN before inviting IT friends to test. It WIPES all
+// Purpose: provide a realistic, fully-populated state to click through as
+// user / ADMIN / SUPER_ADMIN before wider testing. It WIPES all
 // Events + Registrations and re-creates 4 fully-described events with realistic
 // "family" registrations (10–20 each), then exits.
 //
@@ -285,8 +285,8 @@ const EVENTS: EventSpec[] = [
       SURPLUS: { daily: 330, night: 230, mA: 30, aA: 50, eA: 70, ed: 50 },
     },
   },
-  // ── Faithful copies of the LIVE regserver.bdc.cz/tenovice events (prices from
-  //    Martin's screenshots; dates/meals from the live registration forms). Used
+  // ── Faithful copies of the LIVE regserver.bdc.cz/tenovice events (prices and
+  //    dates/meals taken from the live registration forms). Used
   //    to verify our engine matches theirs. NB: MLK charges ages 8–14 (100/day),
   //    night rate is 0 on both (accommodation adds nothing), arrival discounts are
   //    monotonic (morning ≤ afternoon ≤ evening). Descriptions are concise — the
