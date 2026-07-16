@@ -84,9 +84,9 @@ single source of orientation for anyone joining the project.
 
 ## Screenshots
 
-> All screenshots use the demo dataset (`prisma/seed-demo.ts`) — fictional families on the
-> RFC-2606 reserved `example.*` domains. The **admin email addresses and the audit-log IP
-> column are blurred here on purpose** for privacy: they are shown normally to admins in the
+> All screenshots show a **demo dataset — fictional families on the RFC-2606 reserved
+> `example.*` domains**, never real registrants. The **admin email addresses and the audit-log
+> IP column are blurred here on purpose** for privacy: they are shown normally to admins in the
 > running app — only these public screenshots hide them.
 
 ### Visitor side
@@ -464,12 +464,12 @@ npx prisma migrate deploy
 
 # Seed the centre rows (23 BDC centres + 2 catch-alls)
 npx prisma db seed
-
-# (optional) Load a realistic demo dataset — events + fictional family registrations.
-# Destructive: it wipes Events + Registrations but keeps Centers/Users. Dry-run first:
-npx tsx --env-file .env.local prisma/seed-demo.ts             # prints the plan
-npx tsx --env-file .env.local prisma/seed-demo.ts --confirm   # executes
 ```
+
+Create events and registrations from the admin panel. There is deliberately no demo-data
+script: one existed during the build, but once an instance holds real registrations a
+seeder that truncates `Event` and `Registration` is a footgun with no upside. It is in the
+git history (`prisma/seed-demo.ts`) if a throwaway environment ever needs it.
 
 ### 4. Run
 
@@ -531,8 +531,7 @@ noted.
 | `postinstall` | `prisma generate` (regenerates the gitignored client). |
 
 Database utilities: `npx prisma migrate deploy` (apply migrations), `npx prisma db seed`
-(centre rows), `prisma/seed-demo.ts` (demo data), `prisma/promote-super-admin.ts` (bootstrap a
-super-admin).
+(centre rows), `prisma/promote-super-admin.ts` (bootstrap a super-admin).
 
 ---
 
@@ -554,7 +553,6 @@ locales/{cs,en}.json           UI translations
 prisma/
   schema.prisma · migrations/  data layer (6 applied migrations)
   seed.ts                      the 25 centre rows
-  seed-demo.ts                 optional demo dataset
   promote-super-admin.ts       one-off super-admin bootstrap
 public/images/                 static assets (BDC logo)
 proxy.ts                       edge middleware (i18n + session + admin hardening + CSP)
