@@ -182,7 +182,9 @@ single source of orientation for anyone joining the project.
   veg totals) and **accommodation** (per-night headcount) tables.
 - **Per-event XLSX export** — one click per event, with a formula-injection-safe serializer.
 - **Centre & admin management** — invite/edit/remove admins, assign centres, soft-delete and
-  restore centres.
+  restore centres. An invited admin lands on a guided password setup: the requirements are
+  listed up front and tick as they are met, with a show/hide toggle and a live match check
+  (details and the important caveat under [Security & privacy](#security--privacy)).
 - **Audit log** — a forensic trail of admin actions (actor, action, entity, IP, time).
 
 ---
@@ -547,8 +549,10 @@ app/
 components/{public,admin,shared}   UI components
 modules/{events,registrations,pricing,auth,centers,users}   business services (no fat handlers)
 lib/                           infrastructure
-  {db,validation,security,email,export,supabase,utils,mock,admin}/   modules
+  {db,security,email,export,supabase,utils,mock,admin}/   modules
+  validation/                  client-safe Zod schemas + the admin password policy
   audit.ts · types.ts          audit-log writer · shared types
+  auth-errors.ts               Supabase auth-error code → next-intl key
 locales/{cs,en}.json           UI translations
 prisma/
   schema.prisma · migrations/  data layer (6 applied migrations)
@@ -573,19 +577,22 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 `npm test` runs **93 Vitest tests** across 7 files, with **no database required**:
 
-- **Pricing engine** — unit tests over the arithmetic and a 22-scenario matrix checked against
-  the hand-derived BDC formula.
-- **Validation** — the Zod submit/price schemas (honeypot, participant caps, tier rules,
+- **Pricing engine** (29) — the arithmetic against the hand-derived BDC formula, grouped by
+  concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
+  subtracted, accommodation nights, meal pricing, defensive behaviour (missing rule, degenerate
+  stay, over-large discount → `0`, never a throw) and the full aggregated result.
+- **Validation** (12) — the Zod submit/price schemas (honeypot, participant caps, tier rules,
   diet).
-- **Submit service** — control-flow with a **mocked Prisma** (`vi.mock('@/lib/db')`) while
+- **Submit service** (9) — control-flow with a **mocked Prisma** (`vi.mock('@/lib/db')`) while
   keeping the real engine, so `totalPrice` is asserted end-to-end.
-- **Export & auth** — the registration-export scoping (including the cross-centre IDOR
-  regression) and auth helpers.
-- **Auth error wording** — the Supabase-code → message mapping, plus a check that every key it
-  can return is translated in **both** locales (an unmapped key would render as raw text).
-- **Password policy** — the rule checks (including Czech diacritics and non-ASCII symbols),
-  that the checklist and the submit gate can never disagree, and that every rule is labelled
-  in both locales.
+- **Export & auth** (7 + 4) — the registration-export scoping (including the cross-centre IDOR
+  regression) and the owner-tier auth helpers.
+- **Auth error wording** (8) — the Supabase-code → message mapping, plus a check that every key
+  it can return is translated in **both** locales (an unmapped key would render as raw text).
+- **Password policy** (24) — that the rules mirror GoTrue's literal ASCII sets (Czech accented
+  letters and non-ASCII symbols must **not** tick a rule, or the checklist would green-light a
+  password Supabase rejects), that the checklist and the submit gate can never disagree, and
+  that every rule is labelled in both locales.
 
 ---
 
