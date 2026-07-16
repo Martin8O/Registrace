@@ -31,8 +31,16 @@ export default function ProfilePage() {
   // Arriving here from the e-mail-change confirmation link (auth/confirm sends
   // ?emailChanged=1) → show the green confirmation banner. Read from the URL
   // directly to avoid needing a useSearchParams Suspense boundary.
+  //
+  // The setState below is deliberate and cannot be hoisted into render: `window`
+  // does not exist during SSR, and seeding it via a lazy useState initializer
+  // would make the server render (no toast) disagree with the first client render
+  // (toast) — a hydration mismatch. Reading a client-only value *after* hydration
+  // is exactly what an effect is for. It runs once and settles; the "cascading
+  // render" the rule warns about is a single extra pass on mount.
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('emailChanged') === '1') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only URL read after hydration; see above
       setToast(t('emailChangedConfirmed'))
     }
   }, [t])

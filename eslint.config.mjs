@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The Prisma client is generated code (gitignored, regenerated on every
+    // install). Linting it produced ~400 errors that no one can act on and that
+    // drowned out real findings in `npm run lint`.
+    "generated/**",
   ]),
 ]);
 

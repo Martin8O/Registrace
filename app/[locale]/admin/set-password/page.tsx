@@ -32,11 +32,18 @@ export default function SetPasswordPage() {
   const [loading, setLoading] = useState(false)
   const [done, setDone] = useState(false)
 
+  // The setState below is deliberate: `window` does not exist during SSR, so the
+  // token check cannot run in render, and seeding `phase` from a lazy useState
+  // initializer would make the server render disagree with the first client
+  // render (hydration mismatch). The 'checking' → 'invalid'/'ready' transition
+  // after hydration is the whole point of this effect. Do NOT "fix" this by
+  // trusting an ambient session — see the SECURITY note above.
   useEffect(() => {
     // A raw auth token in the URL ⇒ reached by an old direct link, not through
     // the server confirm route. Refuse rather than touch any ambient session.
     const raw = (window.location.hash || '') + (window.location.search || '')
     if (/access_token=|token_hash=|[?&]code=|[?&]type=|error=/.test(raw)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- client-only URL check after hydration; see above
       setPhase('invalid')
       return
     }
@@ -63,7 +70,12 @@ export default function SetPasswordPage() {
     setLoading(true)
     const { error: updateError } = await supabase.auth.updateUser({ password })
     if (updateError) {
-      setError(t('error'))
+      // Surface the actual Supabase reason alongside the friendly message (same
+      // reasoning as the profile page): a rate-limit cooldown, "new password
+      // should be different from the old password", an expired session. Without
+      // it every rejection looks identical and the admin retries the same
+      // password forever, with nothing on screen to act on.
+      setError(updateError.message ? `${t('error')} (${updateError.message})` : t('error'))
       setLoading(false)
       return
     }
