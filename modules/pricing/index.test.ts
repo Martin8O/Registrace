@@ -228,3 +228,103 @@ describe("full result", () => {
     expect(r.totalPrice).toBe(380);
   });
 });
+
+// ─── Meal price list: meal type × age × tier (invariant 21, M37) ───────────────
+// Before this, a meal cost the same for everybody. The fixture prices breakfast at
+// 80 for a standard adult, 40 for a 4–7 child, and 20 on the supported tier, so a
+// wrong lookup on any of the three axes produces a distinguishable number.
+
+describe("meal price is data-driven by age and tier", () => {
+  const mealPricingRules = [
+    { mealType: "BREAKFAST", ageCategory: "AGE_15_PLUS", pricingType: "STANDARD", price: 80 },
+    { mealType: "BREAKFAST", ageCategory: "AGE_15_PLUS", pricingType: "SUPPORTED", price: 50 },
+    { mealType: "BREAKFAST", ageCategory: "AGE_15_PLUS", pricingType: "SURPLUS", price: 110 },
+    { mealType: "BREAKFAST", ageCategory: "AGE_4_7", pricingType: "STANDARD", price: 40 },
+    { mealType: "BREAKFAST", ageCategory: "AGE_4_7", pricingType: "SUPPORTED", price: 20 },
+    { mealType: "LUNCH", ageCategory: "AGE_15_PLUS", pricingType: "STANDARD", price: 120 },
+    { mealType: "LUNCH", ageCategory: "AGE_4_7", pricingType: "STANDARD", price: 60 },
+  ];
+  const withRules = (o: Partial<PricingInput> = {}) => ({ mealPricingRules, ...o });
+
+  it("an adult pays the 15+/STANDARD price → 80", () => {
+    expect(one(adult("STANDARD", ["m_b"]), withRules())?.mealPrice).toBe(80);
+  });
+  it("a child pays the child price for the SAME meal → 40", () => {
+    expect(
+      one({ ageCategory: "AGE_4_7", pricingType: "STANDARD", mealIds: ["m_b"] }, withRules())?.mealPrice,
+    ).toBe(40);
+  });
+  it("the tier changes an adult's meal price → SUPPORTED 50, SURPLUS 110", () => {
+    expect(one(adult("SUPPORTED", ["m_b"]), withRules())?.mealPrice).toBe(50);
+    expect(one(adult("SURPLUS", ["m_b"]), withRules())?.mealPrice).toBe(110);
+  });
+  it("the tier changes a CHILD's meal price too → supported 4–7 pays 20", () => {
+    expect(
+      one({ ageCategory: "AGE_4_7", pricingType: "SUPPORTED", mealIds: ["m_b"] }, withRules())?.mealPrice,
+    ).toBe(20);
+  });
+  it("sums several meals at that participant's own prices → child 40 + 60 = 100", () => {
+    expect(
+      one({ ageCategory: "AGE_4_7", pricingType: "STANDARD", mealIds: ["m_b", "m_l"] }, withRules())?.mealPrice,
+    ).toBe(100);
+  });
+  it("a closed slot is still free regardless of the price list", () => {
+    expect(one(adult("STANDARD", ["m_d"]), withRules())?.mealPrice).toBe(0);
+  });
+  it("duplicate meal ids are charged once → 80, not 160", () => {
+    expect(one(adult("STANDARD", ["m_b", "m_b"]), withRules())?.mealPrice).toBe(80);
+  });
+  it("omitted pricingType defaults to STANDARD → 80", () => {
+    expect(one({ ageCategory: "AGE_15_PLUS", mealIds: ["m_b"] }, withRules())?.mealPrice).toBe(80);
+  });
+
+  // The one case where a combination is absent from a list that DOES exist: the
+  // fallback must NOT kick in, or a gap in the price list would silently bill the
+  // adult flat price to a child.
+  it("a combination missing from an existing price list → 0, not the flat price", () => {
+    expect(
+      one({ ageCategory: "AGE_4_7", pricingType: "SURPLUS", mealIds: ["m_b"] }, withRules())?.mealPrice,
+    ).toBe(0);
+  });
+
+  it("counts into the subtotal and the total", () => {
+    const r = calculatePricing(
+      input([adult("STANDARD", ["m_b"]), { ageCategory: "AGE_4_7", pricingType: "STANDARD", mealIds: ["m_b"] }], withRules()),
+    );
+    expect(r.participants).toEqual([
+      { participationPrice: 300, mealPrice: 80, subtotal: 380 },
+      { participationPrice: 0, mealPrice: 40, subtotal: 40 },
+    ]);
+    expect(r.totalPrice).toBe(420);
+  });
+});
+
+// ─── Legacy events with no price list keep their old flat pricing ──────────────
+// Every event predating M37 charged one price per meal to everyone. Those events
+// must keep billing exactly that, for every age and tier — the guarantee the
+// migration's backfill and this fallback jointly make.
+
+// it.each (not a for loop) so lib/readme-claims.test.ts counts these four cases:
+// its AST counter models it.each and expands it, but sees a loop-wrapped it() as
+// a single literal and would undercount the suite in the README.
+describe("an event with no meal price list falls back to the flat price", () => {
+  it.each([
+    ["absent", undefined],
+    ["empty", []],
+  ])("adult pays the flat slot price when the list is %s → 80 + 120 = 200", (_what, rules) => {
+    expect(
+      one(adult("STANDARD", ["m_b", "m_l"]), { mealPricingRules: rules as never })?.mealPrice,
+    ).toBe(200);
+  });
+
+  it.each([
+    ["absent", undefined],
+    ["empty", []],
+  ])("a child pays that same flat price when the list is %s → 80", (_what, rules) => {
+    expect(
+      one({ ageCategory: "AGE_4_7", pricingType: "SUPPORTED", mealIds: ["m_b"] }, {
+        mealPricingRules: rules as never,
+      })?.mealPrice,
+    ).toBe(80);
+  });
+});

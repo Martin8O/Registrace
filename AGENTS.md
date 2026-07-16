@@ -18,7 +18,7 @@ list of invariants before changing anything structural.
 ```bash
 npm run dev                 # dev server on :3000
 npm run build               # production build
-npm test                    # Vitest (101 tests, no database needed)
+npm test                    # Vitest (117 tests, no database needed)
 npm run lint                # ESLint
 npx prisma migrate deploy   # apply migrations (needs DIRECT_URL)
 ```
@@ -56,6 +56,13 @@ These are enforced across the codebase — do not violate them to make something
 - **Pricing is data-driven.** No age is hard-coded to 0 — every age is charged by its
   `PricingRule.dailyRate`. Arrival/departure discounts apply to 15+ only because child rules
   carry `0` discounts, not via an age branch.
+- **The pricing tier applies at every age, and prices meals too.** A meal costs
+  `MealPricingRule(mealType, ageCategory, pricingType)` — one 36-cell price list per event — so a
+  child's lunch and a supported adult's lunch differ. `EventMeal.price` is a legacy mirror of the
+  15+/STANDARD cell, used **only** when an event has no price list at all (pre-M37 events, all
+  backfilled to their existing price). A combination absent from a list that exists is 0, not the
+  flat price — do not "fix" that into a fallback, it would bill a child the adult price whenever
+  the list has a gap. Per-day meal control is availability, not price.
 - **RLS is enabled deny-all** on the data tables as a backstop, but Prisma connects directly
   and bypasses it. The real authorization is the role/ownership gate in the handlers and
   services.

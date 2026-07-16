@@ -135,12 +135,13 @@ model Event {
   numberPrefix     String?     @unique
   registrationSeq  Int         @default(0)
 
-  creator       User?          @relation(fields: [createdBy], references: [id])
-  center        Center         @relation(fields: [centerId], references: [id])
-  dates         EventDate[]
-  pricingRules  PricingRule[]
-  meals         EventMeal[]
-  registrations Registration[]
+  creator          User?             @relation(fields: [createdBy], references: [id])
+  center           Center            @relation(fields: [centerId], references: [id])
+  dates            EventDate[]
+  pricingRules     PricingRule[]
+  mealPricingRules MealPricingRule[]
+  meals            EventMeal[]
+  registrations    Registration[]
 
   @@index([status])
   @@index([startDate])
@@ -164,6 +165,10 @@ model EventDate {
   @@index([eventId])
 }
 
+// Participation price list: one row per age category × pricing tier. Since M37
+// the tier applies to EVERY age (children included), so a fully-configured event
+// carries 4 × 3 = 12 rows; events created before that carry only the 3 child
+// STANDARD rows + the three 15+ tiers and were backfilled (see the migration).
 model PricingRule {
   id                       String      @id @default(cuid())
   eventId                  String
@@ -184,11 +189,43 @@ model PricingRule {
   @@index([eventId])
 }
 
+// Meal price list: one row per meal type × age category × pricing tier (3 × 4 × 3
+// = 36 rows per fully-configured event), set once for the whole event. Introduced
+// in M37 — before it, a meal cost the same for everybody (the flat EventMeal.price),
+// which could not express "a child's lunch is cheaper" or a supported/surplus tier.
+//
+// Deliberately keyed by mealType and NOT by eventMealId: the price list is a
+// property of the event, not of a single day's slot. Every event in the database
+// already charged one price per meal type across all its days when this was added,
+// so per-day price variation was a capability nobody used — modelling it here would
+// have multiplied the rows by the day count and the admin form by the same factor.
+// Per-day control that IS used (include/exclude a slot) stays on EventMeal.
+model MealPricingRule {
+  id          String      @id @default(cuid())
+  eventId     String
+  mealType    MealType
+  ageCategory AgeCategory
+  pricingType PricingType @default(STANDARD)
+  price       Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, mealType, ageCategory, pricingType])
+  @@index([eventId])
+}
+
 model EventMeal {
   id          String   @id @default(cuid())
   eventId     String
   eventDateId String
   mealType    MealType
+  // LEGACY headline price, kept in sync with the 15+/STANDARD MealPricingRule row.
+  // The engine prices a meal from MealPricingRule and only falls back to this when
+  // an event has no price list at all (invariant 21). Retained rather than dropped
+  // because ParticipantMeal rows and the deployed client both still read it —
+  // expand-and-contract, same as Participant.mealType in M31.
   price       Int      @default(0)
   isClosed    Boolean  @default(false)
   label_cs    String

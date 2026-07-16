@@ -45,6 +45,13 @@ type RefineableBase = {
   participants: ReadonlyArray<{ ageCategory: string; pricingType?: string }>;
 };
 
+// The pricing tier used to be rejected for anyone under 15 here (old invariant 15).
+// Since M37 the tier applies at EVERY age — an event can price a supported child
+// differently from a standard one, for participation and for meals — so the tier is
+// valid on any participant and the refinement is gone. Nothing is lost by dropping
+// it: the tier is not a free-text field (the enum still bounds it), and the engine
+// prices strictly from the event's own rules, so an unexpected combination resolves
+// to that event's configured price rather than to anything the client chose.
 function applySharedRefinements(data: RefineableBase, ctx: z.RefinementCtx): void {
   if (data.honeypot !== undefined && data.honeypot !== "") {
     ctx.addIssue({
@@ -53,16 +60,6 @@ function applySharedRefinements(data: RefineableBase, ctx: z.RefinementCtx): voi
       path: ["honeypot"],
     });
   }
-
-  data.participants.forEach((p, i) => {
-    if (p.ageCategory !== "AGE_15_PLUS" && p.pricingType !== undefined) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "pricingType only applies to AGE_15_PLUS participants",
-        path: ["participants", i, "pricingType"],
-      });
-    }
-  });
 }
 
 // ─── Public schemas ───────────────────────────────────────────────────────────

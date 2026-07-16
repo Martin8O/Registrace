@@ -24,6 +24,13 @@ import ts from "typescript";
 // other test-defining form rather than guessing: an unsupported pattern must be a
 // loud failure telling you to teach it, never a quiet undercount.
 //
+// It also throws on an `it(` inside a loop, which is a real miss it once had: a
+// `for (const x of [a, b]) { it(...) }` block reads as one literal `it(` but runs
+// once per iteration, so the suite silently grew past the stated total while this
+// guard still passed. The iteration count is not knowable from the AST in general
+// (the loop may range over anything), so the only honest answers are "throw" or
+// "be wrong" — write it.each, which is countable, and this models it.
+//
 // This file counts ITSELF — it is a test file that `npm test` runs, so the
 // README's totals include it. Adding a case here means updating the README, which
 // is the point rather than a snag.
@@ -56,12 +63,28 @@ const UNSUPPORTED = new Set([
   "describe.each",
 ]);
 
+const LOOPS = [
+  ts.SyntaxKind.ForStatement,
+  ts.SyntaxKind.ForOfStatement,
+  ts.SyntaxKind.ForInStatement,
+  ts.SyntaxKind.WhileStatement,
+  ts.SyntaxKind.DoStatement,
+];
+
 /** How many cases Vitest will run from this source. Throws rather than guess. */
 export function countTests(src: string, label: string): number {
   const sf = ts.createSourceFile(label, src, ts.ScriptTarget.Latest, true);
   let count = 0;
+  let loopDepth = 0;
 
   const visit = (node: ts.Node): void => {
+    if (LOOPS.includes(node.kind)) {
+      loopDepth += 1;
+      ts.forEachChild(node, visit);
+      loopDepth -= 1;
+      return;
+    }
+
     if (ts.isCallExpression(node)) {
       // `it(...)` / `it.each([...])(...)` / `describe.each(...)` — the callee text
       // as written, which for it.each([..])("name") is the inner call.
@@ -75,9 +98,17 @@ export function countTests(src: string, label: string): number {
         );
       }
 
+      const isEach = ts.isCallExpression(head) && head.expression.getText(sf) === "it.each";
+      if ((text === "it" || isEach) && loopDepth > 0) {
+        throw new Error(
+          `${label}: defines a test inside a loop, which runs once per iteration but ` +
+            `reads as one case here. Use it.each([...]) instead — it is countable.`,
+        );
+      }
+
       if (text === "it") count += 1;
 
-      if (ts.isCallExpression(head) && head.expression.getText(sf) === "it.each") {
+      if (isEach) {
         const arg = head.arguments[0];
         if (!arg || !ts.isArrayLiteralExpression(arg)) {
           throw new Error(
@@ -132,6 +163,14 @@ describe("the counter itself", () => {
     expect(() => countTests(`it.skip("x", () => {})`, "f")).toThrow(/does not model/);
     expect(() => countTests(`describe.each([1])("x", () => {})`, "f")).toThrow(/does not model/);
     expect(() => countTests(`it.each(CASES)("x", () => {})`, "f")).toThrow(/literal array/);
+  });
+
+  it("throws on a test defined inside a loop (it runs N times, reads as one)", () => {
+    expect(() => countTests(`for (const x of [1, 2]) { it("x", () => {}) }`, "f")).toThrow(/inside a loop/);
+    expect(() => countTests(`for (let i = 0; i < 2; i++) { it("x", () => {}) }`, "f")).toThrow(/inside a loop/);
+    expect(() => countTests(`while (x) { it.each([1])("x", () => {}) }`, "f")).toThrow(/inside a loop/);
+    // A loop INSIDE a test body is normal and must still count as exactly one.
+    expect(countTests(`it("x", () => { for (const v of [1, 2]) expect(v).toBe(v) })`, "f")).toBe(1);
   });
 });
 

@@ -17,10 +17,17 @@ import {
   type RegistrationSubmitInput,
 } from '@/lib/validation'
 import { getAvailableMealIds } from '@/lib/utils/mealAvailability'
+import { resolveMealPrice } from '@/lib/utils/mealPrice'
 import { useDebounce } from '@/lib/utils/useDebounce'
 import GdprModal from './GdprModal'
 import ParticipationPriceModal from './ParticipationPriceModal'
-import type { CenterDTO, EventDateDTO, EventMealDTO, PricingRuleDTO } from '@/lib/types'
+import type {
+  CenterDTO,
+  EventDateDTO,
+  EventMealDTO,
+  MealPricingRuleDTO,
+  PricingRuleDTO,
+} from '@/lib/types'
 
 // The working form type loosens two fields the user must actively choose so they
 // can start UNSELECTED, while the zodResolver still enforces them on submit:
@@ -53,6 +60,7 @@ type Props = {
   meals: EventMealDTO[]
   centers: CenterDTO[]
   pricingRules: PricingRuleDTO[]
+  mealPricingRules: MealPricingRuleDTO[]
   // UTC ISO meal-ordering cut-off (or null). Past it, meal selection is disabled
   // (the server is authoritative — it strips meals submitted after the deadline).
   mealRegistrationDeadline: string | null
@@ -111,6 +119,7 @@ export default function RegistrationForm({
   meals,
   centers,
   pricingRules,
+  mealPricingRules,
   mealRegistrationDeadline,
 }: Props) {
   const t = useTranslations('form')
@@ -311,16 +320,6 @@ export default function RegistrationForm({
     }
   }, [debouncedCalcKey])
 
-  // Age drives the pricing-type field: it exists only for 15+ and must be
-  // cleared (invariant 15 / schema refinement) when the age leaves 15+.
-  function handleAgeChange(index: number, value: string) {
-    setValue(
-      `participants.${index}.pricingType`,
-      value === 'AGE_15_PLUS' ? 'STANDARD' : undefined,
-      { shouldDirty: true },
-    )
-  }
-
   // POST the resolver's validated output (incl. idempotencyKey + honeypot) —
   // the server recomputes all prices; nothing price-related is sent (inv. 3–4).
   const onSubmit = async (data: RegistrationSubmitInput) => {
@@ -462,7 +461,7 @@ export default function RegistrationForm({
         <div className="mt-5 space-y-4">
           {fields.map((field, i) => {
             const age = allValues.participants?.[i]?.ageCategory
-            const showPricingType = age === 'AGE_15_PLUS'
+            const tier = allValues.participants?.[i]?.pricingType
             const pricing = price?.participants?.[i]
 
             return (
@@ -508,20 +507,20 @@ export default function RegistrationForm({
                     options={AGE_CATEGORIES}
                     labelFor={(v) => t(ageLabelKey[v] ?? v)}
                     register={register}
-                    onPick={(v) => handleAgeChange(i, v)}
                   />
                 </Field>
 
-                {showPricingType && (
-                  <Field label={t('price_type')}>
-                    <PillRadioGroup
-                      name={`participants.${i}.pricingType`}
-                      options={PRICING_TYPES}
-                      labelFor={(v) => t(pricingLabelKey[v] ?? v)}
-                      register={register}
-                    />
-                  </Field>
-                )}
+                {/* The tier applies at every age (invariant 15): an event can price
+                    a supported child differently from a standard one, for both
+                    participation and meals. */}
+                <Field label={t('price_type')}>
+                  <PillRadioGroup
+                    name={`participants.${i}.pricingType`}
+                    options={PRICING_TYPES}
+                    labelFor={(v) => t(pricingLabelKey[v] ?? v)}
+                    register={register}
+                  />
+                </Field>
 
                 {!mealsClosed && (
                   <Field label={t('meal_type')}>
@@ -557,6 +556,15 @@ export default function RegistrationForm({
                           <div className="mt-2 flex flex-wrap gap-2">
                             {slots.map((slot) => {
                               const domId = `meal-${i}-${slot.id}`
+                              // Priced for THIS participant's age + tier — the same
+                              // lookup the server-authoritative engine uses, so the
+                              // pill agrees with the subtotal below it.
+                              const slotPrice = resolveMealPrice(
+                                slot.mealType,
+                                { ageCategory: age ?? 'AGE_15_PLUS', pricingType: tier },
+                                mealPricingRules,
+                                slot.price,
+                              )
                               return (
                                 <div key={slot.id}>
                                   <input
@@ -576,7 +584,7 @@ export default function RegistrationForm({
                                     }`}
                                   >
                                     {t(mealLabelKey[slot.mealType] ?? slot.mealType)} ·{' '}
-                                    {formatCzk(slot.price)}
+                                    {formatCzk(slotPrice)}
                                     {slot.isClosed && ` (${t('meal_closed')})`}
                                   </label>
                                 </div>
@@ -623,14 +631,19 @@ export default function RegistrationForm({
           })}
         </div>
 
-        <button
-          type="button"
-          onClick={() => append(makeParticipant())}
-          disabled={fields.length >= MAX_PARTICIPANTS}
-          className="btn-secondary mt-4 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {t('add_participant')}
-        </button>
+        {/* Separated from the participant cards by a rule: sitting flush under the
+            last card, it read as part of that participant rather than as an action
+            for the whole section. */}
+        <div className="mt-6 border-t border-neutral-200 pt-5">
+          <button
+            type="button"
+            onClick={() => append(makeParticipant())}
+            disabled={fields.length >= MAX_PARTICIPANTS}
+            className="btn-secondary w-full disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+          >
+            {t('add_another_participant')}
+          </button>
+        </div>
       </section>
 
       {/* ─── §3 Contact / other ─── */}

@@ -9,15 +9,30 @@
 // floored at 0 (SESSION_BOOTSTRAP §D.7). All values are whole-CZK integers
 // (invariant 10); inputs are already integers, so no rounding is introduced.
 //
-// Participation is DATA-DRIVEN per participant (REVISED invariant 15): the engine
-// no longer hard-codes ages 0–14 to 0. Instead each participant's price comes
-// from the matching PricingRule's dailyRate. Young children (0–3/4–7) carry a
-// 0-rate rule → 0; ages 8–14 follow the event's configured rate (0 in most
-// events, but real BDC courses can charge them, e.g. 100 CZK/day); 15+ uses the
-// tier rate. This matches the authoritative regserver.bdc.cz pricing, where the
-// 8–14 daily rate is a real, sometimes-non-zero value. Arrival/early-departure
-// discounts apply only to 15+ purely because child rules carry 0 discounts — not
-// via any age branch in the engine.
+// BOTH halves of a participant's price are DATA-DRIVEN by (ageCategory,
+// pricingType) — no age and no tier is hard-coded anywhere in this file:
+//
+//  • Participation comes from the matching PricingRule (revised invariant 15,
+//    M30). Young children (0–3/4–7) carry a 0-rate rule → 0; ages 8–14 follow the
+//    event's configured rate (0 in most events, but real BDC courses charge them,
+//    e.g. 100 CZK/day); 15+ uses the tier rate. Arrival/early-departure discounts
+//    apply only to 15+ purely because child rules carry 0 discounts — not via any
+//    age branch here.
+//
+//  • Meals come from the matching MealPricingRule (invariant 21, M37). Before it,
+//    a meal cost the same for everyone, so a child's lunch could not be cheaper
+//    and the supported/surplus tiers priced only participation. The tier now
+//    applies at every age (revised invariant 15 again), which is why the lookup
+//    keys on both fields for meals exactly as it does for participation.
+//
+// An event with NO meal price list at all falls back to the flat EventMeal.price
+// (invariant 21) — that is what every event charged before M37, so a row the
+// backfill somehow missed keeps billing today's price instead of silently
+// dropping to 0. The fallback is per-event, not per-combination: a configured
+// event whose 8–14/SURPLUS breakfast is deliberately 0 has a rule saying 0, and
+// that 0 is honoured rather than being read as "unpriced".
+
+import { resolveMealPrice } from "@/lib/utils/mealPrice";
 
 export type PricingParticipantInput = {
   ageCategory: string;
@@ -40,8 +55,16 @@ export type PricingMealInput = {
   id: string;
   eventDateId: string;
   mealType: string;
+  // Legacy flat price — only consulted for an event with no meal price list.
   price: number;
   isClosed: boolean;
+};
+
+export type PricingMealRuleInput = {
+  mealType: string;
+  ageCategory: string;
+  pricingType: string;
+  price: number;
 };
 
 export type PricingEventDateInput = {
@@ -53,6 +76,9 @@ export type PricingEventDateInput = {
 export type PricingInput = {
   participants: PricingParticipantInput[];
   pricingRules: PricingRuleInput[];
+  // The event's meal price list. Optional so a caller that predates M37 (and any
+  // event without one) still prices meals at the flat PricingMealInput.price.
+  mealPricingRules?: PricingMealRuleInput[];
   meals: PricingMealInput[];
   eventDates: PricingEventDateInput[];
   arrivalDateId: string;
@@ -128,23 +154,28 @@ function participationPriceFor(
 // Meal price for one participant: sum of each UNIQUE selected meal's price, but
 // only for meals that exist on this event and are open. Unknown / closed ids
 // contribute 0 (mirrors the submit service, which drops them before persisting).
-// Applies to every age — children pay for meals even though participation is 0.
+//
+// Each slot is priced for THIS participant's (ageCategory, pricingType) from the
+// event's meal price list — so a child's lunch and an adult's lunch on the same
+// day cost different amounts (invariant 21). Applies to every age: children pay
+// for meals even when their participation is 0.
 function mealPriceFor(participant: PricingParticipantInput, input: PricingInput): number {
   const mealById = new Map(input.meals.map((m) => [m.id, m]));
   let total = 0;
   for (const id of new Set(participant.mealIds)) {
     const meal = mealById.get(id);
-    if (meal && !meal.isClosed) total += meal.price;
+    if (meal && !meal.isClosed) {
+      total += resolveMealPrice(meal.mealType, participant, input.mealPricingRules, meal.price);
+    }
   }
   return total;
 }
 
 export function calculatePricing(input: PricingInput): PricingResult {
   const participants = input.participants.map((p) => {
-    // Participation is fully data-driven: the matching rule's dailyRate (0 for
-    // young children, the configured rate for 8–14, the tier rate for 15+) — no
-    // age is hard-coded to 0 anymore (revised invariant 15). Meals apply to every
-    // age regardless (children still pay for selected meals).
+    // Both halves are fully data-driven by (ageCategory, pricingType): the
+    // PricingRule's dailyRate for participation, the MealPricingRule's price for
+    // each meal. No age and no tier is hard-coded here (invariants 15 + 21).
     const participationPrice = participationPriceFor(p, input);
     const mealPrice = mealPriceFor(p, input);
     return {

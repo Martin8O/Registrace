@@ -26,6 +26,7 @@ export type {
   EventMealDTO,
   CenterDTO,
   PricingRuleDTO,
+  MealPricingRuleDTO,
   AdminEventListItem,
   EventStatusValue,
   MealTypeValue,

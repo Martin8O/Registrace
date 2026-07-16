@@ -67,12 +67,24 @@ next-intl 4 (i18n) · Zod 4 (validation — only lib) · React Hook Form · Rese
 12. User.id = @db.Uuid (matches Supabase Auth auth.users.id UUID format).
 13. Supabase needs two connection strings: pooled DATABASE_URL (port 6543) and direct DIRECT_URL (port 5432).
 14. Registration submission = idempotent (client sends UUID v4 idempotencyKey).
-15. PricingType applies only to AGE_15_PLUS. Pricing is **data-driven**: the engine charges every age by its PricingRule's `dailyRate` (no age hard-coded to 0). Children default to 0 in the form, but an admin may set a non-zero rate per event (e.g. real BDC "MLK" charges ages 8–14). Arrival/departure discounts apply to 15+ only because child rules carry 0 discounts — not via an age branch. (Revised M30; was "ages 0–14 always dailyRate = 0".)
+15. **PricingType applies to EVERY age**, children included: an event may price a supported
+    child differently from a standard one, for participation *and* meals. Pricing is
+    **data-driven** — the engine charges every age by its PricingRule's `dailyRate` (no age
+    hard-coded to 0). Children default to 0 in the form, but an admin may set a non-zero rate
+    per event (e.g. real BDC "MLK" charges ages 8–14). Arrival/departure discounts apply to 15+
+    only because child rules carry 0 discounts — not via an age branch. (Revised M37; was
+    "PricingType applies only to AGE_15_PLUS" — revised M30 from "ages 0–14 always dailyRate = 0".)
 16. User cancellation not supported — admins only. Deliberate product decision.
 17. Export endpoint = POST (not GET), filters in body.
 18. Honeypot field on registration form, validated server-side.
 19. Max 10 participants per registration.
 20. SUPER_ADMIN sees all. ADMIN is scoped to their center(s) only.
+21. **A meal's price is `MealPricingRule(mealType, ageCategory, pricingType)`** — one price list
+    per event (3 × 4 × 3 = 36 cells), not one flat price per slot. `EventMeal.price` is a legacy
+    mirror of the 15+/STANDARD cell and is the engine's fallback **only** for an event carrying no
+    price list at all (every event predating M37 was backfilled to its current price, so no live
+    price moved). A combination missing from a list that *exists* resolves to 0, never the flat
+    price. Per-day control is availability (`isClosed`), not price. (M37.)
 - Fields named `*Discount` are **subtracted** from the total, not added
   (morningArrivalDiscount, afternoonArrivalDiscount, eveningArrivalDiscount, earlyDepartureDiscount).
 

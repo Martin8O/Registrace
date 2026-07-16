@@ -67,7 +67,11 @@ export default async function RegistrationDetailPage({
         registrationNumber={detail.registrationNumber ?? detail.id}
         numberLabel={t('registrationDetail.number')}
         pricingButton={
-          <PricingInfoButton meals={detail.eventMeals} pricingRules={detail.eventPricingRules} />
+          <PricingInfoButton
+            meals={detail.eventMeals}
+            pricingRules={detail.eventPricingRules}
+            mealPricingRules={detail.eventMealPricingRules}
+          />
         }
         initialHasAccommodation={detail.hasAccommodation}
         initialStatus={detail.status}

@@ -17,7 +17,6 @@
     "gdpr_consent": "I consent to the processing of my personal data for this registration.",
     "gdpr_details": "Read the detailed, required information in our <link>personal data protection policy</link>.",
     "total_price": "Total price",
-    "add_participant": "Add participant",
     "remove_participant": "Remove participant",
     "register": "Register",
     "registration_success": "Registration has been successfully submitted",
@@ -88,7 +87,8 @@
       "rights_title": "Your rights",
       "rights_body": "You have the right to access your data, to rectification, erasure, restriction of processing, portability, and the right to object (Art. 15–21 GDPR). Send your requests to info@bdc.cz.",
       "close": "Close"
-    }
+    },
+    "add_another_participant": "Add another participant"
   },
   "home": {
     "heading": "DWB Event Registration",
@@ -106,23 +106,33 @@
     "pricingInfo": "Pricing Info",
     "pricingModal": {
       "close": "Close",
-      "title": "Pricing Overview",
+      "title": "Price overview",
+      "stayTitle": "Participation price",
+      "mealsTitle": "Meal price",
+      "discountsTitle": "Discounts",
+      "discountsNote": "Discounts apply to the 15 and over category.",
+      "categoryColumn": "Category",
+      "free": "No charge.",
+      "dailyRateShort": "Daily rate",
+      "pricePerNightShort": "Per night",
       "breakfast": "Breakfast",
       "lunch": "Lunch",
       "dinner": "Dinner",
-      "dailyRate": {
-        "age03": "Daily rate age 0–3",
-        "age47": "Daily rate age 4–7",
-        "age814": "Daily rate age 8–14",
-        "age15standard": "Daily rate age 15+ standard",
-        "age15supported": "Daily rate age 15+ supported",
-        "age15surplus": "Daily rate age 15+ surplus"
+      "age": {
+        "age03": "0–3 years",
+        "age47": "4–7 years",
+        "age814": "8–14 years",
+        "age15": "15 and over"
+      },
+      "tier": {
+        "standard": "standard",
+        "supported": "supported",
+        "surplus": "surplus"
       },
       "morningArrivalDiscount": "Morning arrival discount (15+)",
       "afternoonArrivalDiscount": "Afternoon arrival discount (15+)",
       "eveningArrivalDiscount": "Evening arrival discount (15+)",
-      "earlyDepartureDiscount": "Early departure discount (15+)",
-      "pricePerNight": "Price per night (15+)"
+      "earlyDepartureDiscount": "Early departure discount (15+)"
     },
     "registrationFormPlaceholder": "Registration form — coming next"
   },
@@ -383,7 +393,7 @@
         "intro": "Pricing rules are saved with the event.",
         "ageCategory": "Age category",
         "pricingType": "Price type",
-        "childNote": "Child categories are usually 0, but you can set your own daily and night rate — the calculation always follows the price list you enter exactly. Arrival/departure discounts do not apply to children."
+        "childNote": "Child categories are usually 0, but you can set your own daily and night rate – the calculation always follows the price list exactly. Arrival/departure discounts do not apply to children."
       },
       "settings": {
         "mealDeadlineNote": "After this time, meals can no longer be ordered for the event (participation and accommodation stay open). Optional — with no deadline (empty field) meal registration has no time limit. The time is Czech local time (SELČ/SEČ handled automatically).",
@@ -391,12 +401,15 @@
         "noDeadline": "No deadline"
       },
       "meals": {
-        "intro": "Each event day offers breakfast, lunch and dinner. Edit the price; exclude any meal that isn't offered — this sets the event's starting and ending meal.",
+        "intro": "The meal price list is set once for the whole event. On each day, exclude any meal that is not served — that fixes the event's first and last meal.",
         "noDates": "First choose a start and end date in the Schedule step.",
         "forDate": "Day",
         "exclude": "Exclude",
         "include": "Include again",
-        "excluded": "Not offered"
+        "excluded": "Not offered",
+        "priceListTitle": "Meal price list",
+        "priceListNote": "These prices apply to the whole event — each day only decides whether a meal is served. Every category starts at the same price; lower it where a different one should apply (children, or the supported tier).",
+        "availabilityTitle": "Availability per day"
       },
       "preview": {
         "intro": "Review the entered data.",
@@ -407,7 +420,8 @@
         "settings": "Settings",
         "noPricing": "No pricing rules.",
         "noMeals": "No meals.",
-        "notSet": "—"
+        "notSet": "—",
+        "mealPrices": "Meal price list"
       },
       "errors": {
         "required": "Required",

@@ -46,10 +46,23 @@ describe("registrationSubmitSchema", () => {
     expect(registrationSubmitSchema.safeParse({ ...validSubmit, honeypot: "i am a bot" }).success).toBe(false);
   });
 
-  it("rejects pricingType on a child (only AGE_15_PLUS may carry it)", () => {
+  // Inverted in M37: the tier used to be a 15+-only concept and a child carrying
+  // one was a validation error. Events can now price a supported child differently
+  // from a standard one, so every age accepts every tier.
+  it("accepts pricingType on a child (the tier applies at every age)", () => {
+    for (const pricingType of ["STANDARD", "SUPPORTED", "SURPLUS"]) {
+      const payload = {
+        ...validSubmit,
+        participants: [{ fullName: "Dítě", ageCategory: "AGE_4_7", pricingType, mealType: "MEAT", mealIds: [] }],
+      };
+      expect(registrationSubmitSchema.safeParse(payload).success).toBe(true);
+    }
+  });
+
+  it("still rejects a pricingType outside the enum", () => {
     const payload = {
       ...validSubmit,
-      participants: [{ fullName: "Dítě", ageCategory: "AGE_4_7", pricingType: "STANDARD", mealType: "MEAT", mealIds: [] }],
+      participants: [{ fullName: "Dítě", ageCategory: "AGE_4_7", pricingType: "FREE", mealType: "MEAT", mealIds: [] }],
     };
     expect(registrationSubmitSchema.safeParse(payload).success).toBe(false);
   });

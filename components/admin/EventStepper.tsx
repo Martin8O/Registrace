@@ -9,6 +9,7 @@ import { eventCreateSchema, type EventCreateInput } from '@/lib/validation'
 import type {
   EventDateDTO,
   EventMealDTO,
+  MealPricingRuleDTO,
   PricingRuleDTO,
 } from '@/modules/events'
 import type {
@@ -53,11 +54,15 @@ export type EventStepperEditData = {
   dates: EventDateDTO[]
   meals: EventMealDTO[]
   pricingRules: PricingRuleDTO[]
+  mealPricingRules: MealPricingRuleDTO[]
 }
 
 type CenterOption = { id: string; name_cs: string; name_en: string }
 
-type Pricing15 = {
+// One participation price row = one (age category × tier) cell. Children only
+// expose dailyRate + nightRate; the arrival/departure discounts are a 15+ concept
+// and stay 0 for them (the engine has no age branch — it just reads these 0s).
+type PricingRow = {
   dailyRate: number
   nightRate: number
   morningArrivalDiscount: number
@@ -65,7 +70,6 @@ type Pricing15 = {
   eveningArrivalDiscount: number
   earlyDepartureDiscount: number
 }
-type MealEdit = { price: number; excluded: boolean }
 
 const STEP_KEYS = [
   'basic',
@@ -84,8 +88,9 @@ const STATUSES: EventFormValues['status'][] = [
   'ARCHIVED',
 ]
 const CHILD_AGES: MockAgeCategory[] = ['AGE_0_3', 'AGE_4_7', 'AGE_8_14']
+const ALL_AGES: MockAgeCategory[] = [...CHILD_AGES, 'AGE_15_PLUS']
 const PRICING_TYPES: MockPricingType[] = ['STANDARD', 'SUPPORTED', 'SURPLUS']
-const PRICING15_FIELDS: (keyof Pricing15)[] = [
+const PRICING15_FIELDS: (keyof PricingRow)[] = [
   'dailyRate',
   'nightRate',
   'morningArrivalDiscount',
@@ -97,8 +102,14 @@ const PRICING15_FIELDS: (keyof Pricing15)[] = [
 // Children carry only a daily + night rate (arrival/departure discounts are a
 // 15+-only concept — mirrors the real BDC price list). Both default to 0 but are
 // admin-editable so the engine charges exactly what the price list says.
-type PricingChild = { dailyRate: number; nightRate: number }
-const CHILD_FIELDS: (keyof PricingChild)[] = ['dailyRate', 'nightRate']
+const CHILD_FIELDS: (keyof PricingRow)[] = ['dailyRate', 'nightRate']
+const fieldsForAge = (age: string): (keyof PricingRow)[] =>
+  age === 'AGE_15_PLUS' ? PRICING15_FIELDS : CHILD_FIELDS
+
+// Both price lists are keyed by the combination they price, so every lookup in
+// this file goes through one of these two helpers.
+const ruleKey = (age: string, type: string) => `${age}|${type}`
+const mealPriceKey = (meal: MealType, age: string, type: string) => `${meal}|${age}|${type}`
 
 const FIELD_STEP: Record<keyof EventFormValues, number> = {
   centerId: 0,
@@ -123,7 +134,7 @@ const FIELD_STEP: Record<keyof EventFormValues, number> = {
 // you arrive, the more of the day you miss, so the larger the discount. A
 // non-monotonic set makes a later arrival cost MORE — illogical (engine subtracts
 // each discount in modules/pricing).
-const DEFAULT_PRICING_15: Record<MockPricingType, Pricing15> = {
+const DEFAULT_PRICING_15: Record<MockPricingType, PricingRow> = {
   STANDARD: {
     dailyRate: 200,
     nightRate: 150,
@@ -150,6 +161,15 @@ const DEFAULT_PRICING_15: Record<MockPricingType, Pricing15> = {
   },
 }
 
+const ZERO_ROW: PricingRow = {
+  dailyRate: 0,
+  nightRate: 0,
+  morningArrivalDiscount: 0,
+  afternoonArrivalDiscount: 0,
+  eveningArrivalDiscount: 0,
+  earlyDepartureDiscount: 0,
+}
+
 const mealKey = (date: string, meal: MealType) => `${date}|${meal}`
 
 // Shift an ISO yyyy-mm-dd by n days (UTC), for the meal-deadline min bound.
@@ -163,53 +183,66 @@ function isoMinusDays(iso: string, n: number): string {
 // A draft with no registrations is fully editable (§0 decision 1 revised): the
 // 15+/child rates and per-day meals start from the event's saved values instead
 // of the catalogue defaults, so the admin tweaks rather than re-enters them.
-function initialPricing15(
+// Participation price list, one row per age × tier (12 rows). 15+ starts from the
+// catalogue defaults; children start at 0 across all three tiers, which is what
+// most events charge — an admin who does charge them (real BDC courses charge
+// 8–14) sets the rate per tier.
+function initialPricingRules(
   editData?: EventStepperEditData,
-): Record<MockPricingType, Pricing15> {
-  const base: Record<MockPricingType, Pricing15> = {
-    STANDARD: { ...DEFAULT_PRICING_15.STANDARD },
-    SUPPORTED: { ...DEFAULT_PRICING_15.SUPPORTED },
-    SURPLUS: { ...DEFAULT_PRICING_15.SURPLUS },
+): Record<string, PricingRow> {
+  const base: Record<string, PricingRow> = {}
+  for (const age of ALL_AGES) {
+    for (const type of PRICING_TYPES) {
+      base[ruleKey(age, type)] =
+        age === 'AGE_15_PLUS' ? { ...DEFAULT_PRICING_15[type] } : { ...ZERO_ROW }
+    }
   }
   for (const r of editData?.pricingRules ?? []) {
-    if (r.ageCategory === 'AGE_15_PLUS' && (PRICING_TYPES as string[]).includes(r.pricingType)) {
-      base[r.pricingType as MockPricingType] = {
-        dailyRate: r.dailyRate,
-        nightRate: r.nightRate,
-        morningArrivalDiscount: r.morningArrivalDiscount,
-        afternoonArrivalDiscount: r.afternoonArrivalDiscount,
-        eveningArrivalDiscount: r.eveningArrivalDiscount,
-        earlyDepartureDiscount: r.earlyDepartureDiscount,
+    const key = ruleKey(r.ageCategory, r.pricingType)
+    if (!(key in base)) continue
+    base[key] = {
+      dailyRate: r.dailyRate,
+      nightRate: r.nightRate,
+      morningArrivalDiscount: r.morningArrivalDiscount,
+      afternoonArrivalDiscount: r.afternoonArrivalDiscount,
+      eveningArrivalDiscount: r.eveningArrivalDiscount,
+      earlyDepartureDiscount: r.earlyDepartureDiscount,
+    }
+  }
+  return base
+}
+
+// Meal price list, one price per meal type × age × tier (36 cells). Every cell
+// defaults to the same catalogue price, so a new event bills meals exactly as
+// every event did before the matrix existed until the admin differentiates —
+// defaulting children to 0 here would quietly feed them free.
+function initialMealPrices(
+  editData?: EventStepperEditData,
+): Record<string, number> {
+  const base: Record<string, number> = {}
+  for (const meal of MEAL_TYPES) {
+    for (const age of ALL_AGES) {
+      for (const type of PRICING_TYPES) {
+        base[mealPriceKey(meal, age, type)] = DEFAULT_MEAL_PRICE[meal]
       }
     }
   }
-  return base
-}
-
-function initialPricingChild(
-  editData?: EventStepperEditData,
-): Record<string, PricingChild> {
-  const base: Record<string, PricingChild> = {
-    AGE_0_3: { dailyRate: 0, nightRate: 0 },
-    AGE_4_7: { dailyRate: 0, nightRate: 0 },
-    AGE_8_14: { dailyRate: 0, nightRate: 0 },
-  }
-  for (const r of editData?.pricingRules ?? []) {
-    if ((CHILD_AGES as string[]).includes(r.ageCategory)) {
-      base[r.ageCategory] = { dailyRate: r.dailyRate, nightRate: r.nightRate }
-    }
+  for (const r of editData?.mealPricingRules ?? []) {
+    const key = mealPriceKey(r.mealType as MealType, r.ageCategory, r.pricingType)
+    if (key in base) base[key] = r.price
   }
   return base
 }
 
-function initialMealEdits(editData?: EventStepperEditData): Record<string, MealEdit> {
-  const out: Record<string, MealEdit> = {}
+// Per-day availability only — the price moved to the event-wide list above.
+function initialMealExcluded(editData?: EventStepperEditData): Record<string, boolean> {
+  const out: Record<string, boolean> = {}
   if (!editData) return out
   const isoByDateId = new Map(editData.dates.map((d) => [d.id, d.date]))
   for (const m of editData.meals) {
     const date = isoByDateId.get(m.eventDateId)
     if (!date) continue
-    out[mealKey(date, m.mealType as MealType)] = { price: m.price, excluded: m.isClosed }
+    out[mealKey(date, m.mealType as MealType)] = m.isClosed
   }
   return out
 }
@@ -264,14 +297,14 @@ export default function EventStepper({
   // UI-only state (assembled into the payload on save). For a fully-editable
   // draft these prefill from the saved event; otherwise they're catalogue
   // defaults (create) and unused (locked edit renders read-only from editData).
-  const [pricing15, setPricing15] = useState<Record<MockPricingType, Pricing15>>(
-    () => initialPricing15(editData),
+  const [pricingRules, setPricingRules] = useState<Record<string, PricingRow>>(() =>
+    initialPricingRules(editData),
   )
-  const [pricingChild, setPricingChild] = useState<Record<string, PricingChild>>(
-    () => initialPricingChild(editData),
+  const [mealPrices, setMealPrices] = useState<Record<string, number>>(() =>
+    initialMealPrices(editData),
   )
-  const [mealEdits, setMealEdits] = useState<Record<string, MealEdit>>(() =>
-    initialMealEdits(editData),
+  const [mealExcluded, setMealExcluded] = useState<Record<string, boolean>>(() =>
+    initialMealExcluded(editData),
   )
 
   const {
@@ -323,18 +356,32 @@ export default function EventStepper({
   // locked edit shows them read-only and an existing event may already have started.
   const startInPast = !relationsLocked && startDate !== '' && startDate < todayISO()
 
-  function getMeal(date: string, meal: MealType): MealEdit {
-    return mealEdits[mealKey(date, meal)] ?? { price: DEFAULT_MEAL_PRICE[meal], excluded: false }
-  }
-  function patchMeal(date: string, meal: MealType, patch: Partial<MealEdit>) {
-    const key = mealKey(date, meal)
-    const current = getMeal(date, meal)
-    setMealEdits((prev) => ({ ...prev, [key]: { ...current, ...patch } }))
-  }
-  const updatePricing15 = (type: MockPricingType, patch: Partial<Pricing15>) =>
-    setPricing15((prev) => ({ ...prev, [type]: { ...prev[type], ...patch } }))
-  const updatePricingChild = (age: string, patch: Partial<PricingChild>) =>
-    setPricingChild((prev) => ({ ...prev, [age]: { ...prev[age]!, ...patch } }))
+  const isExcluded = (date: string, meal: MealType): boolean =>
+    mealExcluded[mealKey(date, meal)] ?? false
+  const toggleExcluded = (date: string, meal: MealType) =>
+    setMealExcluded((prev) => ({
+      ...prev,
+      [mealKey(date, meal)]: !(prev[mealKey(date, meal)] ?? false),
+    }))
+
+  const rule = (age: string, type: string): PricingRow =>
+    pricingRules[ruleKey(age, type)] ?? ZERO_ROW
+  const updateRule = (age: string, type: string, patch: Partial<PricingRow>) =>
+    setPricingRules((prev) => ({
+      ...prev,
+      [ruleKey(age, type)]: { ...(prev[ruleKey(age, type)] ?? ZERO_ROW), ...patch },
+    }))
+
+  const mealPrice = (meal: MealType, age: string, type: string): number =>
+    mealPrices[mealPriceKey(meal, age, type)] ?? 0
+  const updateMealPrice = (meal: MealType, age: string, type: string, price: number) =>
+    setMealPrices((prev) => ({ ...prev, [mealPriceKey(meal, age, type)]: price }))
+
+  // The stored price list of an event being viewed read-only (locked edit).
+  const storedMealPrice = (meal: MealType, age: string, type: string): number | undefined =>
+    (editData?.mealPricingRules ?? []).find(
+      (r) => r.mealType === meal && r.ageCategory === age && r.pricingType === type,
+    )?.price
 
   function fieldError(name: keyof EventFormValues): string | null {
     const err = errors[name]
@@ -350,8 +397,8 @@ export default function EventStepper({
     return t('eventForm.errors.required')
   }
 
-  // Assemble the full create payload: validated scalars + derived dates + the
-  // 15+ pricing rows + the per-age child rows (admin-set daily/night) + meals.
+  // Assemble the full create payload: validated scalars + derived dates + both
+  // price lists (participation 12 rows, meals 36 cells) + the per-day meal slots.
   function buildPayload(data: EventCreateInput) {
     return {
       ...data,
@@ -361,29 +408,50 @@ export default function EventStepper({
         label_en: d.label_en,
         sortOrder: i + 1,
       })),
-      pricingRules: [
-        ...CHILD_AGES.map((age) => ({
-          ageCategory: age,
-          pricingType: 'STANDARD' as const,
-          dailyRate: pricingChild[age]?.dailyRate ?? 0,
-          nightRate: pricingChild[age]?.nightRate ?? 0,
-          // Discounts are 15+-only (mirrors the BDC price list) — children: 0.
-          morningArrivalDiscount: 0,
-          afternoonArrivalDiscount: 0,
-          eveningArrivalDiscount: 0,
-          earlyDepartureDiscount: 0,
-        })),
-        ...PRICING_TYPES.map((type) => ({
-          ageCategory: 'AGE_15_PLUS' as const,
-          pricingType: type,
-          ...pricing15[type],
-        })),
-      ],
-      meals: days.flatMap((d) =>
-        MEAL_TYPES.map((meal) => {
-          const m = getMeal(d.date, meal)
-          return { date: d.date, mealType: meal, price: m.price, isClosed: m.excluded }
+      pricingRules: ALL_AGES.flatMap((age) =>
+        PRICING_TYPES.map((type) => {
+          const r = rule(age, type)
+          return {
+            ageCategory: age,
+            pricingType: type,
+            dailyRate: r.dailyRate,
+            nightRate: r.nightRate,
+            // Discounts are 15+-only (mirrors the BDC price list). Sending 0 for
+            // children is what keeps the engine free of any age branch.
+            ...(age === 'AGE_15_PLUS'
+              ? {
+                  morningArrivalDiscount: r.morningArrivalDiscount,
+                  afternoonArrivalDiscount: r.afternoonArrivalDiscount,
+                  eveningArrivalDiscount: r.eveningArrivalDiscount,
+                  earlyDepartureDiscount: r.earlyDepartureDiscount,
+                }
+              : {
+                  morningArrivalDiscount: 0,
+                  afternoonArrivalDiscount: 0,
+                  eveningArrivalDiscount: 0,
+                  earlyDepartureDiscount: 0,
+                }),
+          }
         }),
+      ),
+      mealPricingRules: MEAL_TYPES.flatMap((meal) =>
+        ALL_AGES.flatMap((age) =>
+          PRICING_TYPES.map((type) => ({
+            mealType: meal,
+            ageCategory: age,
+            pricingType: type,
+            price: mealPrice(meal, age, type),
+          })),
+        ),
+      ),
+      meals: days.flatMap((d) =>
+        MEAL_TYPES.map((meal) => ({
+          date: d.date,
+          mealType: meal,
+          // The legacy flat column mirrors the 15+/STANDARD cell (invariant 21).
+          price: mealPrice(meal, 'AGE_15_PLUS', 'STANDARD'),
+          isClosed: isExcluded(d.date, meal),
+        })),
       ),
     }
   }
@@ -653,125 +721,160 @@ export default function EventStepper({
             {relationsLocked ? t('eventForm.editLockedNote') : t('eventForm.pricing.intro')}
           </p>
 
-          {/* Children (0–14): admin-editable daily + night rate (default 0). The
-              engine charges exactly what's entered (no age is hard-coded to 0). */}
-          <div className="space-y-4">
-            {CHILD_AGES.map((age) => {
-              const stored = (editData?.pricingRules ?? []).find(
-                (r) => r.ageCategory === age,
-              )
-              return (
-                <div
-                  key={age}
-                  className="rounded-xl border border-neutral-200 bg-stone-50 p-4"
-                >
-                  <p className="mb-3 text-sm font-semibold text-primary-700">
-                    {t(`age.${age}`)}
-                  </p>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    {CHILD_FIELDS.map((f) =>
-                      relationsLocked ? (
-                        <PreviewRow
-                          key={f}
-                          label={t(`eventForm.fields.${f}`)}
-                          value={String(stored?.[f] ?? 0)}
-                        />
-                      ) : (
-                        <TextField key={f} label={t(`eventForm.fields.${f}`)}>
-                          <input
-                            type="number"
-                            min={0}
-                            className="bdc-input"
-                            value={pricingChild[age]![f]}
-                            onChange={(e) =>
-                              updatePricingChild(age, { [f]: Number(e.target.value) || 0 })
-                            }
-                          />
-                        </TextField>
-                      ),
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-            <p className="text-xs text-neutral-500">
-              {t('eventForm.pricing.childNote')}
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-neutral-900">
-              {t('age.AGE_15_PLUS')}
-            </h3>
-            {relationsLocked
-              ? // Read-only: the stored 15+ pricing rules (immutable after creation).
-                (editData?.pricingRules ?? [])
-                  .filter((r) => r.ageCategory === 'AGE_15_PLUS')
-                  .map((r) => (
-                    <div
-                      key={r.id}
-                      className="rounded-xl border border-neutral-200 bg-stone-50 p-4"
-                    >
-                      <p className="mb-3 text-sm font-semibold text-primary-700">
-                        {t(`pricingType.${r.pricingType}`)}
-                      </p>
-                      <div className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
-                        {PRICING15_FIELDS.map((f) => (
-                          <PreviewRow
-                            key={f}
-                            label={t(`eventForm.fields.${f}`)}
-                            value={String(r[f])}
-                          />
-                        ))}
+          {/* One block per age category, each carrying all three tiers. Children
+              expose only the daily + night rate; 15+ adds the arrival/departure
+              discounts. The engine charges exactly what's entered here. */}
+          <div className="space-y-5">
+            {ALL_AGES.map((age) => (
+              <div
+                key={age}
+                className="rounded-xl border border-neutral-200 bg-stone-50 p-4"
+              >
+                <h3 className="text-sm font-semibold text-neutral-900">{t(`age.${age}`)}</h3>
+                <div className="mt-3 space-y-3">
+                  {PRICING_TYPES.map((type) => {
+                    const stored = (editData?.pricingRules ?? []).find(
+                      (r) => r.ageCategory === age && r.pricingType === type,
+                    )
+                    return (
+                      <div
+                        key={type}
+                        className="rounded-lg border border-neutral-200 bg-white p-3"
+                      >
+                        <p className="mb-2 text-sm font-semibold text-primary-700">
+                          {t(`pricingType.${type}`)}
+                        </p>
+                        <div
+                          className={`grid grid-cols-1 gap-x-6 ${
+                            relationsLocked ? 'gap-y-1' : 'gap-y-4'
+                          } sm:grid-cols-2 lg:grid-cols-3`}
+                        >
+                          {fieldsForAge(age).map((f) =>
+                            relationsLocked ? (
+                              <PreviewRow
+                                key={f}
+                                label={t(`eventForm.fields.${f}`)}
+                                value={String(stored?.[f] ?? 0)}
+                              />
+                            ) : (
+                              <TextField key={f} label={t(`eventForm.fields.${f}`)}>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  className="bdc-input"
+                                  value={rule(age, type)[f]}
+                                  onChange={(e) =>
+                                    updateRule(age, type, {
+                                      [f]: Number(e.target.value) || 0,
+                                    })
+                                  }
+                                />
+                              </TextField>
+                            ),
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))
-              : PRICING_TYPES.map((type) => (
-                  <div
-                    key={type}
-                    className="rounded-xl border border-neutral-200 bg-stone-50 p-4"
-                  >
-                    <p className="mb-3 text-sm font-semibold text-primary-700">
-                      {t(`pricingType.${type}`)}
-                    </p>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {PRICING15_FIELDS.map((f) => (
-                        <TextField key={f} label={t(`eventForm.fields.${f}`)}>
-                          <input
-                            type="number"
-                            min={0}
-                            className="bdc-input"
-                            value={pricing15[type][f]}
-                            onChange={(e) =>
-                              updatePricing15(type, { [f]: Number(e.target.value) || 0 })
-                            }
-                          />
-                        </TextField>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+            <p className="text-xs text-neutral-500">{t('eventForm.pricing.childNote')}</p>
           </div>
         </section>
       )}
 
-      {/* ── Step 4 · Meals (all days × B/L/D, default prices, excludable) ── */}
+      {/* ── Step 4 · Meals: one price list for the event + per-day availability ── */}
       {step === 3 && (
-        <section className="section-card space-y-5">
+        <section className="section-card space-y-6">
           <StepHeading>{t('eventForm.steps.meals')}</StepHeading>
           <p className="text-sm text-neutral-500">
             {relationsLocked ? t('eventForm.editLockedNote') : t('eventForm.meals.intro')}
           </p>
 
-          {relationsLocked ? (
-            // Read-only: the stored per-day meals (immutable after creation —
-            // existing ParticipantMeal rows reference these EventMeal ids).
-            <div className="space-y-4">
-              {(editData?.dates ?? []).map((d) => {
-                const dayMeals = (editData?.meals ?? []).filter(
-                  (m) => m.eventDateId === d.id,
-                )
-                return (
+          {/* Price list — meal type × (age category × tier). Set once for the whole
+              event; the same prices apply on every day it is served. */}
+          <div>
+            <h3 className="text-sm font-semibold text-neutral-900">
+              {t('eventForm.meals.priceListTitle')}
+            </h3>
+            <p className="mt-1 text-xs text-neutral-500">
+              {t('eventForm.meals.priceListNote')}
+            </p>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[34rem] border-collapse text-sm">
+                <thead>
+                  <tr>
+                    <th className="border-b border-neutral-200 px-2 py-2 text-left font-semibold text-neutral-700">
+                      {t('eventForm.pricing.ageCategory')}
+                    </th>
+                    <th className="border-b border-neutral-200 px-2 py-2 text-left font-semibold text-neutral-700">
+                      {t('eventForm.pricing.pricingType')}
+                    </th>
+                    {MEAL_TYPES.map((meal) => (
+                      <th
+                        key={meal}
+                        className="border-b border-neutral-200 px-2 py-2 text-left font-semibold text-neutral-700"
+                      >
+                        {t(`mealType.${meal}`)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ALL_AGES.map((age) =>
+                    PRICING_TYPES.map((type, ti) => (
+                      <tr
+                        key={`${age}|${type}`}
+                        className={ti === 0 ? 'border-t border-neutral-200' : ''}
+                      >
+                        <td className="px-2 py-1.5 align-middle text-neutral-800">
+                          {ti === 0 ? (
+                            <span className="font-semibold text-primary-700">
+                              {t(`age.${age}`)}
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="px-2 py-1.5 align-middle text-neutral-600">
+                          {t(`pricingType.${type}`)}
+                        </td>
+                        {MEAL_TYPES.map((meal) => (
+                          <td key={meal} className="px-2 py-1.5">
+                            {relationsLocked ? (
+                              <span className="font-mono tabular-nums text-primary-600">
+                                {storedMealPrice(meal, age, type) ?? 0}
+                              </span>
+                            ) : (
+                              <input
+                                type="number"
+                                min={0}
+                                aria-label={`${t(`age.${age}`)} · ${t(`pricingType.${type}`)} · ${t(`mealType.${meal}`)}`}
+                                className="bdc-input w-24"
+                                value={mealPrice(meal, age, type)}
+                                onChange={(e) =>
+                                  updateMealPrice(meal, age, type, Number(e.target.value) || 0)
+                                }
+                              />
+                            )}
+                          </td>
+                        ))}
+                      </tr>
+                    )),
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Per-day availability — which slots the event actually serves. This is
+              what fixes the event's first and last meal. */}
+          <div>
+            <h3 className="text-sm font-semibold text-neutral-900">
+              {t('eventForm.meals.availabilityTitle')}
+            </h3>
+            {relationsLocked ? (
+              <div className="mt-3 space-y-3">
+                {(editData?.dates ?? []).map((d) => (
                   <div
                     key={d.id}
                     className="rounded-xl border border-neutral-200 bg-stone-50 p-4"
@@ -780,102 +883,81 @@ export default function EventStepper({
                       {t('eventForm.meals.forDate')}:{' '}
                       {locale === 'cs' ? d.label_cs : d.label_en}
                     </p>
-                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                      {dayMeals.map((m) => (
-                        <div
-                          key={m.id}
-                          className={`rounded-lg border border-neutral-200 bg-white p-3 ${
-                            m.isClosed ? 'opacity-60' : ''
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-neutral-800">
-                              {t(`mealType.${m.mealType}`)}
-                            </span>
-                            {m.isClosed && (
-                              <span className="badge bg-neutral-200 text-neutral-600 border border-neutral-300">
-                                {t('eventForm.meals.excluded')}
-                              </span>
-                            )}
-                          </div>
-                          <p className="price-amount mt-2">
-                            {m.isClosed ? '—' : m.price}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          ) : days.length === 0 ? (
-            <p className="text-sm text-neutral-500">{t('eventForm.meals.noDates')}</p>
-          ) : (
-            <div className="space-y-4">
-              {days.map((d) => (
-                <div
-                  key={d.date}
-                  className="rounded-xl border border-neutral-200 bg-stone-50 p-4"
-                >
-                  <p className="text-sm font-semibold text-neutral-900">
-                    {t('eventForm.meals.forDate')}:{' '}
-                    {locale === 'cs' ? d.label_cs : d.label_en}
-                  </p>
-                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    {MEAL_TYPES.map((meal) => {
-                      const m = getMeal(d.date, meal)
-                      return (
-                        <div
-                          key={meal}
-                          className={`rounded-lg border bg-white p-3 ${
-                            m.excluded ? 'border-neutral-200 opacity-60' : 'border-neutral-200'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-neutral-800">
-                              {t(`mealType.${meal}`)}
-                            </span>
-                            {m.excluded && (
-                              <span className="badge bg-neutral-200 text-neutral-600 border border-neutral-300">
-                                {t('eventForm.meals.excluded')}
-                              </span>
-                            )}
-                          </div>
-                          <input
-                            type="number"
-                            min={0}
-                            disabled={m.excluded}
-                            className="bdc-input mt-2"
-                            value={m.price}
-                            onChange={(e) =>
-                              patchMeal(d.date, meal, {
-                                price: Number(e.target.value) || 0,
-                              })
-                            }
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              patchMeal(d.date, meal, { excluded: !m.excluded })
-                            }
-                            className={`mt-2 text-sm font-medium ${
-                              m.excluded
-                                ? 'text-primary-600 hover:text-primary-700'
-                                : 'text-danger-600 hover:text-danger-700'
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {(editData?.meals ?? [])
+                        .filter((m) => m.eventDateId === d.id)
+                        .map((m) => (
+                          <span
+                            key={m.id}
+                            className={`badge border ${
+                              m.isClosed
+                                ? 'border-neutral-300 bg-neutral-200 text-neutral-600'
+                                : 'border-primary-200 bg-primary-50 text-primary-700'
                             }`}
                           >
-                            {m.excluded
-                              ? t('eventForm.meals.include')
-                              : t('eventForm.meals.exclude')}
-                          </button>
-                        </div>
-                      )
-                    })}
+                            {t(`mealType.${m.mealType}`)}
+                            {m.isClosed ? ` · ${t('eventForm.meals.excluded')}` : ''}
+                          </span>
+                        ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            ) : days.length === 0 ? (
+              <p className="mt-3 text-sm text-neutral-500">{t('eventForm.meals.noDates')}</p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                {days.map((d) => (
+                  <div
+                    key={d.date}
+                    className="rounded-xl border border-neutral-200 bg-stone-50 p-4"
+                  >
+                    <p className="text-sm font-semibold text-neutral-900">
+                      {t('eventForm.meals.forDate')}:{' '}
+                      {locale === 'cs' ? d.label_cs : d.label_en}
+                    </p>
+                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      {MEAL_TYPES.map((meal) => {
+                        const excluded = isExcluded(d.date, meal)
+                        return (
+                          <div
+                            key={meal}
+                            className={`rounded-lg border border-neutral-200 bg-white p-3 ${
+                              excluded ? 'opacity-60' : ''
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-medium text-neutral-800">
+                                {t(`mealType.${meal}`)}
+                              </span>
+                              {excluded && (
+                                <span className="badge border border-neutral-300 bg-neutral-200 text-neutral-600">
+                                  {t('eventForm.meals.excluded')}
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => toggleExcluded(d.date, meal)}
+                              className={`mt-2 text-sm font-medium ${
+                                excluded
+                                  ? 'text-primary-600 hover:text-primary-700'
+                                  : 'text-danger-600 hover:text-danger-700'
+                              }`}
+                            >
+                              {excluded
+                                ? t('eventForm.meals.include')
+                                : t('eventForm.meals.exclude')}
+                            </button>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </section>
       )}
 
@@ -983,15 +1065,31 @@ export default function EventStepper({
           </PreviewBlock>
 
           <PreviewBlock title={t('eventForm.preview.pricing')}>
-            {PRICING_TYPES.map((type) => (
-              <PreviewRow
-                key={type}
-                label={`${t('age.AGE_15_PLUS')} · ${t(`pricingType.${type}`)}`}
-                value={PRICING15_FIELDS.map(
-                  (f) => `${t(`eventForm.fields.${f}`)} ${pricing15[type][f]}`,
-                ).join(' · ')}
-              />
-            ))}
+            {ALL_AGES.flatMap((age) =>
+              PRICING_TYPES.map((type) => (
+                <PreviewRow
+                  key={`${age}|${type}`}
+                  label={`${t(`age.${age}`)} · ${t(`pricingType.${type}`)}`}
+                  value={fieldsForAge(age)
+                    .map((f) => `${t(`eventForm.fields.${f}`)} ${rule(age, type)[f]}`)
+                    .join(' · ')}
+                />
+              )),
+            )}
+          </PreviewBlock>
+
+          <PreviewBlock title={t('eventForm.preview.mealPrices')}>
+            {ALL_AGES.flatMap((age) =>
+              PRICING_TYPES.map((type) => (
+                <PreviewRow
+                  key={`${age}|${type}`}
+                  label={`${t(`age.${age}`)} · ${t(`pricingType.${type}`)}`}
+                  value={MEAL_TYPES.map(
+                    (meal) => `${t(`mealType.${meal}`)} ${mealPrice(meal, age, type)}`,
+                  ).join(' · ')}
+                />
+              )),
+            )}
           </PreviewBlock>
 
           <PreviewBlock title={t('eventForm.preview.meals')}>
@@ -1002,12 +1100,11 @@ export default function EventStepper({
                 <PreviewRow
                   key={d.date}
                   label={locale === 'cs' ? d.label_cs : d.label_en}
-                  value={MEAL_TYPES.map((meal) => {
-                    const m = getMeal(d.date, meal)
-                    return m.excluded
+                  value={MEAL_TYPES.map((meal) =>
+                    isExcluded(d.date, meal)
                       ? `${t(`mealType.${meal}`)} —`
-                      : `${t(`mealType.${meal}`)} ${m.price}`
-                  }).join(' · ')}
+                      : t(`mealType.${meal}`),
+                  ).join(' · ')}
                 />
               ))
             )}

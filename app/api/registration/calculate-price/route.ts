@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
       mealIds: p.mealIds,
     })),
     pricingRules: event.pricingRules,
+    mealPricingRules: event.mealPricingRules,
     meals: event.meals,
     eventDates: event.dates,
     arrivalDateId: result.data.arrivalDateId,

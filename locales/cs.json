@@ -17,7 +17,6 @@
     "gdpr_consent": "Souhlasím se zpracováním osobních údajů pro účely této registrace.",
     "gdpr_details": "Podrobné a povinné informace najdete v <link>zásadách ochrany osobních údajů</link>.",
     "total_price": "Celková cena",
-    "add_participant": "Přidat účastníka",
     "remove_participant": "Odebrat účastníka",
     "register": "Zaregistrovat",
     "registration_success": "Registrace byla úspěšně odeslána",
@@ -88,7 +87,8 @@
       "rights_title": "Vaše práva",
       "rights_body": "Máte právo na přístup ke svým údajům, jejich opravu, výmaz, omezení zpracování, přenositelnost a právo vznést námitku (čl. 15–21 GDPR). Své žádosti zasílejte na info@bdc.cz.",
       "close": "Zavřít"
-    }
+    },
+    "add_another_participant": "Přidat dalšího účastníka"
   },
   "home": {
     "heading": "Registrace na akce BDC",
@@ -107,22 +107,32 @@
     "pricingModal": {
       "close": "Zavřít",
       "title": "Přehled cen",
+      "stayTitle": "Cena za účast",
+      "mealsTitle": "Cena za stravu",
+      "discountsTitle": "Slevy",
+      "discountsNote": "Slevy se vztahují na kategorii 15 let a více.",
+      "categoryColumn": "Kategorie",
+      "free": "Bez poplatku.",
+      "dailyRateShort": "Denní sazba",
+      "pricePerNightShort": "Za noc",
       "breakfast": "Snídaně",
       "lunch": "Oběd",
       "dinner": "Večeře",
-      "dailyRate": {
-        "age03": "Denní sazba věk 0–3",
-        "age47": "Denní sazba věk 4–7",
-        "age814": "Denní sazba věk 8–14",
-        "age15standard": "Denní sazba 15+ standardní",
-        "age15supported": "Denní sazba 15+ podporovaná",
-        "age15surplus": "Denní sazba 15+ nadbytek"
+      "age": {
+        "age03": "0–3 roky",
+        "age47": "4–7 let",
+        "age814": "8–14 let",
+        "age15": "15 let a více"
+      },
+      "tier": {
+        "standard": "standardní",
+        "supported": "podporovaná",
+        "surplus": "nadbytek"
       },
       "morningArrivalDiscount": "Sleva za dopolední příjezd (15+)",
       "afternoonArrivalDiscount": "Sleva za odpolední příjezd (15+)",
       "eveningArrivalDiscount": "Sleva za večerní příjezd (15+)",
-      "earlyDepartureDiscount": "Sleva za brzký odjezd (15+)",
-      "pricePerNight": "Cena za noc (15+)"
+      "earlyDepartureDiscount": "Sleva za brzký odjezd (15+)"
     },
     "registrationFormPlaceholder": "Registrační formulář — připravuje se"
   },
@@ -391,12 +401,15 @@
         "noDeadline": "Bez termínu"
       },
       "meals": {
-        "intro": "Každý den akce nabízí snídani, oběd a večeři. Cenu lze upravit; jídlo, které není v nabídce, vyřaďte — tím se určí počáteční a koncové jídlo akce.",
+        "intro": "Ceník jídla se zadává jednou pro celou akci. U jednotlivých dnů pak vyřaďte jídlo, které se nepodává — tím se určí počáteční a koncové jídlo akce.",
         "noDates": "Nejprve zvolte datum začátku a konce v kroku Termín.",
         "forDate": "Den",
         "exclude": "Vyřadit",
         "include": "Zařadit zpět",
-        "excluded": "Není v nabídce"
+        "excluded": "Není v nabídce",
+        "priceListTitle": "Ceník jídla",
+        "priceListNote": "Ceny platí pro celou akci — u každého dne se pak už jen určuje, zda se jídlo podává. Výchozí cena je pro všechny kategorie stejná; snižte ji tam, kde má platit jiná (např. děti nebo podporovaná hladina).",
+        "availabilityTitle": "Nabídka po dnech"
       },
       "preview": {
         "intro": "Zkontrolujte zadané údaje.",
@@ -407,7 +420,8 @@
         "settings": "Nastavení",
         "noPricing": "Žádná cenová pravidla.",
         "noMeals": "Žádná jídla.",
-        "notSet": "—"
+        "notSet": "—",
+        "mealPrices": "Ceník jídla"
       },
       "errors": {
         "required": "Povinné pole",

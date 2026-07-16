@@ -38,7 +38,11 @@ export default async function EventPage({
       )}
 
       <div className="mt-4 flex items-center justify-end">
-        <PricingInfoButton meals={event.meals} pricingRules={event.pricingRules} />
+        <PricingInfoButton
+          meals={event.meals}
+          pricingRules={event.pricingRules}
+          mealPricingRules={event.mealPricingRules}
+        />
       </div>
 
       <RegistrationForm
@@ -47,6 +51,7 @@ export default async function EventPage({
         meals={event.meals}
         centers={centers}
         pricingRules={event.pricingRules}
+        mealPricingRules={event.mealPricingRules}
         mealRegistrationDeadline={event.mealRegistrationDeadline}
       />
     </div>

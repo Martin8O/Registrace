@@ -7,7 +7,13 @@
 
 import { prisma } from "@/lib/db";
 import { calculatePricing } from "@/modules/pricing";
-import { isPubliclyVisible, type EventMealDTO, type PricingRuleDTO } from "@/modules/events";
+import { resolveMealPrice } from "@/lib/utils/mealPrice";
+import {
+  isPubliclyVisible,
+  type EventMealDTO,
+  type MealPricingRuleDTO,
+  type PricingRuleDTO,
+} from "@/modules/events";
 import { sendRegistrationConfirmation, type ConfirmationEmailData } from "@/lib/email";
 import { logAuditEvent } from "@/lib/audit";
 import type { AdminContext } from "@/modules/auth";
@@ -113,6 +119,7 @@ export async function submitRegistration(
       dates: { orderBy: { sortOrder: "asc" } },
       meals: true,
       pricingRules: true,
+      mealPricingRules: true,
     },
   });
   if (!event || !isPubliclyVisible({ status: event.status, endDate: event.endDate })) {
@@ -178,6 +185,7 @@ export async function submitRegistration(
       mealIds: p.mealIds,
     })),
     pricingRules: event.pricingRules,
+    mealPricingRules: event.mealPricingRules,
     meals: event.meals,
     eventDates: event.dates.map((d) => ({
       id: d.id,
@@ -259,9 +267,12 @@ export async function submitRegistration(
             registrationId: registration.id,
             fullName: p.fullName,
             ageCategory: p.ageCategory,
-            // pricingType only applies to 15+ (invariant 15); the column is
-            // non-nullable so children keep the STANDARD default.
-            pricingType: p.ageCategory === "AGE_15_PLUS" ? (p.pricingType ?? "STANDARD") : "STANDARD",
+            // The tier applies at every age since M37 (revised invariant 15), so a
+            // child's chosen tier is persisted as-is instead of being flattened to
+            // STANDARD. It is what the engine priced them at, and what the meal
+            // price list is keyed by — storing anything else would make the stored
+            // row disagree with the price charged.
+            pricingType: p.pricingType ?? "STANDARD",
             mealType: p.mealType,
             participationPrice: priced?.participationPrice ?? 0,
             mealPrice: priced?.mealPrice ?? 0,
@@ -278,9 +289,12 @@ export async function submitRegistration(
             data: selectedMeals.map((m) => ({
               participantId: participant.id,
               eventMealId: m.id,
-              // Snapshot of the meal's price at registration time (factual
-              // data, not computed pricing — the P5 engine works on top).
-              price: m.price,
+              // Snapshot of what THIS participant was charged for this meal at
+              // registration time — resolved through the same lookup the engine
+              // used, so the row agrees with the participant's mealPrice and with
+              // totalPrice. The flat EventMeal.price is now only one age/tier's
+              // price, so storing it here would misstate every other one.
+              price: resolveMealPrice(m.mealType, p, event.mealPricingRules, m.price),
             })),
           });
         }
@@ -321,7 +335,8 @@ export async function submitRegistration(
       participants: participantsInput.map((p, i) => ({
         fullName: p.fullName,
         ageCategory: p.ageCategory,
-        pricingType: p.ageCategory === "AGE_15_PLUS" ? (p.pricingType ?? "STANDARD") : null,
+        // Shown for every age now that children have tiers too (invariant 15).
+        pricingType: p.pricingType ?? "STANDARD",
         mealType: p.mealType,
         subtotal: pricing.participants[i]?.subtotal ?? 0,
         meals: [...new Set(p.mealIds)]
@@ -483,6 +498,7 @@ export type AdminRegistrationDetailDTO = {
   // "Informace o cenách" popup as the public event page (price-list check).
   eventMeals: EventMealDTO[];
   eventPricingRules: PricingRuleDTO[];
+  eventMealPricingRules: MealPricingRuleDTO[];
   participants: AdminRegistrationDetailParticipant[];
 };
 
@@ -537,7 +553,9 @@ export async function getRegistrationForDetail(
   const r = await prisma.registration.findFirst({
     where: { id, deletedAt: null, event: { ...ownEventFilter(ctx) } },
     include: {
-      event: { include: { center: true, meals: true, pricingRules: true } },
+      event: {
+        include: { center: true, meals: true, pricingRules: true, mealPricingRules: true },
+      },
       arrivalDate: true,
       departureDate: true,
       participants: {
@@ -586,6 +604,13 @@ export async function getRegistrationForDetail(
       afternoonArrivalDiscount: pr.afternoonArrivalDiscount,
       eveningArrivalDiscount: pr.eveningArrivalDiscount,
       earlyDepartureDiscount: pr.earlyDepartureDiscount,
+    })),
+    eventMealPricingRules: r.event.mealPricingRules.map((mr) => ({
+      id: mr.id,
+      mealType: mr.mealType,
+      ageCategory: mr.ageCategory,
+      pricingType: mr.pricingType,
+      price: mr.price,
     })),
     participants: r.participants.map((p) => ({
       fullName: p.fullName,

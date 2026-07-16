@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-101%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-117%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -207,7 +207,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 101 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 117 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -588,14 +588,16 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **101 Vitest tests** across 8 files, with **no database required**:
+`npm test` runs **117 Vitest tests** across 8 files, with **no database required**:
 
-- **Pricing engine** (29) — the arithmetic against the hand-derived BDC formula, grouped by
+- **Pricing engine** (43) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
-  subtracted, accommodation nights, meal pricing, defensive behaviour (missing rule, degenerate
-  stay, over-large discount → `0`, never a throw) and the full aggregated result.
-- **Validation** (12) — the Zod submit/price schemas (honeypot, participant caps, tier rules,
-  diet).
+  subtracted, accommodation nights, meal pricing per age × tier (a child's lunch priced
+  differently from an adult's, and the tier moving both), the flat-price fallback that keeps
+  pre-matrix events billing exactly what they always did, defensive behaviour (missing rule,
+  degenerate stay, over-large discount → `0`, never a throw) and the full aggregated result.
+- **Validation** (13) — the Zod submit/price schemas (honeypot, participant caps, the tier
+  accepted at every age but still bounded by its enum, diet).
 - **Submit service** (9) — control-flow with a **mocked Prisma** (`vi.mock('@/lib/db')`) while
   keeping the real engine, so `totalPrice` is asserted end-to-end.
 - **Export & auth** (7 + 4) — the registration-export scoping (including the cross-centre IDOR
@@ -606,7 +608,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   letters and non-ASCII symbols must **not** tick a rule, or the checklist would green-light a
   password Supabase rejects), that the checklist and the submit gate can never disagree, and
   that every rule is labelled in both locales.
-- **Docs guard** (8) — the counts on this page. Every number above is parsed back out of the
+- **Docs guard** (9) — the counts on this page. Every number above is parsed back out of the
   README and checked against the test files (via the TypeScript AST, so `it.each` expands and
   regex literals aren't mistaken for code), as are the badge, the tech-stack row and
   `AGENTS.md`. It exists because "a 22-scenario matrix" outlived the matrix by two audits:

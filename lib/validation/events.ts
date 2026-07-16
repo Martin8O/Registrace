@@ -61,8 +61,18 @@ const pricingRuleInputSchema = z.object({
 const eventMealInputSchema = z.object({
   date: z.string().min(1).max(40), // ISO yyyy-mm-dd — matched to the created EventDate
   mealType: z.enum(mealTypeValues),
+  // Legacy flat price, kept in sync with the 15+/STANDARD meal rule (invariant 21).
   price: z.number().int().min(0),
   isClosed: z.boolean(),
+});
+
+// One cell of the event's meal price list: mealType × ageCategory × tier → price.
+// A complete list is 3 × 4 × 3 = 36 rows; the admin form always sends all of them.
+const mealPricingRuleInputSchema = z.object({
+  mealType: z.enum(mealTypeValues),
+  ageCategory: z.enum(ageCategoryValues),
+  pricingType: z.enum(pricingTypeValues),
+  price: z.number().int().min(0),
 });
 
 // ─── Date order refinement ────────────────────────────────────────────────────
@@ -124,6 +134,7 @@ export const eventCreateWithRelationsSchema = z
     ...eventFields,
     dates: z.array(eventDateInputSchema).min(1),
     pricingRules: z.array(pricingRuleInputSchema),
+    mealPricingRules: z.array(mealPricingRuleInputSchema),
     meals: z.array(eventMealInputSchema),
   })
   .superRefine((data, ctx) => {
@@ -139,6 +150,7 @@ export const eventUpdateSchema = z
     ...eventFields,
     dates: z.array(eventDateInputSchema).optional(),
     pricingRules: z.array(pricingRuleInputSchema).optional(),
+    mealPricingRules: z.array(mealPricingRuleInputSchema).optional(),
     meals: z.array(eventMealInputSchema).optional(),
   })
   .partial()

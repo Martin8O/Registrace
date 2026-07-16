@@ -48,6 +48,16 @@ export type PricingRuleDTO = {
   earlyDepartureDiscount: number;
 };
 
+// One cell of the event's meal price list: what `mealType` costs a participant of
+// this age category on this pricing tier (invariant 21).
+export type MealPricingRuleDTO = {
+  id: string;
+  mealType: MealTypeValue;
+  ageCategory: string;
+  pricingType: string;
+  price: number; // whole CZK (invariant 10)
+};
+
 export type PublishedEventDTO = {
   id: string;
   title_cs: string;
@@ -73,6 +83,7 @@ export type EventDetailDTO = PublishedEventDTO & {
   dates: EventDateDTO[];
   meals: EventMealDTO[];
   pricingRules: PricingRuleDTO[];
+  mealPricingRules: MealPricingRuleDTO[];
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -196,6 +207,7 @@ const eventDetailInclude = {
   dates: { orderBy: { sortOrder: "asc" } },
   meals: true,
   pricingRules: true,
+  mealPricingRules: true,
 } satisfies Prisma.EventInclude;
 
 type EventDetailRow = Prisma.EventGetPayload<{ include: typeof eventDetailInclude }>;
@@ -244,6 +256,13 @@ function toEventDetailDTO(event: EventDetailRow): EventDetailDTO {
       afternoonArrivalDiscount: r.afternoonArrivalDiscount,
       eveningArrivalDiscount: r.eveningArrivalDiscount,
       earlyDepartureDiscount: r.earlyDepartureDiscount,
+    })),
+    mealPricingRules: event.mealPricingRules.map((r) => ({
+      id: r.id,
+      mealType: r.mealType,
+      ageCategory: r.ageCategory,
+      pricingType: r.pricingType,
+      price: r.price,
     })),
   };
 }
@@ -431,6 +450,12 @@ export async function createEvent(
       });
     }
 
+    if (input.mealPricingRules.length > 0) {
+      await tx.mealPricingRule.createMany({
+        data: input.mealPricingRules.map((r) => ({ eventId: event.id, ...r })),
+      });
+    }
+
     // Batch the meals into one INSERT (P1 audit M5 — was a per-meal create loop).
     // Meals whose date isn't an event day are skipped.
     const mealData = input.meals.flatMap((m) => {
@@ -608,7 +633,10 @@ export async function updateEvent(
   // draft; a locked event ignores centre/dates/relations even if they're sent.
   const relationsEditable = status === "DRAFT" && registrationCount === 0;
   const hasRelations =
-    input.dates !== undefined && input.pricingRules !== undefined && input.meals !== undefined;
+    input.dates !== undefined &&
+    input.pricingRules !== undefined &&
+    input.mealPricingRules !== undefined &&
+    input.meals !== undefined;
   if (relationsEditable && hasRelations) {
     return replaceDraftEventRelations(id, input, before, ctx);
   }
@@ -670,6 +698,7 @@ async function replaceDraftEventRelations(
 
   const dates = input.dates ?? [];
   const pricingRules = input.pricingRules ?? [];
+  const mealPricingRules = input.mealPricingRules ?? [];
   const meals = input.meals ?? [];
   const dayLabels = new Map(dates.map((d) => [d.date, { cs: d.label_cs, en: d.label_en }]));
 
@@ -700,6 +729,7 @@ async function replaceDraftEventRelations(
     // 2) Wipe old relations (EventMeal first — it references EventDate).
     await tx.eventMeal.deleteMany({ where: { eventId: id } });
     await tx.pricingRule.deleteMany({ where: { eventId: id } });
+    await tx.mealPricingRule.deleteMany({ where: { eventId: id } });
     await tx.eventDate.deleteMany({ where: { eventId: id } });
 
     // 3) Recreate them (mirrors createEvent's relation writes).
@@ -719,6 +749,11 @@ async function replaceDraftEventRelations(
     if (pricingRules.length > 0) {
       await tx.pricingRule.createMany({
         data: pricingRules.map((r) => ({ eventId: id, ...r })),
+      });
+    }
+    if (mealPricingRules.length > 0) {
+      await tx.mealPricingRule.createMany({
+        data: mealPricingRules.map((r) => ({ eventId: id, ...r })),
       });
     }
     const mealData = meals.flatMap((m) => {
