@@ -200,7 +200,11 @@
       "ruleSymbol": "speciální znak (např. ! ? # @ - _ *)",
       "met": "splněno",
       "notMet": "zatím nesplněno",
-      "notMetSummary": "Heslo zatím nesplňuje všechny požadavky."
+      "notMetSummary": "Heslo zatím nesplňuje všechny požadavky.",
+      "show": "Zobrazit heslo",
+      "hide": "Skrýt heslo",
+      "match": "Hesla se shodují",
+      "noMatch": "Hesla se neshodují"
     },
     "dashboard": {
       "title": "Přehled",

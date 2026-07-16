@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-91%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-93%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -201,7 +201,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 91 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 93 unit / integration tests |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
 Exact versions live in [`package.json`](package.json). **No Docker.**
@@ -395,7 +395,8 @@ Validation errors return a canonical `400 { error, details }` (Zod issues) via t
   `OWNER_EMAILS` fallback) may create/modify super-admins. Both lists empty → nobody can
   (fail-closed).
 - **Admin password policy** — at least 12 characters with a lowercase letter, an uppercase
-  letter, a digit and a symbol, shown as a live checklist while the password is typed
+  letter, a digit and a symbol, shown as a live checklist while the password is typed, with a
+  per-field show/hide toggle and a live match indicator on the confirm field
   (`lib/validation/password`). Note the split, which mirrors the pricing rule: admin passwords
   are set by the browser calling Supabase Auth **directly**, with no route of ours in between,
   so the checklist is **informational** and the authoritative gate is the policy configured in
@@ -566,7 +567,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **91 Vitest tests** across 7 files, with **no database required**:
+`npm test` runs **93 Vitest tests** across 7 files, with **no database required**:
 
 - **Pricing engine** — unit tests over the arithmetic and a 22-scenario matrix checked against
   the hand-derived BDC formula.

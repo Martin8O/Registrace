@@ -8,6 +8,8 @@ import { createClient } from '@/lib/supabase/client'
 import { authErrorKey } from '@/lib/auth-errors'
 import { isPasswordValid } from '@/lib/validation/password'
 import { PasswordRequirements } from '@/components/admin/PasswordRequirements'
+import { PasswordInput } from '@/components/admin/PasswordInput'
+import { PasswordMatch } from '@/components/admin/PasswordMatch'
 
 // "Set your password" page — reached ONLY after /admin/auth/confirm has verified
 // the invite/reset token server-side and put the token user's session in the
@@ -135,14 +137,11 @@ export default function SetPasswordPage() {
                 <label className="form-label" htmlFor="password">
                   {t('password')}
                 </label>
-                <input
+                <PasswordInput
                   id="password"
-                  type="password"
-                  autoComplete="new-password"
-                  className="bdc-input"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  aria-describedby="password-requirements"
+                  onChange={setPassword}
+                  describedBy="password-requirements"
                   required
                 />
                 <div id="password-requirements" className="mt-2">
@@ -154,15 +153,8 @@ export default function SetPasswordPage() {
                 <label className="form-label" htmlFor="confirm">
                   {t('confirm')}
                 </label>
-                <input
-                  id="confirm"
-                  type="password"
-                  autoComplete="new-password"
-                  className="bdc-input"
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                  required
-                />
+                <PasswordInput id="confirm" value={confirm} onChange={setConfirm} required />
+                <PasswordMatch value={password} confirm={confirm} />
               </div>
 
               {error && <p className="text-sm text-danger-600">{error}</p>}

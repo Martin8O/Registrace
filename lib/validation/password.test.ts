@@ -143,9 +143,32 @@ describe("every rule is labelled in both locales", () => {
       (k) => typeof block[k] !== "string",
     );
     expect(missing).toEqual([]);
-    for (const k of ["title", "met", "notMet", "notMetSummary"]) {
+    // title/met/notMet/notMetSummary: the checklist. show/hide: the reveal toggle's
+    // aria-label. match/noMatch: the live confirm-field indicator. A missing one
+    // renders as a raw key — on an aria-label, silently.
+    for (const k of [
+      "title",
+      "met",
+      "notMet",
+      "notMetSummary",
+      "show",
+      "hide",
+      "match",
+      "noMatch",
+    ]) {
       expect(typeof block[k]).toBe("string");
     }
+  });
+
+  it.each(["cs", "en"])("%s.json distinguishes match from noMatch", (locale) => {
+    const messages = JSON.parse(
+      readFileSync(new URL(`../../locales/${locale}.json`, import.meta.url), "utf8"),
+    );
+    const p = messages.admin.passwordPolicy;
+    // A copy-paste slip here would show "passwords match" under two passwords
+    // that do not — the indicator would be worse than absent.
+    expect(p.match).not.toBe(p.noMatch);
+    expect(p.show).not.toBe(p.hide);
   });
 
   it("interpolates the length rule with the real minimum", () => {

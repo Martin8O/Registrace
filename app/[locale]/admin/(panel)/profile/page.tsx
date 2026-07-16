@@ -6,6 +6,8 @@ import { createClient } from '@/lib/supabase/client'
 import { authErrorKey } from '@/lib/auth-errors'
 import { isPasswordValid } from '@/lib/validation/password'
 import { PasswordRequirements } from '@/components/admin/PasswordRequirements'
+import { PasswordInput } from '@/components/admin/PasswordInput'
+import { PasswordMatch } from '@/components/admin/PasswordMatch'
 
 // Every admin / super-admin can view + change their own sign-in email and
 // password here, against the browser Supabase client (auth.updateUser). The
@@ -184,14 +186,11 @@ export default function ProfilePage() {
             <label className="form-label" htmlFor="new-password">
               {t('newPassword')}
             </label>
-            <input
+            <PasswordInput
               id="new-password"
-              type="password"
-              autoComplete="new-password"
-              className="bdc-input"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              aria-describedby="profile-password-requirements"
+              onChange={setPassword}
+              describedBy="profile-password-requirements"
             />
             <div id="profile-password-requirements" className="mt-2">
               <PasswordRequirements value={password} />
@@ -201,14 +200,8 @@ export default function ProfilePage() {
             <label className="form-label" htmlFor="confirm-password">
               {t('confirmPassword')}
             </label>
-            <input
-              id="confirm-password"
-              type="password"
-              autoComplete="new-password"
-              className="bdc-input"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-            />
+            <PasswordInput id="confirm-password" value={confirm} onChange={setConfirm} />
+            <PasswordMatch value={password} confirm={confirm} />
           </div>
           <div className="flex justify-center">
             <button

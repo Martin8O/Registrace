@@ -200,7 +200,11 @@
       "ruleSymbol": "a special character (e.g. ! ? # @ - _ *)",
       "met": "met",
       "notMet": "not met yet",
-      "notMetSummary": "The password does not meet all requirements yet."
+      "notMetSummary": "The password does not meet all requirements yet.",
+      "show": "Show password",
+      "hide": "Hide password",
+      "match": "Passwords match",
+      "noMatch": "Passwords do not match"
     },
     "dashboard": {
       "title": "Dashboard",
