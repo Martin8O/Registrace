@@ -167,7 +167,11 @@ single source of orientation for anyone joining the project.
   own discount and night-rate rules.
 - **Human-readable registration number** (`YYEEENNNN`) and a polished, BDC-branded
   confirmation email.
-- **Privacy-first** — in-app GDPR consent, server-validated honeypot, idempotent submit.
+- **Privacy-first** — in-app GDPR consent, server-validated honeypot, idempotent submit. No
+  cookie banner, because nothing here needs consent: the only cookies are the strictly
+  necessary ones (the admin session and the chosen locale), there is no ad tech or cross-site
+  tracking, and the only analytics is Vercel's cookieless page counter
+  ([details](#security--privacy)).
 
 ### For admins
 
@@ -204,6 +208,7 @@ single source of orientation for anyone joining the project.
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
 | Tests | **Vitest** (+ v8 coverage) | 101 unit / integration tests |
+| Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
 Exact versions live in [`package.json`](package.json). **No Docker.**
@@ -414,6 +419,11 @@ Validation errors return a canonical `400 { error, details }` (Zod issues) via t
   makes us stricter on accented input — the safe direction.
 - **GDPR** — explicit `z.literal(true)` consent; the stored `ipAddress` is retained solely for
   abuse prevention and never appears in the UI or exports.
+- **Analytics** — [Vercel Web Analytics](https://vercel.com/docs/analytics/privacy-policy)
+  (`<Analytics />` in `app/layout.tsx`) runs on every page. It is cookieless and does not
+  fingerprint or track visitors across sites; its beacon posts to `/_vercel/insights` on this
+  origin, which is why `connect-src 'self'` covers it. It is the only third party in the page,
+  and it never sees registration data — that all moves over our own API.
 - **Export hardening** — XLSX cells are neutralized against spreadsheet **formula injection**
   (`=`, `+`, `-`, `@`, tab and CR are prefixed) across title, headers and every data row.
 - **Idempotency & honeypot** on the public submit path; **max 10** participants. The honeypot
@@ -464,14 +474,17 @@ cp .env.example .env.local
 # Apply all migrations to your database (uses DIRECT_URL)
 npx prisma migrate deploy
 
-# Seed the centre rows (23 BDC centres + 2 catch-alls)
+# Seed the centre rows (23 BDC centres + 2 catch-alls) — and nothing else.
+# Idempotent, deletes nothing, safe to re-run.
 npx prisma db seed
 ```
 
-Create events and registrations from the admin panel. There is deliberately no demo-data
-script: one existed during the build, but once an instance holds real registrations a
-seeder that truncates `Event` and `Registration` is a footgun with no upside. It is in the
-git history (`prisma/seed-demo.ts`) if a throwaway environment ever needs it.
+Create events and registrations from the admin panel. There is deliberately no demo data
+anywhere in the setup path: the seeder creates only the centre rows every instance needs.
+Two demo-data paths existed during the build and both are gone — one truncated `Event` and
+`Registration` before reseeding, the other put a fictional **published** event on the public
+homepage of whatever instance ran the documented setup command. Both are in the git history
+if a throwaway environment ever wants them.
 
 ### 4. Run
 
@@ -556,7 +569,7 @@ lib/                           infrastructure
 locales/{cs,en}.json           UI translations
 prisma/
   schema.prisma · migrations/  data layer (6 applied migrations)
-  seed.ts                      the 25 centre rows
+  seed.ts                      the 25 centre rows (no demo data — see Getting started)
   promote-super-admin.ts       one-off super-admin bootstrap
 public/images/                 static assets (BDC logo)
 proxy.ts                       edge middleware (i18n + session + admin hardening + CSP)
