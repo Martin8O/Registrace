@@ -194,10 +194,10 @@
     "passwordPolicy": {
       "title": "Heslo musí splňovat:",
       "ruleLength": "alespoň {count} znaků",
-      "ruleLowercase": "malé písmeno",
-      "ruleUppercase": "velké písmeno",
-      "ruleDigit": "číslici",
-      "ruleSymbol": "speciální znak (např. ! ? # @ -)",
+      "ruleLowercase": "malé písmeno bez diakritiky (a–z)",
+      "ruleUppercase": "velké písmeno bez diakritiky (A–Z)",
+      "ruleDigit": "číslici (0–9)",
+      "ruleSymbol": "speciální znak (např. ! ? # @ - _ *)",
       "met": "splněno",
       "notMet": "zatím nesplněno",
       "notMetSummary": "Heslo zatím nesplňuje všechny požadavky."

@@ -8,17 +8,38 @@
 // to show them, live, what is still missing — not to be the gate.
 //
 // The authoritative gate is Supabase's own policy, configured in the project
-// dashboard (Authentication → Providers → Email):
-//   • Minimum password length      → MIN_LENGTH below
-//   • Password Requirements        → "Lowercase, uppercase letters, digits and symbols"
-// KEEP THE TWO IN SYNC. If the dashboard is laxer, a password this module rejects
-// can still be set by anyone who skips the UI; if it is stricter, Supabase rejects
-// a password this checklist showed as complete (which the admin then sees via the
-// weak_password wording in lib/auth-errors).
+// dashboard (Authentication → Providers → Email) and currently set to:
+//   • Minimum password length → 12                        (mirrored by MIN_LENGTH)
+//   • Password Requirements   → "Lowercase, uppercase letters, digits and symbols"
+//                                                         (mirrored by the sets below)
+// KEEP THE TWO IN SYNC, and mind the DIRECTION of any drift:
+//   • client laxer than GoTrue  → the checklist goes all-ticks, the button enables,
+//     and Supabase still refuses. The admin is told "weak password" by a form that
+//     just said the password was fine. This is the bug to avoid.
+//   • client stricter than GoTrue → the button simply stays disabled until the
+//     stricter rule is met. Harmless, and the deliberate choice for length.
 //
 // Client-safe: no Prisma, no server-only imports (validation convention).
 
 export const MIN_LENGTH = 12;
+
+// ── Mirror of the GoTrue character sets ──────────────────────────────────────
+// GoTrue validates with `strings.ContainsAny(password, characterSet)` against
+// LITERAL sets configured as GOTRUE_PASSWORD_REQUIRED_CHARACTERS (colon-separated).
+// It is not a Unicode-category check, so these sets are ASCII and must stay that
+// way. Widening any of them re-introduces the bug this replaced: Unicode classes
+// (\p{Ll} etc.) tick "lowercase" for ř and "uppercase" for Ž, which GoTrue does
+// not accept — the checklist would go all-green and Supabase would still refuse
+// the password. A Czech keyboard walks straight into that: ř/Ž/§ are on the main
+// rows while @ and # need AltGr.
+//   Source: supabase/auth internal/api/password.go + conf/configuration.go
+//   Docs:   https://supabase.com/docs/guides/auth/password-security
+const LOWERCASE = "abcdefghijklmnopqrstuvwxyz";
+const UPPERCASE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const DIGITS = "0123456789";
+export const SYMBOLS = "!@#$%^&*()_+-=[]{};'\\:\"|<>?,./`~";
+
+const containsAny = (value: string, set: string) => [...value].some((ch) => set.includes(ch));
 
 export type PasswordRuleId = "length" | "lowercase" | "uppercase" | "digit" | "symbol";
 
@@ -27,14 +48,16 @@ export const PASSWORD_RULES: readonly {
   id: PasswordRuleId;
   test: (value: string) => boolean;
 }[] = [
-  { id: "length", test: (v) => v.length >= MIN_LENGTH },
-  { id: "lowercase", test: (v) => /\p{Ll}/u.test(v) },
-  { id: "uppercase", test: (v) => /\p{Lu}/u.test(v) },
-  { id: "digit", test: (v) => /\p{Nd}/u.test(v) },
-  // "Symbol" = anything that is not a letter, a digit or whitespace. Defined by
-  // exclusion rather than a fixed ASCII set so that punctuation outside ASCII
-  // (and Czech keyboard symbols) counts too.
-  { id: "symbol", test: (v) => /[^\p{L}\p{N}\s]/u.test(v) },
+  // Deliberately counts CHARACTERS while GoTrue's MinLength counts BYTES
+  // (Go's len() on a UTF-8 string). For ASCII the two agree; for Czech text a
+  // character is 2 bytes, so this is the stricter of the pair. That direction is
+  // the safe one — the admin is simply held to 12 real characters and never sees
+  // a password the checklist approved get rejected.
+  { id: "length", test: (v) => [...v].length >= MIN_LENGTH },
+  { id: "lowercase", test: (v) => containsAny(v, LOWERCASE) },
+  { id: "uppercase", test: (v) => containsAny(v, UPPERCASE) },
+  { id: "digit", test: (v) => containsAny(v, DIGITS) },
+  { id: "symbol", test: (v) => containsAny(v, SYMBOLS) },
 ] as const;
 
 export type PasswordRuleState = { id: PasswordRuleId; met: boolean };

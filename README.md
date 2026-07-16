@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-81%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-91%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -201,7 +201,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 81 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 91 unit / integration tests |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
 Exact versions live in [`package.json`](package.json). **No Docker.**
@@ -399,8 +399,16 @@ Validation errors return a canonical `400 { error, details }` (Zod issues) via t
   (`lib/validation/password`). Note the split, which mirrors the pricing rule: admin passwords
   are set by the browser calling Supabase Auth **directly**, with no route of ours in between,
   so the checklist is **informational** and the authoritative gate is the policy configured in
-  the Supabase dashboard (Authentication → Providers → Email: minimum length + required
-  character classes). The two must be kept in sync.
+  the Supabase project (Authentication → Providers → Email), currently *minimum length 12* +
+  *lowercase, uppercase, digits and symbols*. The two must be kept in sync, and the client must
+  never be the **laxer** of the pair — a checklist that goes all-ticks on a password Supabase
+  then refuses is worse than no checklist.
+  <br/>The subtle part: GoTrue validates with `strings.ContainsAny` against **literal ASCII
+  sets**, not Unicode categories. `Ž` is not an uppercase letter to it and `§` is not a symbol,
+  so the rules here mirror those exact sets (and the labels say "a–z" / "A–Z" out loud, because
+  otherwise a Czech admin types `Ž`, reads "uppercase ○" and assumes the form is broken).
+  Length is the one deliberate asymmetry: we count characters where GoTrue counts bytes, which
+  makes us stricter on accented input — the safe direction.
 - **GDPR** — explicit `z.literal(true)` consent; the stored `ipAddress` is retained solely for
   abuse prevention and never appears in the UI or exports.
 - **Export hardening** — XLSX cells are neutralized against spreadsheet **formula injection**
@@ -558,7 +566,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **81 Vitest tests** across 7 files, with **no database required**:
+`npm test` runs **91 Vitest tests** across 7 files, with **no database required**:
 
 - **Pricing engine** — unit tests over the arithmetic and a 22-scenario matrix checked against
   the hand-derived BDC formula.

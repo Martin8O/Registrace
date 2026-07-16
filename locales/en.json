@@ -194,10 +194,10 @@
     "passwordPolicy": {
       "title": "Your password must contain:",
       "ruleLength": "at least {count} characters",
-      "ruleLowercase": "a lowercase letter",
-      "ruleUppercase": "an uppercase letter",
-      "ruleDigit": "a digit",
-      "ruleSymbol": "a special character (e.g. ! ? # @ -)",
+      "ruleLowercase": "an unaccented lowercase letter (a–z)",
+      "ruleUppercase": "an unaccented uppercase letter (A–Z)",
+      "ruleDigit": "a digit (0–9)",
+      "ruleSymbol": "a special character (e.g. ! ? # @ - _ *)",
       "met": "met",
       "notMet": "not met yet",
       "notMetSummary": "The password does not meet all requirements yet."

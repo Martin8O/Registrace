@@ -18,7 +18,7 @@ list of invariants before changing anything structural.
 ```bash
 npm run dev                 # dev server on :3000
 npm run build               # production build
-npm test                    # Vitest (81 tests, no database needed)
+npm test                    # Vitest (91 tests, no database needed)
 npm run lint                # ESLint
 npx prisma migrate deploy   # apply migrations (needs DIRECT_URL)
 ```
@@ -62,7 +62,10 @@ These are enforced across the codebase — do not violate them to make something
 - **Admin passwords never touch our server.** set-password and profile call Supabase Auth
   straight from the browser, so `lib/validation/password` is informational (same status as
   frontend pricing) and the enforcing policy lives in the Supabase dashboard. Changing one
-  without the other silently desyncs them.
+  without the other silently desyncs them — and the client must never end up the laxer of the
+  two. Its character sets mirror GoTrue's **literal ASCII** sets (`strings.ContainsAny`, not
+  Unicode categories): `Ž` is not an uppercase letter to it and `§` is not a symbol. Do not
+  "improve" those rules into `\p{Lu}` / `\p{Ll}` — that is the bug they replaced.
 
 ## Conventions
 
