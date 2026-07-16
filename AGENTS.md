@@ -18,7 +18,7 @@ list of invariants before changing anything structural.
 ```bash
 npm run dev                 # dev server on :3000
 npm run build               # production build
-npm test                    # Vitest (69 tests, no database needed)
+npm test                    # Vitest (81 tests, no database needed)
 npm run lint                # ESLint
 npx prisma migrate deploy   # apply migrations (needs DIRECT_URL)
 ```
@@ -59,6 +59,10 @@ These are enforced across the codebase — do not violate them to make something
 - **RLS is enabled deny-all** on the data tables as a backstop, but Prisma connects directly
   and bypasses it. The real authorization is the role/ownership gate in the handlers and
   services.
+- **Admin passwords never touch our server.** set-password and profile call Supabase Auth
+  straight from the browser, so `lib/validation/password` is informational (same status as
+  frontend pricing) and the enforcing policy lives in the Supabase dashboard. Changing one
+  without the other silently desyncs them.
 
 ## Conventions
 

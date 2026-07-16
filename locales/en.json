@@ -172,7 +172,6 @@
       "saving": "Saving…",
       "success": "Password set. Redirecting to the admin panel…",
       "error": "Could not set the password. Please try again.",
-      "tooShort": "Password must be at least 8 characters.",
       "mismatch": "Passwords do not match.",
       "checking": "Verifying the link…",
       "invalidTitle": "Link not valid",
@@ -191,6 +190,17 @@
       "emailNotAuthorized": "Messages cannot be sent to that e-mail address.",
       "userBanned": "This account is blocked. Please contact an administrator.",
       "validationFailed": "The details entered are not valid."
+    },
+    "passwordPolicy": {
+      "title": "Your password must contain:",
+      "ruleLength": "at least {count} characters",
+      "ruleLowercase": "a lowercase letter",
+      "ruleUppercase": "an uppercase letter",
+      "ruleDigit": "a digit",
+      "ruleSymbol": "a special character (e.g. ! ? # @ -)",
+      "met": "met",
+      "notMet": "not met yet",
+      "notMetSummary": "The password does not meet all requirements yet."
     },
     "dashboard": {
       "title": "Dashboard",

@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { createClient } from '@/lib/supabase/client'
 import { authErrorKey } from '@/lib/auth-errors'
+import { isPasswordValid } from '@/lib/validation/password'
+import { PasswordRequirements } from '@/components/admin/PasswordRequirements'
 
 // Every admin / super-admin can view + change their own sign-in email and
 // password here, against the browser Supabase client (auth.updateUser). The
@@ -13,6 +15,7 @@ import { authErrorKey } from '@/lib/auth-errors'
 export default function ProfilePage() {
   const t = useTranslations('admin.profile')
   const tErr = useTranslations('admin.authErrors')
+  const tPolicy = useTranslations('admin.passwordPolicy')
 
   const [currentEmail, setCurrentEmail] = useState('')
   const [newEmail, setNewEmail] = useState('')
@@ -78,6 +81,13 @@ export default function ProfilePage() {
     e.preventDefault()
     setToast(null)
     setError(null)
+    // This form previously checked only that the two fields matched — no length,
+    // no character classes — so the effective floor was whatever Supabase's own
+    // policy happened to be. Hold it to the same policy as the set-password page.
+    if (!isPasswordValid(password)) {
+      setError(tPolicy('notMetSummary'))
+      return
+    }
     if (password !== confirm) {
       setError(t('passwordMismatch'))
       return
@@ -181,7 +191,11 @@ export default function ProfilePage() {
               className="bdc-input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              aria-describedby="profile-password-requirements"
             />
+            <div id="profile-password-requirements" className="mt-2">
+              <PasswordRequirements value={password} />
+            </div>
           </div>
           <div>
             <label className="form-label" htmlFor="confirm-password">
@@ -199,7 +213,7 @@ export default function ProfilePage() {
           <div className="flex justify-center">
             <button
               type="submit"
-              disabled={busy}
+              disabled={busy || !isPasswordValid(password) || password !== confirm}
               className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t('changePassword')}

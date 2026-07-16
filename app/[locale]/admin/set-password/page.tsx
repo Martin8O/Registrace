@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { createClient } from '@/lib/supabase/client'
 import { authErrorKey } from '@/lib/auth-errors'
+import { isPasswordValid } from '@/lib/validation/password'
+import { PasswordRequirements } from '@/components/admin/PasswordRequirements'
 
 // "Set your password" page — reached ONLY after /admin/auth/confirm has verified
 // the invite/reset token server-side and put the token user's session in the
@@ -25,6 +27,7 @@ export default function SetPasswordPage() {
   const locale = useLocale()
   const t = useTranslations('admin.setPassword')
   const tErr = useTranslations('admin.authErrors')
+  const tPolicy = useTranslations('admin.passwordPolicy')
 
   const clientRef = useRef<ReturnType<typeof createClient> | null>(null)
   const [phase, setPhase] = useState<'checking' | 'ready' | 'invalid'>('checking')
@@ -59,8 +62,11 @@ export default function SetPasswordPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
-    if (password.length < 8) {
-      setError(t('tooShort'))
+    // Re-check on submit even though the button is disabled until the policy is
+    // met — the disabled attribute is a hint, not a guarantee. (The real gate is
+    // Supabase's own policy; see lib/validation/password.)
+    if (!isPasswordValid(password)) {
+      setError(tPolicy('notMetSummary'))
       return
     }
     if (password !== confirm) {
@@ -136,8 +142,12 @@ export default function SetPasswordPage() {
                   className="bdc-input"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  aria-describedby="password-requirements"
                   required
                 />
+                <div id="password-requirements" className="mt-2">
+                  <PasswordRequirements value={password} />
+                </div>
               </div>
 
               <div className="form-field">
@@ -160,7 +170,7 @@ export default function SetPasswordPage() {
 
               <button
                 type="submit"
-                disabled={loading || done}
+                disabled={loading || done || !isPasswordValid(password) || password !== confirm}
                 className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {loading ? t('saving') : t('submit')}

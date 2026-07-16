@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-69%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-81%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -201,7 +201,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 69 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 81 unit / integration tests |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
 Exact versions live in [`package.json`](package.json). **No Docker.**
@@ -394,6 +394,13 @@ Validation errors return a canonical `400 { error, details }` (Zod issues) via t
 - **Owner tier** — only an owner (`OWNER_USER_IDS`, immutable Supabase ids; verified-email
   `OWNER_EMAILS` fallback) may create/modify super-admins. Both lists empty → nobody can
   (fail-closed).
+- **Admin password policy** — at least 12 characters with a lowercase letter, an uppercase
+  letter, a digit and a symbol, shown as a live checklist while the password is typed
+  (`lib/validation/password`). Note the split, which mirrors the pricing rule: admin passwords
+  are set by the browser calling Supabase Auth **directly**, with no route of ours in between,
+  so the checklist is **informational** and the authoritative gate is the policy configured in
+  the Supabase dashboard (Authentication → Providers → Email: minimum length + required
+  character classes). The two must be kept in sync.
 - **GDPR** — explicit `z.literal(true)` consent; the stored `ipAddress` is retained solely for
   abuse prevention and never appears in the UI or exports.
 - **Export hardening** — XLSX cells are neutralized against spreadsheet **formula injection**
@@ -551,7 +558,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **69 Vitest tests** across 6 files, with **no database required**:
+`npm test` runs **81 Vitest tests** across 7 files, with **no database required**:
 
 - **Pricing engine** — unit tests over the arithmetic and a 22-scenario matrix checked against
   the hand-derived BDC formula.
@@ -563,6 +570,9 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   regression) and auth helpers.
 - **Auth error wording** — the Supabase-code → message mapping, plus a check that every key it
   can return is translated in **both** locales (an unmapped key would render as raw text).
+- **Password policy** — the rule checks (including Czech diacritics and non-ASCII symbols),
+  that the checklist and the submit gate can never disagree, and that every rule is labelled
+  in both locales.
 
 ---
 
