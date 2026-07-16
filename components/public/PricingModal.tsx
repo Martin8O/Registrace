@@ -35,12 +35,16 @@ const mealKey: Record<string, string> = {
 
 // Informational overview only (invariant 3) — the server price is authoritative.
 //
-// Both halves are now a matrix of age category × pricing tier, so the flat
-// label/value list this used to be could not represent them: it showed one price
-// per meal and only the 15+ daily rates, which since M37 is a single column of a
-// 12-row table. Rows whose every value is 0 are dropped rather than rendered as a
-// wall of zeros — most events charge nothing for young children, and printing
-// "0 CZK" twelve times buries the numbers that do matter.
+// Both halves are a matrix of age category × pricing tier, so the flat label/value
+// list this used to be could not represent them: it showed one price per meal and
+// only the 15+ daily rates, which since M37 is a single column of a 12-row table.
+//
+// EVERY age category is listed, including ones that cost nothing. Dropping all-zero
+// rows to avoid a wall of zeros read as "0–3 is missing" rather than "0–3 is free" —
+// for a price list, a 0 is an answer, not noise. What is actually noise is repeating
+// an identical price under three tier headings, so a category whose tiers are all
+// equal collapses to a single row labelled by age alone (which is every category on
+// an event that does not differentiate, e.g. any event predating the price list).
 export default function PricingModal({
   isOpen,
   onClose,
@@ -65,13 +69,25 @@ export default function PricingModal({
   const mealPrice = (type: string, age: string, tier: string): number =>
     resolveMealPrice(type, { ageCategory: age, pricingType: tier }, mealPricingRules, flatPriceFor(type))
 
-  // One row per (age, tier) that costs something — for participation and meals
-  // independently, since an event may charge a child for meals but not for the stay.
-  type Row = { age: string; tier: string; values: number[] }
+  // Every age category, every time. A category whose three tiers carry identical
+  // values collapses to one row labelled by age alone — the tier heading would be
+  // telling the reader something that isn't true of the price.
+  type Row = { key: string; label: string; values: number[] }
   const buildRows = (valuesFor: (age: string, tier: string) => number[]): Row[] =>
-    AGES.flatMap((age) =>
-      TIERS.map((tier) => ({ age, tier, values: valuesFor(age, tier) })),
-    ).filter((r) => r.values.some((v) => v > 0))
+    AGES.flatMap((age) => {
+      const perTier = TIERS.map((tier) => ({ tier, values: valuesFor(age, tier) }))
+      const allSame = perTier.every(
+        (x) => JSON.stringify(x.values) === JSON.stringify(perTier[0]!.values),
+      )
+      if (allSame) {
+        return [{ key: age, label: t(`age.${ageKey[age]}`), values: perTier[0]!.values }]
+      }
+      return perTier.map((x) => ({
+        key: `${age}|${x.tier}`,
+        label: `${t(`age.${ageKey[age]}`)} · ${t(`tier.${tierKey[x.tier]}`)}`,
+        values: x.values,
+      }))
+    })
 
   const stayColumns = [t('dailyRateShort'), t('pricePerNightShort')]
   const stayRows = buildRows((age, tier) => {
@@ -93,8 +109,6 @@ export default function PricingModal({
   pushDiscount(t('afternoonArrivalDiscount'), std15?.afternoonArrivalDiscount)
   pushDiscount(t('eveningArrivalDiscount'), std15?.eveningArrivalDiscount)
   pushDiscount(t('earlyDepartureDiscount'), std15?.earlyDepartureDiscount)
-
-  const label = (row: Row) => `${t(`age.${ageKey[row.age]}`)} · ${t(`tier.${tierKey[row.tier]}`)}`
 
   return (
     <div
@@ -118,14 +132,13 @@ export default function PricingModal({
         </div>
         <div className="h-0.5 w-10 bg-primary-500 mt-2 mb-6 rounded" />
 
-        <PriceTable title={t('stayTitle')} columns={stayColumns} rows={stayRows} label={label} />
+        <PriceTable title={t('stayTitle')} columns={stayColumns} rows={stayRows} />
 
         {servedMeals.length > 0 && (
           <PriceTable
             title={t('mealsTitle')}
             columns={servedMeals.map((type) => t(mealKey[type] ?? type))}
             rows={mealRows}
-            label={label}
             className="mt-6"
           />
         )}
@@ -166,13 +179,11 @@ function PriceTable({
   title,
   columns,
   rows,
-  label,
   className = '',
 }: {
   title: string
   columns: string[]
-  rows: Array<{ age: string; tier: string; values: number[] }>
-  label: (row: { age: string; tier: string; values: number[] }) => string
+  rows: Array<{ key: string; label: string; values: number[] }>
   className?: string
 }) {
   const t = useTranslations('event.pricingModal')
@@ -202,8 +213,8 @@ function PriceTable({
             </thead>
             <tbody>
               {rows.map((row, i) => (
-                <tr key={`${row.age}|${row.tier}`} className={i % 2 === 0 ? 'bg-white' : 'bg-stone-50'}>
-                  <td className="px-4 py-2 text-neutral-700">{label(row)}</td>
+                <tr key={row.key} className={i % 2 === 0 ? 'bg-white' : 'bg-stone-50'}>
+                  <td className="px-4 py-2 text-neutral-700">{row.label}</td>
                   {row.values.map((v, vi) => (
                     <td
                       key={columns[vi] ?? vi}
