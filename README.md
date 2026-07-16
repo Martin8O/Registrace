@@ -485,6 +485,12 @@ provisioned manually: create the user in Supabase Auth, then set their role in t
 row exists). From then on, further admins are invited from the panel's **Admins (Správci)**
 screen, which assigns roles and centres.
 
+> **Note:** opening an invite/reset link signs that browser in as the *link's* user, replacing
+> any session already present in every window (cookie auth is one session per browser). This is
+> deliberate — the identity must come from the token, never from whoever happens to be logged
+> in. If you're testing an invite while signed in as a super-admin, open it in a private window
+> to keep your own session; the set-password page also states whose account it is.
+
 ---
 
 ## Environment variables

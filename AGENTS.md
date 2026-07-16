@@ -66,6 +66,12 @@ These are enforced across the codebase — do not violate them to make something
   two. Its character sets mirror GoTrue's **literal ASCII** sets (`strings.ContainsAny`, not
   Unicode categories): `Ž` is not an uppercase letter to it and `§` is not a symbol. Do not
   "improve" those rules into `\p{Lu}` / `\p{Ll}` — that is the bug they replaced.
+- **Opening an invite/reset link replaces the browser's session — deliberately.**
+  `auth/confirm` verifies the token server-side, which signs the browser in as the *token's*
+  user; a super-admin logged in in another window is signed out (cookies are per browser, not
+  per window). This is the fix for a past bug where the invite link changed the *super-admin's*
+  password. Do not "fix" the sign-out by falling back to the ambient session — that reopens
+  the hole. The set-password page states the takeover and whose account it is.
 
 ## Conventions
 
