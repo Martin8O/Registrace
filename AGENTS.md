@@ -18,7 +18,7 @@ list of invariants before changing anything structural.
 ```bash
 npm run dev                 # dev server on :3000
 npm run build               # production build
-npm test                    # Vitest (61 tests, no database needed)
+npm test                    # Vitest (69 tests, no database needed)
 npm run lint                # ESLint
 npx prisma migrate deploy   # apply migrations (needs DIRECT_URL)
 ```

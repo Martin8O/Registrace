@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-61%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-69%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -201,7 +201,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 61 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 69 unit / integration tests |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
 Exact versions live in [`package.json`](package.json). **No Docker.**
@@ -551,7 +551,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **61 Vitest tests** across 5 files, with **no database required**:
+`npm test` runs **69 Vitest tests** across 6 files, with **no database required**:
 
 - **Pricing engine** — unit tests over the arithmetic and a 22-scenario matrix checked against
   the hand-derived BDC formula.
@@ -561,6 +561,8 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   keeping the real engine, so `totalPrice` is asserted end-to-end.
 - **Export & auth** — the registration-export scoping (including the cross-centre IDOR
   regression) and auth helpers.
+- **Auth error wording** — the Supabase-code → message mapping, plus a check that every key it
+  can return is translated in **both** locales (an unmapped key would render as raw text).
 
 ---
 

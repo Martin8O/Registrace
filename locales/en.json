@@ -179,6 +179,19 @@
       "invalid": "This password link is invalid or has expired. Ask for a new invitation or password reset.",
       "backToLogin": "Back to sign-in"
     },
+    "authErrors": {
+      "weakPassword": "That password is too weak. Please choose a longer, less common one.",
+      "samePassword": "The new password must be different from your current one.",
+      "rateLimited": "Too many attempts in a row. Please wait a moment and try again.",
+      "emailRateLimited": "Too many e-mails sent in a row. Please wait a moment and try again.",
+      "sessionExpired": "Your session has expired. Please sign in again and retry.",
+      "reauthNeeded": "For security reasons, please sign in again before making this change.",
+      "emailExists": "That e-mail is already used by another account.",
+      "emailInvalid": "That e-mail address is not a valid format.",
+      "emailNotAuthorized": "Messages cannot be sent to that e-mail address.",
+      "userBanned": "This account is blocked. Please contact an administrator.",
+      "validationFailed": "The details entered are not valid."
+    },
     "dashboard": {
       "title": "Dashboard",
       "subtitle": "Overview of events and registrations.",

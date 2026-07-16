@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { createClient } from '@/lib/supabase/client'
+import { authErrorKey } from '@/lib/auth-errors'
 
 // Every admin / super-admin can view + change their own sign-in email and
 // password here, against the browser Supabase client (auth.updateUser). The
@@ -11,6 +12,7 @@ import { createClient } from '@/lib/supabase/client'
 // change applies immediately after a successful call.
 export default function ProfilePage() {
   const t = useTranslations('admin.profile')
+  const tErr = useTranslations('admin.authErrors')
 
   const [currentEmail, setCurrentEmail] = useState('')
   const [newEmail, setNewEmail] = useState('')
@@ -53,10 +55,14 @@ export default function ProfilePage() {
     try {
       const { error: err } = await createClient().auth.updateUser({ email: newEmail })
       if (err) {
-        // Surface the actual Supabase reason (e.g. a rate-limit cooldown, or
-        // "email already registered") alongside the friendly message — otherwise
-        // the cause is hidden and changes look like they fail for no reason.
-        setError(err.message ? `${t('emailFailed')} (${err.message})` : t('emailFailed'))
+        // Say WHY in the admin's own language (rate-limit cooldown, e-mail already
+        // taken, …). Branch on the stable `code`; `message` is English-only GoTrue
+        // prose, so it is only a last-resort fallback for codes we have no wording
+        // for — better than hiding the cause. See lib/auth-errors.
+        const key = authErrorKey(err.code)
+        setError(
+          key ? tErr(key) : err.message ? `${t('emailFailed')} (${err.message})` : t('emailFailed')
+        )
       } else {
         setToast(t('emailSaved'))
         setNewEmail('')
@@ -80,7 +86,17 @@ export default function ProfilePage() {
     try {
       const { error: err } = await createClient().auth.updateUser({ password })
       if (err) {
-        setError(t('passwordFailed'))
+        // This branch used to swallow the reason entirely, so "weak password",
+        // "same as your current one" and a rate-limit cooldown were indistinguishable
+        // from each other. Same treatment as the e-mail form above.
+        const key = authErrorKey(err.code)
+        setError(
+          key
+            ? tErr(key)
+            : err.message
+              ? `${t('passwordFailed')} (${err.message})`
+              : t('passwordFailed')
+        )
       } else {
         setToast(t('passwordSaved'))
         setPassword('')

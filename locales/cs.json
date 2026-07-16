@@ -179,6 +179,19 @@
       "invalid": "Odkaz pro nastavení hesla je neplatný nebo vypršel. Nech si poslat nový (pozvánku nebo reset hesla).",
       "backToLogin": "Zpět na přihlášení"
     },
+    "authErrors": {
+      "weakPassword": "Heslo je příliš slabé. Zvolte prosím delší a méně obvyklé heslo.",
+      "samePassword": "Nové heslo musí být jiné než to současné.",
+      "rateLimited": "Příliš mnoho pokusů po sobě. Počkejte prosím chvíli a zkuste to znovu.",
+      "emailRateLimited": "Příliš mnoho odeslaných e-mailů po sobě. Počkejte prosím chvíli a zkuste to znovu.",
+      "sessionExpired": "Vaše přihlášení vypršelo. Přihlaste se prosím znovu a akci zopakujte.",
+      "reauthNeeded": "Z bezpečnostních důvodů se před touto změnou přihlaste znovu.",
+      "emailExists": "Tento e-mail už je u jiného účtu používán.",
+      "emailInvalid": "Tento e-mail nemá platný formát.",
+      "emailNotAuthorized": "Na tento e-mail nelze odeslat zprávu.",
+      "userBanned": "Účet je zablokovaný. Obraťte se prosím na správce.",
+      "validationFailed": "Zadané údaje nejsou platné."
+    },
     "dashboard": {
       "title": "Přehled",
       "subtitle": "Souhrn akcí a registrací.",

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { createClient } from '@/lib/supabase/client'
+import { authErrorKey } from '@/lib/auth-errors'
 
 // "Set your password" page — reached ONLY after /admin/auth/confirm has verified
 // the invite/reset token server-side and put the token user's session in the
@@ -23,6 +24,7 @@ export default function SetPasswordPage() {
   const router = useRouter()
   const locale = useLocale()
   const t = useTranslations('admin.setPassword')
+  const tErr = useTranslations('admin.authErrors')
 
   const clientRef = useRef<ReturnType<typeof createClient> | null>(null)
   const [phase, setPhase] = useState<'checking' | 'ready' | 'invalid'>('checking')
@@ -70,12 +72,19 @@ export default function SetPasswordPage() {
     setLoading(true)
     const { error: updateError } = await supabase.auth.updateUser({ password })
     if (updateError) {
-      // Surface the actual Supabase reason alongside the friendly message (same
-      // reasoning as the profile page): a rate-limit cooldown, "new password
-      // should be different from the old password", an expired session. Without
-      // it every rejection looks identical and the admin retries the same
-      // password forever, with nothing on screen to act on.
-      setError(updateError.message ? `${t('error')} (${updateError.message})` : t('error'))
+      // Tell the admin WHY, in their own language. Without this every rejection
+      // looked identical ("try again") and they would retype the same password
+      // forever. Branch on the stable `code`, never on `message` — the latter is
+      // English-only GoTrue prose. Unknown code → generic message plus the raw
+      // reason: still English, but better than losing it. See lib/auth-errors.
+      const key = authErrorKey(updateError.code)
+      setError(
+        key
+          ? tErr(key)
+          : updateError.message
+            ? `${t('error')} (${updateError.message})`
+            : t('error')
+      )
       setLoading(false)
       return
     }
