@@ -1,5 +1,7 @@
 # REGISTRACE — Project Memory for Claude Code
 
+@AGENTS.md
+
 Bilingual (CZ/EN) web app for registering to meditation / community events run by
 Buddhismus Diamantové cesty (BDC) centres. Public users register themselves + fellow
 participants; the app prices the stay and emails a confirmation. Admins manage events,
@@ -8,6 +10,12 @@ registrations, and exports.
 > This file is the always-loaded **constitution**: stable rules + navigation only.
 > Point-in-time status, milestone logs, and deep reference live in `local/`
 > (see below). Do not paste build status into this file.
+
+> **Note for readers of the public repository:** everything under `local/` referenced below is
+> the maintainer's private Claude Code workspace (session state, notes, build history). It is
+> gitignored and deliberately **not published**, so those paths will not exist in a clone —
+> this file is included because it documents the architectural rules the code is held to.
+> Nothing outside `local/` depends on it.
 
 ## Session Start Protocol
 At the start of every new session, before any other action:
@@ -19,12 +27,12 @@ At the start of every new session, before any other action:
 ## Memory directory (OVERRIDE — project-local, not user-profile)
 All memory files for this project live in **`local/wiki/`** (gitignored, copied manually
 when moving to a new machine). This overrides the default Claude Code auto-memory path
-(`C:\Users\…\.claude\projects\…\memory\`).
+(`<user-profile>/.claude/projects/…/memory/`).
 
 - **Index:** `local/wiki/MEMORY.md` — one-line pointer per memory file.
 - **Reads:** always look up memories from `local/wiki/`.
 - **Writes:** always write new memory files to `local/wiki/` and update `local/wiki/MEMORY.md`.
-- Never write project memory to the user-profile path (`C:\Users\svobo\.claude\…`).
+- Never write project memory to the user-profile path (`<user-profile>/.claude/…`).
 
 ## Where things live (`local/` — gitignored, never pushed)
 `local/` is Claude Code's internal workspace (notes, wiki, session state).

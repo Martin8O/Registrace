@@ -4,10 +4,10 @@
 
 # Registrace
 
-**Bilingual (CZ / EN) event‑registration platform for Diamond Way Buddhism (BDC) centres.**
+**Bilingual (CZ / EN) event-registration platform for Diamond Way Buddhism (BDC) centres.**
 
 Public visitors register themselves and fellow participants for meditation and community
-events; the app prices the stay server‑side and emails a bilingual confirmation. Centre
+events; the app prices the stay server-side and emails a bilingual confirmation. Centre
 admins manage events, registrations and exports — all scoped by role and centre.
 
 [![Live](https://img.shields.io/badge/live-registrace.online-8B1A2B?style=flat-square)](https://registrace.online)
@@ -40,7 +40,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 - [Feature highlights](#feature-highlights)
 - [Tech stack](#tech-stack)
 - [Architecture](#architecture)
-  - [Non‑negotiable rules](#non-negotiable-rules)
+  - [Non-negotiable rules](#non-negotiable-rules)
   - [Request & data flow](#request--data-flow)
   - [Pricing engine](#pricing-engine)
   - [Data model](#data-model)
@@ -63,21 +63,21 @@ admins manage events, registrations and exports — all scoped by role and centr
 
 **Registrace** is a production web application built for
 [Buddhismus Diamantové cesty](https://www.bdc.cz) (BDC / Diamond Way Buddhism) — a network of
-25 Czech meditation centres. It replaces ad‑hoc spreadsheets and email threads with a single
+Czech meditation centres. It replaces ad-hoc spreadsheets and email threads with a single
 bilingual flow:
 
 1. A visitor opens a published event, fills in one form for the whole group (up to 10
    participants), picks arrival/departure, meals and diet per person, and submits.
 2. The **server** recalculates every price from the event's own pricing rules (the browser
    figure is informational only), writes an idempotent registration, and sends a confirmation
-   email carrying a human‑readable registration number (e.g. `260020108`).
+   email carrying a human-readable registration number (e.g. `260020108`).
 3. Centre admins review, filter, search, mark paid, resend confirmations, and export a
-   per‑event XLSX for the kitchen and accommodation teams — always scoped to the centres they
+   per-event XLSX for the kitchen and accommodation teams — always scoped to the centres they
    manage.
 
 It is **live in production at [registrace.online](https://registrace.online)** on Vercel +
-Supabase, and has been through a full internal build (B1–B8), a production‑hardening pass
-(P1–P8) and a multi‑agent security audit. This README is the
+Supabase, and has been through a full internal build (B1–B8), a production-hardening pass
+(P1–P8) and a multi-agent security audit. This README is the
 single source of orientation for anyone joining the project.
 
 ---
@@ -85,7 +85,7 @@ single source of orientation for anyone joining the project.
 ## Screenshots
 
 > All screenshots use the demo dataset (`prisma/seed-demo.ts`) — fictional families on the
-> RFC‑2606 reserved `example.*` domains. The **admin email addresses and the audit‑log IP
+> RFC-2606 reserved `example.*` domains. The **admin email addresses and the audit-log IP
 > column are blurred here on purpose** for privacy: they are shown normally to admins in the
 > running app — only these public screenshots hide them.
 
@@ -106,13 +106,13 @@ single source of orientation for anyone joining the project.
   </tr>
   <tr>
     <td align="center"><em>Event detail + stay (arrival, departure, accommodation)</em></td>
-    <td align="center"><em>Per‑participant age, price tier, diet & live total</em></td>
+    <td align="center"><em>Per-participant age, price tier, diet & live total</em></td>
   </tr>
 </table>
 
 <p align="center">
   <img src="docs/screenshots/public-pricing-modal.png" width="70%" alt="Transparent price overview modal" /><br/>
-  <em>Transparent, data‑driven price overview — meals, daily rates per age and tier, arrival/early‑departure discounts.</em>
+  <em>Transparent, data-driven price overview — meals, daily rates per age and tier, arrival/early-departure discounts.</em>
 </p>
 
 ### Admin side
@@ -123,8 +123,8 @@ single source of orientation for anyone joining the project.
     <td width="50%"><img src="docs/screenshots/admin-event-form.png" alt="7-step event creation wizard" /></td>
   </tr>
   <tr>
-    <td align="center"><em>Event management — draft / published / archived, per‑event export</em></td>
-    <td align="center"><em>7‑step bilingual event wizard</em></td>
+    <td align="center"><em>Event management — draft / published / archived, per-event export</em></td>
+    <td align="center"><em>7-step bilingual event wizard</em></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/admin-registrations.png" alt="Registrations list with filters, search and status badges" /></td>
@@ -139,14 +139,14 @@ single source of orientation for anyone joining the project.
     <td width="50%"><img src="docs/screenshots/admin-logs.png" alt="Audit log of admin actions" /></td>
   </tr>
   <tr>
-    <td align="center"><em>Admins — SUPER_ADMIN vs centre‑scoped ADMIN</em></td>
-    <td align="center"><em>Audit log — who, what, when, where (super‑admin only)</em></td>
+    <td align="center"><em>Admins — SUPER_ADMIN vs centre-scoped ADMIN</em></td>
+    <td align="center"><em>Audit log — who, what, when, where (super-admin only)</em></td>
   </tr>
 </table>
 
 <p align="center">
   <img src="docs/screenshots/admin-registrations-kitchen.png" width="80%" alt="Per-event kitchen and accommodation totals" /><br/>
-  <em>Per‑event kitchen &amp; accommodation planning — meat/veg counts per meal and headcount per night, ready for the kitchen and accommodation teams.</em>
+  <em>Per-event kitchen &amp; accommodation planning — meat/veg counts per meal and headcount per night, ready for the kitchen and accommodation teams.</em>
 </p>
 
 ---
@@ -159,29 +159,29 @@ single source of orientation for anyone joining the project.
   the current place.
 - **Group registration** — one submission for up to **10 participants**, each with their own
   age category, price tier (standard / supported / surplus) and diet (meat / vegetarian).
-- **Per‑day meal selection** with a per‑event **meal‑ordering deadline** (after the cut‑off,
-  meal choice is closed and enforced server‑side).
-- **Live, server‑authoritative pricing** — the form shows a running total, but the backend
+- **Per-day meal selection** with a per-event **meal-ordering deadline** (after the cut-off,
+  meal choice is closed and enforced server-side).
+- **Live, server-authoritative pricing** — the form shows a running total, but the backend
   always recomputes the authoritative price before saving.
 - **Arrival time, early departure and accommodation** all feed into the price via the event's
-  own discount and night‑rate rules.
-- **Human‑readable registration number** (`YYEEENNNN`) and a polished, BDC‑branded
+  own discount and night-rate rules.
+- **Human-readable registration number** (`YYEEENNNN`) and a polished, BDC-branded
   confirmation email.
-- **Privacy‑first** — in‑app GDPR consent, server‑validated honeypot, idempotent submit.
+- **Privacy-first** — in-app GDPR consent, server-validated honeypot, idempotent submit.
 
 ### For admins
 
-- **Role‑based access** — `SUPER_ADMIN` sees everything; `ADMIN` is scoped to their assigned
-  centre(s); an **owner tier** guards super‑admin management.
-- **7‑step event wizard** — bilingual titles/descriptions, dates, pricing rules per age &
+- **Role-based access** — `SUPER_ADMIN` sees everything; `ADMIN` is scoped to their assigned
+  centre(s); an **owner tier** guards super-admin management.
+- **7-step event wizard** — bilingual titles/descriptions, dates, pricing rules per age &
   tier, meals per day, capacity, and the meal deadline. Empty drafts stay fully editable.
 - **Event lifecycle** — draft → published → closed → archived, with a public visibility
   window derived on read.
 - **Registration workflow** — filter by centre / status / archived, search by number, edit
   status (registered / paid / cancelled), resend confirmations, and read **kitchen** (meat /
-  veg totals) and **accommodation** (per‑night headcount) tables.
-- **Per‑event XLSX export** — one click per event, with a formula‑injection‑safe serializer.
-- **Centre & admin management** — invite/edit/remove admins, assign centres, soft‑delete and
+  veg totals) and **accommodation** (per-night headcount) tables.
+- **Per-event XLSX export** — one click per event, with a formula-injection-safe serializer.
+- **Centre & admin management** — invite/edit/remove admins, assign centres, soft-delete and
   restore centres.
 - **Audit log** — a forensic trail of admin actions (actor, action, entity, IP, time).
 
@@ -193,16 +193,16 @@ single source of orientation for anyone joining the project.
 |---|---|---|
 | Framework | **Next.js 16** (App Router, Turbopack) · **React 19** | Server Components + route handlers; no `middleware.ts` — edge logic lives in `proxy.ts` |
 | Language | **TypeScript** (strict, `noUncheckedIndexedAccess`) | — |
-| ORM | **Prisma 7** + `@prisma/adapter-pg` (`pg`) | Driver‑adapter pattern; client generated to `generated/prisma` (gitignored) |
-| Database & Auth | **Supabase** (PostgreSQL + Auth) | RLS deny‑all; all data access goes through Prisma |
-| Validation | **Zod 4** | Client‑safe schemas (no Prisma imports) |
+| ORM | **Prisma 7** + `@prisma/adapter-pg` (`pg`) | Driver-adapter pattern; client generated to `generated/prisma` (gitignored) |
+| Database & Auth | **Supabase** (PostgreSQL + Auth) | RLS deny-all; all data access goes through Prisma |
+| Validation | **Zod 4** | Client-safe schemas (no Prisma imports) |
 | Forms | **React Hook Form** + `@hookform/resolvers` | — |
-| i18n | **next‑intl 4** | Locales `cs` (default) / `en` |
-| Email | **Resend** | Bilingual, inline‑CSS, non‑blocking |
+| i18n | **next-intl 4** | Locales `cs` (default) / `en` |
+| Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
 | Tests | **Vitest** (+ v8 coverage) | 61 unit / integration tests |
-| Hosting | **Vercel** + own domain (Wedos DNS) | Auto‑deploy on push to `main` |
+| Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
 Exact versions live in [`package.json`](package.json). **No Docker.**
 
@@ -210,21 +210,21 @@ Exact versions live in [`package.json`](package.json). **No Docker.**
 
 ## Architecture
 
-### Non‑negotiable rules
+### Non-negotiable rules
 
 These invariants are enforced across the codebase (full list in
 [`CLAUDE.md`](CLAUDE.md)):
 
 1. **Auth = Supabase Auth. Data = Prisma. Never mix.**
-2. The **pricing engine** (`modules/pricing`) is **pure, server‑only, no DB access**.
+2. The **pricing engine** (`modules/pricing`) is **pure, server-only, no DB access**.
 3. **Frontend prices are informational**; backend prices are authoritative and always
-   recomputed server‑side before any DB write.
-4. UI text lives in next‑intl JSON; **event content lives in bilingual DB columns**
+   recomputed server-side before any DB write.
+4. UI text lives in next-intl JSON; **event content lives in bilingual DB columns**
    (`*_cs` / `*_en`).
 5. **Email failure never rolls back** the registration transaction.
-6. **Soft delete** (`deletedAt`) everywhere — no permanent deletion of audit‑relevant data.
-7. **Money = whole‑CZK integers**; **datetimes = UTC in the DB, Europe/Prague in the UI**.
-8. Registration submit is **idempotent** (client‑supplied UUID v4 key), honeypot‑guarded,
+6. **Soft delete** (`deletedAt`) everywhere — no permanent deletion of audit-relevant data.
+7. **Money = whole-CZK integers**; **datetimes = UTC in the DB, Europe/Prague in the UI**.
+8. Registration submit is **idempotent** (client-supplied UUID v4 key), honeypot-guarded,
    and capped at 10 participants.
 9. **SUPER_ADMIN sees all; ADMIN is scoped to their centre(s).**
 
@@ -237,10 +237,12 @@ flowchart LR
         Adm["Admin panel"]
     end
 
-    Edge["proxy.ts (edge middleware)<br/>i18n routing · session refresh<br/>admin rate‑limit · CSRF · CSP nonce"]
+    Edge["proxy.ts — edge middleware<br/>matcher: pages + /api/admin/** only<br/>i18n routing · CSP nonce · session refresh<br/>admin API: rate-limit · CSRF · 401 gate"]
 
     subgraph Next["Next.js server"]
-        API["Route handlers<br/>app/api/**"]
+        Pages["Server Components<br/>app/[locale]/**"]
+        PubAPI["Public handlers<br/>/api/events · /api/registration/**<br/>rate-limit in handler"]
+        AdmAPI["Admin handlers<br/>/api/admin/**<br/>role + ownership guard"]
         SVC["Services<br/>modules/**"]
         Price["Pricing engine<br/>modules/pricing (pure)"]
     end
@@ -249,10 +251,15 @@ flowchart LR
     AuthSvc["Supabase Auth"]
     Mail["Resend<br/>(email)"]
 
-    Pub -->|"submit / calculate-price"| Edge
+    Pub -->|"page requests"| Edge
+    Adm -->|"page requests"| Edge
+    Edge --> Pages
     Adm -->|"manage"| Edge
-    Edge --> API
-    API --> SVC
+    Edge --> AdmAPI
+    Pub -->|"submit / calculate-price<br/>(edge NOT in path)"| PubAPI
+    Pages --> SVC
+    PubAPI --> SVC
+    AdmAPI --> SVC
     SVC --> Price
     SVC -->|Prisma| DB
     Adm -.->|"signInWithPassword"| AuthSvc
@@ -260,21 +267,28 @@ flowchart LR
     SVC -.->|"non-blocking"| Mail
 ```
 
-- **Edge** (`proxy.ts`) does locale routing, Supabase session refresh, and — for
-  `/api/admin/**` — rate‑limiting, CSRF and a 401 gate. It checks session **presence** only.
+- **Edge** (`proxy.ts`) is deliberately **not** a global gate: its `config.matcher` covers
+  pages and `/api/admin/**` **only**. On pages it does locale routing, the CSP nonce and
+  Supabase session refresh; on the admin API it adds rate-limiting (120/min/IP), a CSRF
+  same-origin check on mutations, and a 401 for anonymous callers. It checks session
+  **presence** only.
+- **The public API bypasses the edge entirely** — `/api/events`, `/api/registration/**` and
+  `/api/auth/me` are excluded by the matcher and reach their handlers directly, so each one
+  enforces its own rate limit (submit 10/h, price 60/min, public reads 60/min per IP).
 - **Handlers/services** are the authoritative **role/ownership** gate (Prisma can't run at the
-  edge). Business logic never lives in a route handler — it lives in `modules/*`.
-- **Prices** are computed by the pure engine and re‑verified before every write.
+  edge). Business logic never lives in a route handler — it lives in `modules/*`, which Server
+  Components call directly rather than fetching their own API.
+- **Prices** are computed by the pure engine and re-verified before every write.
 
 ### Pricing engine
 
 `modules/pricing/index.ts` is pure and defensive (a missing rule or degenerate stay yields
-`0`, never throws — the price endpoint calls it mid‑edit on incomplete input). Per participant:
+`0`, never throws — the price endpoint calls it mid-edit on incomplete input). Per participant:
 
 ```
 participation = dailyRate × days
               − arrival discount      (by arrival time: morning / afternoon / evening)
-              − early‑departure discount
+              − early-departure discount
               + nightRate × (days − 1)   (only when accommodation is chosen)
               floored at 0
 
@@ -282,8 +296,8 @@ meals         = Σ price of each unique, open, known selected meal
 subtotal      = participation + meals
 ```
 
-Pricing is **data‑driven**: every age is charged by its matching `PricingRule.dailyRate` — no
-age is hard‑coded to `0`. Young children carry a `0`‑rate rule, but an event may charge, say,
+Pricing is **data-driven**: every age is charged by its matching `PricingRule.dailyRate` — no
+age is hard-coded to `0`. Young children carry a `0`-rate rule, but an event may charge, say,
 ages 8–14 (the real BDC "MLK" course does, at 100 CZK/day). Discounts apply to 15+ only
 because child rules carry `0` discounts — not via any age branch.
 
@@ -299,15 +313,15 @@ because child rules carry `0` discounts — not via any age branch.
 |---|---|
 | **User** | `id @db.Uuid` (= Supabase Auth id), `email`, `role`. |
 | **UserCenter** | Explicit `User ↔ Center` join (which centres an admin manages). |
-| **Center** | 25 seeded centres, bilingual names, `sortOrder`, soft‑active. |
-| **Event** | Bilingual title/subtitle/description, contact fields, `status`, `centerId` (host centre), dates, `createdBy`, `mealRegistrationDeadline`, `numberPrefix` + `registrationSeq` (reg‑number support). |
+| **Center** | 25 seeded rows — 23 BDC centres plus the `Jiné` / `Mimo ČR` (Other / outside CZ) catch-alls a visitor can pick as their home centre. Bilingual names, `sortOrder`, soft-active. |
+| **Event** | Bilingual title/subtitle/description, contact fields, `status`, `centerId` (host centre), dates, `createdBy`, `mealRegistrationDeadline`, `numberPrefix` + `registrationSeq` (reg-number support). |
 | **EventDate** | A day of the event; used as arrival/departure reference. |
 | **PricingRule** | Per `event × ageCategory × pricingType`: `dailyRate`, `nightRate` and the four `*Discount` fields (subtracted). |
 | **EventMeal** | A meal slot on a given day: `mealType`, `price`, `isClosed`. |
 | **Registration** | The submission: home `centerId`, arrival/departure, `hasAccommodation`, `email`, `gdprConsent`, `totalPrice`, `status`, `idempotencyKey`, `registrationNumber`, `locale`, `ipAddress`. |
 | **Participant** | One person: `ageCategory`, `pricingType`, `mealType` (diet), computed prices. |
 | **ParticipantMeal** | `Participant ↔ EventMeal` join with the charged price. |
-| **AuditLog** | Append‑only trail: `userId`, `action`, `entityType`, `entityId`, `oldData`/`newData`, `ip`. |
+| **AuditLog** | Append-only trail: `userId`, `action`, `entityType`, `entityId`, `oldData`/`newData`, `ip`. |
 
 **Enums:** `AgeCategory` · `PricingType` (standard / supported / surplus) · `ArrivalTime` ·
 `EarlyDeparture` · `EventStatus` (draft / published / closed / archived) · `MealType`
@@ -321,23 +335,24 @@ because child rules carry `0` discounts — not via any age branch.
 <details>
 <summary><strong>Routes (click to expand)</strong></summary>
 
-**Public**
-- `GET  /api/events` · `GET /api/events/[id]`
-- `POST /api/registration/calculate-price`
-- `POST /api/registration/submit`
+**Public** (not matched by `proxy.ts` — each handler rate-limits itself)
+- `GET  /api/events` · `GET /api/events/[id]` — 60/min per IP
+- `POST /api/registration/calculate-price` — 60/min per IP
+- `POST /api/registration/submit` — 10/hour per IP
 
-**Admin** (edge: session + rate‑limit + CSRF; handler: role/ownership)
+**Admin** (edge: session + rate-limit + CSRF; handler: role/ownership)
 - Events — `GET`/`POST /api/admin/events`, `GET`/`PUT /api/admin/events/[id]`,
   `PATCH /api/admin/events/[id]/status`
 - Registrations — `GET /api/admin/registrations`, `GET`/`PUT /api/admin/registrations/[id]`,
   `POST /api/admin/registrations/export`, `POST /api/admin/registrations/[id]/resend-confirmation`
-- Centres — `GET`/`POST /api/admin/centers`, `PUT`/`DELETE /api/admin/centers/[id]`
+- Centres — `GET`/`POST /api/admin/centers`, `PUT`/`DELETE`/`PATCH /api/admin/centers/[id]`
+  (`DELETE` soft-deletes, `PATCH` restores)
 - Admins — `GET`/`POST /api/admin/users`, `PUT`/`DELETE /api/admin/users/[id]`,
   `POST /api/admin/users/[id]/reset-password`
 - Audit — `GET /api/admin/audit-log`
 
-**Auth** — `GET /api/auth/me` (login/logout go through the Supabase browser client, not a
-route handler).
+**Auth** — `GET /api/auth/me` (60/min per IP; login/logout go through the Supabase browser
+client, not a route handler).
 
 Validation errors return a canonical `400 { error, details }` (Zod issues) via the shared
 `validationError()` helper.
@@ -348,29 +363,50 @@ Validation errors return a canonical `400 { error, details }` (Zod issues) via t
 
 ## Security & privacy
 
-- **Content‑Security‑Policy** with a **per‑request nonce** + `strict-dynamic` (set in
+- **Content-Security-Policy** with a **per-request nonce** + `strict-dynamic` (set in
   `proxy.ts`), dropping `unsafe-inline` from `script-src` in production.
-- **Static security headers** in `next.config.ts` — HSTS, `X-Frame-Options: DENY`,
-  `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`.
-- **CSRF** — mutating admin requests must be same‑origin (fail‑closed against
-  `NEXT_PUBLIC_APP_URL`).
-- **Rate limiting** — best‑effort in‑memory limits on submit, price calc, public reads and
-  the admin API.
-- **Audit log** — best‑effort, non‑blocking; never rolls back the business write.
-- **RLS** — enabled deny‑all on every data table (all access is via Prisma, which bypasses
-  RLS by design).
-- **Owner tier** — only an owner (`OWNER_USER_IDS`, immutable Supabase ids; verified‑email
-  `OWNER_EMAILS` fallback) may create/modify super‑admins.
+- **Static security headers** in `next.config.ts`, applied to every response —
+  `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`,
+  `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin`,
+  `Permissions-Policy: camera=(), microphone=(), geolocation=()` and
+  `Cross-Origin-Resource-Policy: same-origin`. (The `preload` directive is a one-way
+  commitment and only takes effect once the domain is submitted at
+  [hstspreload.org](https://hstspreload.org/).)
+- **CSRF** — mutating admin requests must be same-origin, checked against
+  `NEXT_PUBLIC_APP_URL`. **Fail-closed**: a missing Origin *and* Referer, or an unset
+  `NEXT_PUBLIC_APP_URL`, is rejected; the any-localhost relaxation is gated to non-production.
+- **Rate limiting** — best-effort in-memory limits: admin API 120/min/IP at the edge; submit
+  10/hour, price calc 60/min and public reads 60/min enforced inside each public handler.
+- **Audit log** — best-effort, non-blocking; never rolls back the business write.
+- **No browser-direct data access** — the Supabase anon key is used for **Auth only**; the JS
+  client never reads or writes tables. Every data access goes through Prisma on the server,
+  which connects directly and bypasses RLS by design.
+- **RLS** — enabled **deny-all** on all 12 public tables (the 11 models + `_prisma_migrations`):
+  row security is on and **zero policies** are defined, so nothing is reachable through the
+  anon key. This is a **backstop**, not the access control — the real authorization is the
+  role/ownership gate in the handlers and services. It is configured in the Supabase project
+  itself rather than in this repo's migrations; verify with
+  `select tablename, rowsecurity from pg_tables where schemaname = 'public'` (expect all
+  `true`) and `select * from pg_policies where schemaname = 'public'` (expect no rows).
+  Supabase's Security Advisor reports this as informational "RLS Enabled No Policy", which is
+  the intended state here.
+- **Owner tier** — only an owner (`OWNER_USER_IDS`, immutable Supabase ids; verified-email
+  `OWNER_EMAILS` fallback) may create/modify super-admins. Both lists empty → nobody can
+  (fail-closed).
 - **GDPR** — explicit `z.literal(true)` consent; the stored `ipAddress` is retained solely for
   abuse prevention and never appears in the UI or exports.
-- **Export hardening** — XLSX cells are neutralized against spreadsheet **formula injection**.
-- **Idempotency & honeypot** on the public submit path; **max 10** participants.
+- **Export hardening** — XLSX cells are neutralized against spreadsheet **formula injection**
+  (`=`, `+`, `-`, `@`, tab and CR are prefixed) across title, headers and every data row.
+- **Idempotency & honeypot** on the public submit path; **max 10** participants. The honeypot
+  is re-checked in the service layer, and an idempotency-key race is recovered on the unique
+  constraint rather than surfacing an error.
 
 ---
 
 ## Internationalization
 
-- Routing and UI copy use **next‑intl 4**; locales are `cs` (default) and `en`, prefixed in
+- Routing and UI copy use **next-intl 4**; locales are `cs` (default) and `en`, prefixed in
   the URL (`/cs/...`, `/en/...`) and handled in `proxy.ts`.
 - **UI strings** live in [`locales/cs.json`](locales/cs.json) / [`locales/en.json`](locales/en.json);
   keys are namespaced (`form`, `home`, `event`, `badge`, `admin`, …).
@@ -385,14 +421,14 @@ Validation errors return a canonical `400 { error, details }` (Zod issues) via t
 
 ### Prerequisites
 
-- **Node.js 20+** (the tooling uses the built‑in `fetch`/`WebSocket`)
+- **Node.js 20+** (the tooling uses the built-in `fetch`/`WebSocket`)
 - A **Supabase** project (PostgreSQL + Auth)
 - A **Resend** account + API key (for confirmation emails)
 
 ### 1. Install
 
 ```bash
-git clone <repo-url> registrace
+git clone https://github.com/Martin8O/Registrace.git registrace
 cd registrace
 npm install          # runs `prisma generate` via postinstall
 ```
@@ -410,7 +446,7 @@ cp .env.example .env.local
 # Apply all migrations to your database (uses DIRECT_URL)
 npx prisma migrate deploy
 
-# Seed the 25 BDC centres
+# Seed the centre rows (23 BDC centres + 2 catch-alls)
 npx prisma db seed
 
 # (optional) Load a realistic demo dataset — events + fictional family registrations.
@@ -446,13 +482,13 @@ noted.
 | `DIRECT_URL` | Direct Supabase connection (port **5432**) — used by Prisma migrate/seed. |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL (also feeds the CSP `connect-src`; must be set **at build**). |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (browser auth client). |
-| `SUPABASE_SERVICE_ROLE_KEY` | Service‑role key for admin user management (server only). |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service-role key for admin user management (server only). |
 | `RESEND_API_KEY` | Resend API key for confirmation emails. |
 | `NEXT_PUBLIC_APP_URL` | The app's own origin — used for invite/reset links **and** the admin CSRF check. A wrong value silently 403s every admin write. |
-| `NEXT_PUBLIC_DEFAULT_LOCALE` | Default UI locale (`cs`). |
 | `EMAIL_FROM` | Verified sender, e.g. `BDC Registrace <noreply@send.registrace.online>`. |
-| `OWNER_USER_IDS` | Comma‑separated Supabase Auth **user UUIDs** allowed to manage super‑admins (preferred, immutable). |
-| `OWNER_EMAILS` | Legacy fallback — verified emails allowed to manage super‑admins. |
+| `OWNER_USER_IDS` | Comma-separated Supabase Auth **user UUIDs** allowed to manage super-admins (preferred, immutable). Find them in Supabase → Authentication → Users. |
+| `OWNER_EMAILS` | Legacy fallback — verified emails allowed to manage super-admins. Both owner lists empty → nobody can manage super-admins. |
+| `SUPER_ADMIN_EMAIL` | *Optional, tooling only.* Fallback address for `prisma/promote-super-admin.ts` when no argument is passed. Not read by the app. |
 
 > `NEXT_PUBLIC_*` values are inlined at **build** time; on Vercel they must be present when the
 > build runs. `EMAIL_FROM` is a runtime value, so changing it needs a redeploy.
@@ -467,14 +503,14 @@ noted.
 | `npm run build` | Production build. |
 | `npm start` | Serve the production build. |
 | `npm run lint` | ESLint. |
-| `npm test` | Run the Vitest suite once (CI‑friendly). |
+| `npm test` | Run the Vitest suite once (CI-friendly). |
 | `npm run test:watch` | Vitest in watch mode. |
 | `npm run test:coverage` | Vitest with v8 coverage. |
 | `postinstall` | `prisma generate` (regenerates the gitignored client). |
 
 Database utilities: `npx prisma migrate deploy` (apply migrations), `npx prisma db seed`
-(25 centres), `prisma/seed-demo.ts` (demo data), `prisma/promote-super-admin.ts` (bootstrap a
-super‑admin).
+(centre rows), `prisma/seed-demo.ts` (demo data), `prisma/promote-super-admin.ts` (bootstrap a
+super-admin).
 
 ---
 
@@ -483,19 +519,33 @@ super‑admin).
 ```
 app/
   [locale]/(public)/           public pages (home, event detail + registration form)
-  [locale]/admin/(panel)/      admin panel (dashboard, events, registrations, centres, admins, logs, profile)
+  [locale]/admin/(panel)/      admin panel — dashboard, events, registrations,
+                               centres (/admin/centers), admins (/admin/users), logs, profile
   [locale]/admin/login|set-password|auth/confirm   auth entry points
   api/                         route handlers (public + admin) + _lib (guard, http helpers)
 components/{public,admin,shared}   UI components
 modules/{events,registrations,pricing,auth,centers,users}   business services (no fat handlers)
-lib/{db,validation,security,email,export,supabase,audit,utils,mock}   infrastructure
+lib/                           infrastructure
+  {db,validation,security,email,export,supabase,utils,mock,admin}/   modules
+  audit.ts · types.ts          audit-log writer · shared types
 locales/{cs,en}.json           UI translations
-prisma/{schema.prisma,seed.ts,seed-demo.ts,migrations}   data layer
+prisma/
+  schema.prisma · migrations/  data layer (6 applied migrations)
+  seed.ts                      the 25 centre rows
+  seed-demo.ts                 optional demo dataset
+  promote-super-admin.ts       one-off super-admin bootstrap
+public/images/                 static assets (BDC logo)
 proxy.ts                       edge middleware (i18n + session + admin hardening + CSP)
 i18n/request.ts                next-intl request config
+next.config.ts                 static security headers
+prisma.config.ts               Prisma CLI config (reads DIRECT_URL)
+vitest.config.ts               test runner config
 generated/prisma/              generated Prisma client (gitignored)
 docs/screenshots/              README images
 ```
+
+Note the naming: the “centres” screen lives at `/admin/centers` and the “admins” screen at
+`/admin/users` (the route names use the model names).
 
 ---
 
@@ -503,22 +553,22 @@ docs/screenshots/              README images
 
 `npm test` runs **61 Vitest tests** across 5 files, with **no database required**:
 
-- **Pricing engine** — unit tests over the arithmetic and a 22‑scenario matrix checked against
-  the hand‑derived BDC formula.
+- **Pricing engine** — unit tests over the arithmetic and a 22-scenario matrix checked against
+  the hand-derived BDC formula.
 - **Validation** — the Zod submit/price schemas (honeypot, participant caps, tier rules,
   diet).
-- **Submit service** — control‑flow with a **mocked Prisma** (`vi.mock('@/lib/db')`) while
-  keeping the real engine, so `totalPrice` is asserted end‑to‑end.
-- **Export & auth** — the registration‑export scoping (including the cross‑centre IDOR
+- **Submit service** — control-flow with a **mocked Prisma** (`vi.mock('@/lib/db')`) while
+  keeping the real engine, so `totalPrice` is asserted end-to-end.
+- **Export & auth** — the registration-export scoping (including the cross-centre IDOR
   regression) and auth helpers.
 
 ---
 
 ## Deployment
 
-- **Hosting:** Vercel (serverless), auto‑deploying every push to `main` (~1–2 min).
+- **Hosting:** Vercel (serverless), auto-deploying every push to `main` (~1–2 min).
 - **Database/Auth:** Supabase (`eu-west-1`). Migrations are applied with
-  `prisma migrate deploy` (a no‑op when already in sync).
+  `prisma migrate deploy` (a no-op when already in sync).
 - **Domain:** `registrace.online` — apex canonical, `www` → 308 → apex, DNS kept at Wedos.
 - **Email:** Resend sends from the verified subdomain `send.registrace.online`
   (DKIM/SPF/DMARC), isolating sending reputation.
@@ -531,24 +581,27 @@ docs/screenshots/              README images
 
 | Document | What's in it |
 |---|---|
-| [`CLAUDE.md`](CLAUDE.md) | Project constitution — architectural invariants and conventions. |
-| [`AGENTS.md`](AGENTS.md) | Note on this project's Next.js version for AI coding agents. |
-| [`.env.example`](.env.example) | Documented environment‑variable template. |
+| [`CLAUDE.md`](CLAUDE.md) | Project constitution — the 20 architectural invariants, roles, folder map and translation-key conventions the code is held to. Written for [Claude Code](https://claude.com/claude-code), which built the app; readable as plain architecture notes. It also references a `local/` workspace that is gitignored and not published — see the note at the top of the file. |
+| [`AGENTS.md`](AGENTS.md) | Briefing for AI coding agents (the [agents.md](https://agents.md) convention, read by Claude Code, Cursor, Copilot and others) — commands, the non-negotiable rules, and the things about this codebase that surprise people. Its top block is Next.js-managed and points agents at the version-matched docs bundled in `node_modules/next/dist/docs/`. |
+| [`.env.example`](.env.example) | Annotated environment-variable template — every variable with its purpose, where to find its value, and the build-time vs runtime distinction. |
+| [`LICENSE`](LICENSE) | MIT. |
+
+This README is the only document a reader needs; the rest are supporting detail.
 
 ---
 
 ## Status & roadmap
 
-The full build (**B1–B8**) and production‑hardening (**P1–P8**) phases are complete, and the
-app is **deployed and verified in production**. A multi‑agent security audit has been run and
+The full build (**B1–B8**) and production-hardening (**P1–P8**) phases are complete, and the
+app is **deployed and verified in production**. A multi-agent security audit has been run and
 its findings fixed.
 
-**Known parking‑lot items** (non‑blocking):
+**Known parking-lot items** (non-blocking):
 
-- Persist a **form draft** so switching language mid‑registration doesn't reset the form.
-- Move the in‑memory rate‑limiter to a shared store (Upstash/Postgres) if serverless scale
+- Persist a **form draft** so switching language mid-registration doesn't reset the form.
+- Move the in-memory rate-limiter to a shared store (Upstash/Postgres) if serverless scale
   demands it.
-- Optional granular Supabase RLS policies, should any browser‑direct data reads ever be added
+- Optional granular Supabase RLS policies, should any browser-direct data reads ever be added
   (none are currently planned).
 
 ---
@@ -561,7 +614,7 @@ from and reuse.
 The **Buddhismus Diamantové cesty (BDC)** name, logo and visual identity belong to BDC and are
 **not** covered by the MIT grant, which applies to the source code only.
 
-Built with Next.js, Prisma, Supabase, next‑intl, Zod, React Hook Form, Resend, exceljs, Tailwind
+Built with Next.js, Prisma, Supabase, next-intl, Zod, React Hook Form, Resend, exceljs, Tailwind
 CSS and Vitest.
 
 Designed and built by **Martin Svoboda** — [svobodamartin.dev](https://svobodamartin.dev).
