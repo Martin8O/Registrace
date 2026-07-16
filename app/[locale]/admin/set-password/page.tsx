@@ -34,10 +34,14 @@ export default function SetPasswordPage() {
   const clientRef = useRef<ReturnType<typeof createClient> | null>(null)
   const [phase, setPhase] = useState<'checking' | 'ready' | 'invalid'>('checking')
   // Whose password this is — the TOKEN user's e-mail, read from the session that
-  // auth/confirm just established. Shown so the takeover is visible up front:
-  // verifying the link has already replaced any session this browser had (cookies
-  // are per browser, not per window), and saying so beats letting a super-admin
-  // discover it later in their other window.
+  // auth/confirm just established. Naming the account is what makes the session
+  // takeover visible (verifying the link already replaced any session this browser
+  // had; cookies are per browser, not per window). A super-admin testing an invite
+  // sees an address that is not theirs and can stop; an ordinary invitee just gets
+  // confirmation they are setting up the right account. An explicit warning about
+  // the takeover lived here too and was dropped: it only ever applied to the
+  // super-admin-testing-invites case, and everyone else read a caution about a
+  // session they never had. The reasoning is in AGENTS.md, where it belongs.
   const [email, setEmail] = useState<string | null>(null)
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -144,11 +148,6 @@ export default function SetPasswordPage() {
                 {t('settingFor', { email })}
               </p>
             )}
-            {/* The link verification (auth/confirm) has ALREADY replaced whatever
-                session this browser held — cookies are shared by every window. Say
-                so here, before saving, rather than letting a super-admin find out
-                from their other window. */}
-            <p className="mt-2 text-xs text-neutral-500">{t('sessionNote')}</p>
             <form onSubmit={handleSubmit} className="mt-6 space-y-5" noValidate>
               <div className="form-field">
                 <label className="form-label" htmlFor="password">

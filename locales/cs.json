@@ -167,7 +167,6 @@
       "title": "Nastavení hesla",
       "subtitle": "Zvolte si nové heslo pro přístup do administrace.",
       "settingFor": "Heslo nastavujete pro účet {email}.",
-      "sessionNote": "Otevřením odkazu jste byli v tomto prohlížeči přihlášeni k tomuto účtu — případné dřívější přihlášení (ve všech oknech) tím bylo nahrazeno. Chcete-li si své přihlášení příště zachovat, otevřete odkaz v anonymním okně.",
       "password": "Nové heslo",
       "confirm": "Heslo znovu",
       "submit": "Uložit heslo",

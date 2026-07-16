@@ -167,7 +167,6 @@
       "title": "Set your password",
       "subtitle": "Choose a new password to access the admin panel.",
       "settingFor": "You are setting the password for {email}.",
-      "sessionNote": "Opening the link signed this browser in as this account — any previous sign-in (in every window) has been replaced. To keep your own session next time, open the link in a private window.",
       "password": "New password",
       "confirm": "Repeat password",
       "submit": "Save password",

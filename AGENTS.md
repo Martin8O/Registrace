@@ -71,7 +71,10 @@ These are enforced across the codebase — do not violate them to make something
   user; a super-admin logged in in another window is signed out (cookies are per browser, not
   per window). This is the fix for a past bug where the invite link changed the *super-admin's*
   password. Do not "fix" the sign-out by falling back to the ambient session — that reopens
-  the hole. The set-password page states the takeover and whose account it is.
+  the hole. The set-password page names the account it is setting the password for, which is
+  what surfaces the takeover; it deliberately does **not** carry a warning about the replaced
+  session — that only ever applied to a super-admin testing invites, while every ordinary
+  invitee would have read a caution about a session they never had.
 
 ## Conventions
 
