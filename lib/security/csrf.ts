@@ -44,6 +44,24 @@ function originFromHeaders(req: Request): string | null {
   return null;
 }
 
+// A Vercel PREVIEW deployment is served from a generated *.vercel.app host, never
+// from the canonical NEXT_PUBLIC_APP_URL — so every mutating admin request on a
+// preview would fail the origin check and 403, making previews useless for testing
+// exactly the admin flows worth testing before a release.
+//
+// This adds ONLY the origin the app is currently being served from, which is
+// same-origin by definition: a browser cannot be induced to send this Origin from
+// any other site, so nothing an attacker controls is accepted. It is skipped
+// entirely when VERCEL_ENV is "production" (or absent, i.e. local/other hosts), so
+// production stays exactly as strict as before: canonical origin only.
+function previewOrigins(): string[] {
+  const env = process.env.VERCEL_ENV;
+  if (!env || env === "production") return [];
+  return [process.env.VERCEL_BRANCH_URL, process.env.VERCEL_URL]
+    .filter((host): host is string => typeof host === "string" && host.length > 0)
+    .map((host) => `https://${host}`);
+}
+
 function isLocalhost(origin: string): boolean {
   try {
     const host = new URL(origin).hostname;
@@ -56,12 +74,14 @@ function isLocalhost(origin: string): boolean {
 // FAIL-CLOSED: a missing NEXT_PUBLIC_APP_URL (in production) or an absent/
 // mismatched Origin+Referer all return false → the caller 403s. In development
 // we also accept any localhost origin, so a mismatched dev port / env value
-// doesn't 403 the admin panel locally while production stays strict.
+// doesn't 403 the admin panel locally while production stays strict. On a Vercel
+// preview we additionally accept that deployment's own URL (see previewOrigins).
 export function isSameOrigin(req: Request): boolean {
   const actual = originFromHeaders(req);
   if (!actual) return false;
   const expected = expectedOrigin();
   if (expected && actual === expected) return true;
+  if (previewOrigins().includes(actual)) return true;
   if (process.env.NODE_ENV !== "production" && isLocalhost(actual)) return true;
   return false;
 }
