@@ -9,6 +9,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["modules/**/*.test.ts", "lib/**/*.test.ts"],
+    // Keep in step with `lib/readme-claims.test.ts`, which counts every *.test.ts
+    // in the repo: a file matched by one and not the other silently miscounts.
+    include: ["modules/**/*.test.ts", "lib/**/*.test.ts", "prisma/**/*.test.ts"],
   },
 });

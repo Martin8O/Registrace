@@ -18,7 +18,7 @@ list of invariants before changing anything structural.
 ```bash
 npm run dev                 # dev server on :3000
 npm run build               # production build
-npm test                    # Vitest (130 tests, no database needed)
+npm test                    # Vitest (134 tests, no database needed)
 npm run lint                # ESLint
 npx prisma migrate deploy   # apply migrations (needs DIRECT_URL)
 ```
@@ -65,7 +65,12 @@ These are enforced across the codebase — do not violate them to make something
   the list has a gap. Per-day meal control is availability, not price.
 - **RLS is enabled deny-all** on the data tables as a backstop, but Prisma connects directly
   and bypasses it. The real authorization is the role/ownership gate in the handlers and
-  services.
+  services. It lives in a migration and is guarded by `prisma/rls.test.ts` — **a new model
+  needs `ALTER TABLE "<table>" ENABLE ROW LEVEL SECURITY;` in the migration that creates it.**
+  Supabase's default privileges grant `anon` full read/write on any new public table, and the
+  anon key ships in the browser bundle, so a table without RLS is world-writable. Do not add
+  policies to "complete" it: zero policies IS the deny-all, and a policy would turn the
+  backstop into a grant.
 - **Admin passwords never touch our server.** set-password and profile call Supabase Auth
   straight from the browser, so `lib/validation/password` is informational (same status as
   frontend pricing) and the enforcing policy lives in the Supabase dashboard. Changing one

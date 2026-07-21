@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-130%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-134%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -207,7 +207,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 130 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 134 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -389,11 +389,15 @@ Validation errors return a canonical `400 { error, details }` (Zod issues) via t
 - **No browser-direct data access** — the Supabase anon key is used for **Auth only**; the JS
   client never reads or writes tables. Every data access goes through Prisma on the server,
   which connects directly and bypasses RLS by design.
-- **RLS** — enabled **deny-all** on all 12 public tables (the 11 models + `_prisma_migrations`):
+- **RLS** — enabled **deny-all** on all 13 public tables (the 12 models + `_prisma_migrations`):
   row security is on and **zero policies** are defined, so nothing is reachable through the
   anon key. This is a **backstop**, not the access control — the real authorization is the
-  role/ownership gate in the handlers and services. It is configured in the Supabase project
-  itself rather than in this repo's migrations; verify with
+  role/ownership gate in the handlers and services. It lives **in the migrations**
+  (`20260721104500_enable_rls_on_all_tables`) and `prisma/rls.test.ts` fails the build if a
+  model is added without it. That is a correction, not a preference: RLS was originally set by
+  hand in the Supabase dashboard, which covers the tables that exist at that moment — so
+  `MealPricingRule`, created by a migration, went live with RLS off and `anon` granted
+  SELECT/INSERT/UPDATE/DELETE on it through PostgREST. Verify the live state with
   `select tablename, rowsecurity from pg_tables where schemaname = 'public'` (expect all
   `true`) and `select * from pg_policies where schemaname = 'public'` (expect no rows).
   Supabase's Security Advisor reports this as informational "RLS Enabled No Policy", which is
@@ -588,7 +592,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **130 Vitest tests** across 9 files, with **no database required**:
+`npm test` runs **134 Vitest tests** across 10 files, with **no database required**:
 
 - **Pricing engine** (43) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -612,11 +616,18 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   letters and non-ASCII symbols must **not** tick a rule, or the checklist would green-light a
   password Supabase rejects), that the checklist and the submit gate can never disagree, and
   that every rule is labelled in both locales.
-- **Docs guard** (9) — the counts on this page. Every number above is parsed back out of the
+- **RLS guard** (3) — that every model's table has `ENABLE ROW LEVEL SECURITY` in a migration,
+  and that no migration defines a policy or forces RLS on the owner. It reads the schema and
+  the migration SQL, not the database. It exists because RLS used to be a dashboard setting:
+  it covered the tables that existed when it was clicked, and `MealPricingRule` arrived later
+  through a migration with RLS off and `anon` holding read/write on it.
+- **Docs guard** (10) — the counts on this page. Every number above is parsed back out of the
   README and checked against the test files (via the TypeScript AST, so `it.each` expands and
   regex literals aren't mistaken for code), as are the badge, the tech-stack row and
-  `AGENTS.md`. It exists because "a 22-scenario matrix" outlived the matrix by two audits:
-  both checked the total, which was right, and trusted the prose beside it.
+  `AGENTS.md`. It also checks that every counted file is one Vitest is configured to run, so a
+  test outside the `include` globs can't inflate the total with cases nobody executes. It
+  exists because "a 22-scenario matrix" outlived the matrix by two audits: both checked the
+  total, which was right, and trusted the prose beside it.
 
 ---
 

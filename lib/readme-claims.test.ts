@@ -129,6 +129,16 @@ export function countTests(src: string, label: string): number {
 
 const readme = readFileSync(join(ROOT, "README.md"), "utf8");
 const agents = readFileSync(join(ROOT, "AGENTS.md"), "utf8");
+const vitestConfig = readFileSync(join(ROOT, "vitest.config.ts"), "utf8");
+
+// The roots of vitest's `include` globs ("modules/**/*.test.ts" → "modules").
+// findTestFiles walks the WHOLE repo, so a test file outside those roots is
+// counted here but never run — the README total would overstate the suite by
+// exactly the tests nobody executes. This turns that into a failure.
+function includedRoots(): string[] {
+  const arr = /include:\s*\[([^\]]+)\]/.exec(vitestConfig)?.[1] ?? "";
+  return [...arr.matchAll(/"([^"]+)"/g)].map((m) => m[1]!.split("/**")[0]!);
+}
 
 // "- **Pricing engine** (29) — …" and "- **Export & auth** (7 + 4) — …" (one
 // bullet can cover two files, so sum every number inside the parens).
@@ -183,6 +193,18 @@ describe("README test claims", () => {
 
   it("states the real number of test files", () => {
     expect(statedFiles).toBe(files.length);
+  });
+
+  it("counts only files Vitest is configured to run", () => {
+    const roots = includedRoots();
+    expect(roots.length).toBeGreaterThan(0);
+    const orphans = files
+      .map((f) => relative(ROOT, f).split("\\").join("/"))
+      .filter((f) => !roots.some((root) => f.startsWith(`${root}/`)));
+    expect(
+      orphans,
+      `Counted but never run — add their directory to vitest.config.ts include: ${orphans.join(", ")}`,
+    ).toEqual([]);
   });
 
   it("states the real total", () => {
