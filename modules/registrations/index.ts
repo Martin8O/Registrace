@@ -637,6 +637,7 @@ async function assertRegistrationWritable(id: string, ctx: AdminContext) {
       centerId: true,
       hasAccommodation: true,
       status: true,
+      totalPrice: true,
       event: { select: { centerId: true } },
     },
   });
@@ -647,8 +648,112 @@ async function assertRegistrationWritable(id: string, ctx: AdminContext) {
   return r;
 }
 
-// Editable fields only (decision 2): home centre, accommodation, status. No
-// price recompute — the P5 engine owns pricing; the stay days/meals are immutable.
+// Everything the pricing engine needs to re-price a STORED registration. Loaded
+// only when an accommodation change actually requires it — a status or centre
+// edit must not pay for this query.
+//
+// Participants carrying a soft-delete mark are excluded (invariant 9: they are
+// gone for every purpose except audit, so they must not inflate the total), and
+// the rest are ordered by sortOrder because calculatePricing returns its results
+// positionally — feeding them in any other order would assign one participant's
+// price to another.
+async function loadRegistrationForRepricing(id: string) {
+  return prisma.registration.findFirst({
+    where: { id, deletedAt: null },
+    select: {
+      arrivalDateId: true,
+      arrivalTime: true,
+      departureDateId: true,
+      earlyDeparture: true,
+      event: {
+        select: {
+          dates: {
+            orderBy: { sortOrder: "asc" },
+            select: { id: true, date: true, sortOrder: true },
+          },
+          meals: {
+            select: {
+              id: true,
+              eventDateId: true,
+              mealType: true,
+              price: true,
+              isClosed: true,
+            },
+          },
+          pricingRules: true,
+          mealPricingRules: true,
+        },
+      },
+      participants: {
+        where: { deletedAt: null },
+        orderBy: { sortOrder: "asc" },
+        select: {
+          id: true,
+          ageCategory: true,
+          pricingType: true,
+          meals: { select: { eventMealId: true } },
+        },
+      },
+    },
+  });
+}
+
+// Re-price a stored registration for a NEW accommodation flag, via the same
+// engine the public submit uses (invariants 3–4 — the server owns the price).
+//
+// Deliberately NOT applied here: the meal-ordering deadline. submitRegistration
+// strips meal selections once Event.mealRegistrationDeadline has passed, but that
+// gate belongs to NEW orders. Re-applying it on an edit would silently delete the
+// meals of anyone re-priced after the cut-off — a far worse defect than the stale
+// price this fixes. The meals already stored are priced exactly as they stand.
+//
+// Meal prices cannot move as a result of this call: accommodation does not enter
+// the meal half of the engine, and an event's price lists are frozen once it has a
+// registration. `update-repricing.test.ts` pins that down.
+async function repriceForAccommodation(id: string, hasAccommodation: boolean) {
+  const stored = await loadRegistrationForRepricing(id);
+  if (!stored) return null;
+
+  const priced = calculatePricing({
+    participants: stored.participants.map((p) => ({
+      ageCategory: p.ageCategory,
+      pricingType: p.pricingType,
+      mealIds: p.meals.map((m) => m.eventMealId),
+    })),
+    pricingRules: stored.event.pricingRules,
+    mealPricingRules: stored.event.mealPricingRules,
+    meals: stored.event.meals,
+    eventDates: stored.event.dates.map((d) => ({
+      id: d.id,
+      date: d.date.toISOString().slice(0, 10),
+      sortOrder: d.sortOrder,
+    })),
+    // Every other input is the stay as stored — only accommodation is editable.
+    arrivalDateId: stored.arrivalDateId,
+    arrivalTime: stored.arrivalTime,
+    departureDateId: stored.departureDateId,
+    earlyDeparture: stored.earlyDeparture,
+    hasAccommodation,
+  });
+
+  return {
+    participants: stored.participants.map((p, i) => ({
+      id: p.id,
+      participationPrice: priced.participants[i]?.participationPrice ?? 0,
+      mealPrice: priced.participants[i]?.mealPrice ?? 0,
+      totalPrice: priced.participants[i]?.subtotal ?? 0,
+    })),
+    totalPrice: priced.totalPrice,
+  };
+}
+
+// Editable fields only (decision 2): home centre, accommodation, status.
+//
+// Price is recomputed ONLY when accommodation flips (M39). It is the one editable
+// field that moves the price — the engine adds nightRate × (days − 1) for it — so
+// leaving the stored figures alone charged people for nights they had given up (or
+// undercharged them for nights they had taken). Days and meals stay immutable, so
+// nothing else here can change a price; a centre or status edit writes none.
 export async function updateRegistration(
   id: string,
   input: RegistrationUpdateInput,
@@ -665,25 +770,57 @@ export async function updateRegistration(
   });
   if (!center) throw new RegistrationCenterInvalidError();
 
-  await prisma.registration.update({
-    where: { id },
-    data: {
-      centerId: input.centerId,
-      hasAccommodation: input.hasAccommodation,
-      status: input.status,
-    },
+  const repricing =
+    before.hasAccommodation !== input.hasAccommodation
+      ? await repriceForAccommodation(id, input.hasAccommodation)
+      : null;
+
+  // One transaction: the registration row and every participant's prices move
+  // together, so a failure can never leave a total disagreeing with its parts.
+  await prisma.$transaction(async (tx) => {
+    await tx.registration.update({
+      where: { id },
+      data: {
+        centerId: input.centerId,
+        hasAccommodation: input.hasAccommodation,
+        status: input.status,
+        ...(repricing ? { totalPrice: repricing.totalPrice } : {}),
+      },
+    });
+    for (const p of repricing?.participants ?? []) {
+      await tx.participant.update({
+        where: { id: p.id },
+        data: {
+          participationPrice: p.participationPrice,
+          mealPrice: p.mealPrice,
+          totalPrice: p.totalPrice,
+        },
+      });
+    }
   });
 
   // One endpoint covers both spec actions: emit `registration.status_change`
   // when the lifecycle status flipped, else the generic `registration.update`.
+  // totalPrice rides along so a re-price is visible in the audit trail — it is
+  // the admin's only record of why an amount owed changed.
   await logAuditEvent({
     userId: ctx.userId,
     ip: ctx.ip,
     action: before.status !== input.status ? "registration.status_change" : "registration.update",
     entityType: "Registration",
     entityId: id,
-    oldData: { centerId: before.centerId, hasAccommodation: before.hasAccommodation, status: before.status },
-    newData: { centerId: input.centerId, hasAccommodation: input.hasAccommodation, status: input.status },
+    oldData: {
+      centerId: before.centerId,
+      hasAccommodation: before.hasAccommodation,
+      status: before.status,
+      totalPrice: before.totalPrice,
+    },
+    newData: {
+      centerId: input.centerId,
+      hasAccommodation: input.hasAccommodation,
+      status: input.status,
+      totalPrice: repricing ? repricing.totalPrice : before.totalPrice,
+    },
   });
 
   return { id };

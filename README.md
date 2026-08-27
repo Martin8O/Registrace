@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-134%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-147%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -207,7 +207,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 134 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 147 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -592,7 +592,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **134 Vitest tests** across 10 files, with **no database required**:
+`npm test` runs **147 Vitest tests** across 11 files, with **no database required**:
 
 - **Pricing engine** (43) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -604,6 +604,12 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   accepted at every age but still bounded by its enum, diet).
 - **Submit service** (9) — control-flow with a **mocked Prisma** (`vi.mock('@/lib/db')`) while
   keeping the real engine, so `totalPrice` is asserted end-to-end.
+- **Admin re-pricing** (13) — that toggling a registration's accommodation re-prices it through
+  the real engine (both directions, children included — no age is special-cased), that a centre
+  or status edit writes no price and issues no extra query, that the registration and its
+  participants move in one transaction, and that the meals already ordered survive a re-price
+  **after** the meal deadline. That last one is the trap: the submit path strips meals once the
+  cut-off passes, and copying that gate into an edit would delete what people had ordered.
 - **CSRF origin gate** (13) — that the admin origin check accepts the canonical origin and a
   Vercel preview's own url, and rejects everything else: foreign origins, a missing
   Origin + Referer, localhost in production, and — the regression that matters — a `vercel.app`
