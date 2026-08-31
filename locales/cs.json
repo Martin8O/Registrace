@@ -494,6 +494,8 @@
       "priceWord": "cena",
       "participationPriceType": "cena za účast",
       "mealPriceType": "cena za stravu",
+      "pricingTiers": "Cenové hladiny účastníků",
+      "pricingTiersHint": "Změna hladiny přepočítá cenu registrace i uložené ceny objednané stravy.",
       "mealWord": "strava",
       "save": "Uložit změny",
       "saved": "Změny uloženy.",

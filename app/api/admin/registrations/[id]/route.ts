@@ -8,6 +8,8 @@ import {
   RegistrationNotFoundError,
   RegistrationForbiddenError,
   RegistrationCenterInvalidError,
+  RegistrationPricingTypeUnavailableError,
+  RegistrationParticipantMismatchError,
 } from "@/modules/registrations";
 
 // GET — one registration (full detail), ownership-scoped. Missing/not-owned → 404.
@@ -24,8 +26,9 @@ export async function GET(
   return NextResponse.json({ data: registration });
 }
 
-// PUT — edit home centre / accommodation / status (decision 2 — no price
-// recompute). 422 invalid, 403 not-owner, 404 missing.
+// PUT — edit home centre / accommodation / status / each participant's two
+// pricing tiers. Anything that moves money is re-priced server-side by the real
+// engine before the write. 422 invalid, 403 not-owner, 404 missing.
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -52,6 +55,15 @@ export async function PUT(
     }
     if (err instanceof RegistrationCenterInvalidError) {
       return NextResponse.json({ error: "Unknown or inactive center" }, { status: 422 });
+    }
+    // A tier this event does not offer, or a participant from another
+    // registration — both are a well-formed body naming something invalid, so
+    // they share the 422 lane with the unknown-centre case (400 stays Zod's).
+    if (err instanceof RegistrationPricingTypeUnavailableError) {
+      return NextResponse.json({ error: "Pricing tier not offered by this event" }, { status: 422 });
+    }
+    if (err instanceof RegistrationParticipantMismatchError) {
+      return NextResponse.json({ error: "Unknown participant" }, { status: 422 });
     }
     throw err;
   }

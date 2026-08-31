@@ -28,7 +28,11 @@ vi.mock("@/lib/audit", () => ({ logAuditEvent: h.logAuditEvent }));
 vi.mock("@/lib/email", () => ({ sendRegistrationConfirmation: vi.fn() }));
 vi.mock("@/modules/events", () => ({ isPubliclyVisible: () => true }));
 
-import { updateRegistration } from "./index";
+import {
+  updateRegistration,
+  RegistrationParticipantMismatchError,
+  RegistrationPricingTypeUnavailableError,
+} from "./index";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 // A 3-day event. Stay = day 1 (morning arrival) → day 3, no early departure, so
@@ -55,6 +59,9 @@ const EVENT_DATES = [
 
 const PRICING_RULES = [
   { ageCategory: "AGE_15_PLUS", pricingType: "STANDARD", dailyRate: 100, nightRate: 50, ...NO_DISCOUNTS },
+  // The adult's supported stay — deliberately a different rate from the standard
+  // one above, so a participation-tier edit either moves the number or fails.
+  { ageCategory: "AGE_15_PLUS", pricingType: "SUPPORTED", dailyRate: 60, nightRate: 30, ...NO_DISCOUNTS },
   { ageCategory: "AGE_8_14", pricingType: "STANDARD", dailyRate: 40, nightRate: 20, ...NO_DISCOUNTS },
 ];
 
@@ -81,15 +88,28 @@ const ADULT = {
   ageCategory: "AGE_15_PLUS",
   pricingType: "STANDARD",
   mealPricingType: "SUPPORTED",
-  meals: [{ eventMealId: "m_b" }],
+  // The join row's own id: a meal-tier edit re-prices this snapshot in place.
+  meals: [{ id: "pm1", eventMealId: "m_b" }],
 };
 const CHILD = {
   id: "p2",
   ageCategory: "AGE_8_14",
   pricingType: "STANDARD",
   mealPricingType: "STANDARD",
-  meals: [{ eventMealId: "m_b" }],
+  meals: [{ id: "pm2", eventMealId: "m_b" }],
 };
+
+// Both tier sets, all three each — the column default every event carries (M40).
+const ALL_TIERS = ["STANDARD", "SUPPORTED", "SURPLUS"];
+
+// The tier payload the admin editor sends: every participant, always, with the
+// tiers exactly as stored unless the admin moved one.
+const tiersAsStored = (participants = [ADULT, CHILD]) =>
+  participants.map((p) => ({
+    id: p.id,
+    pricingType: p.pricingType as "STANDARD" | "SUPPORTED" | "SURPLUS",
+    mealPricingType: p.mealPricingType as "STANDARD" | "SUPPORTED" | "SURPLUS",
+  }));
 
 const ADULT_MEAL = 55; // 15+ / SUPPORTED breakfast — deliberately not the 80 above
 const CHILD_MEAL = 40;
@@ -131,7 +151,13 @@ function storedForRepricing(participants = [ADULT, CHILD]) {
 // `before` = the pre-image assertRegistrationWritable returns; the second
 // findFirst is the repricing load (only issued when accommodation changed).
 function setup(
-  before: { hasAccommodation: boolean; status?: string; totalPrice?: number },
+  before: {
+    hasAccommodation: boolean;
+    status?: string;
+    totalPrice?: number;
+    participationPricingTypes?: string[];
+    mealPricingTypes?: string[];
+  },
   participants = [ADULT, CHILD],
 ) {
   h.prisma.registration.findFirst
@@ -140,7 +166,18 @@ function setup(
       status: before.status ?? "REGISTERED",
       totalPrice: before.totalPrice ?? TOTAL_WITHOUT,
       hasAccommodation: before.hasAccommodation,
-      event: { centerId: "evt-center" },
+      event: {
+        centerId: "evt-center",
+        participationPricingTypes: before.participationPricingTypes ?? ALL_TIERS,
+        mealPricingTypes: before.mealPricingTypes ?? ALL_TIERS,
+      },
+      // The stored tiers ride on the pre-image query, so "did anything move?" is
+      // answerable without a second round trip.
+      participants: participants.map((p) => ({
+        id: p.id,
+        pricingType: p.pricingType,
+        mealPricingType: p.mealPricingType,
+      })),
     })
     .mockResolvedValueOnce(storedForRepricing(participants));
   h.prisma.center.findFirst.mockResolvedValue({ id: "c1" });
@@ -192,7 +229,10 @@ describe("updateRegistration — accommodation re-pricing (M39)", () => {
     expect(participantWrites().map((p) => p.mealPrice)).toEqual([ADULT_MEAL, CHILD_MEAL]);
   });
 
-  it("never writes ParticipantMeal rows — they are the at-submit snapshot", async () => {
+  it("an accommodation flip writes no ParticipantMeal row — it cannot move a meal price", async () => {
+    // Accommodation does not enter the meal half of the engine, so the at-submit
+    // snapshots stand. (A MEAL-TIER edit does re-price them — see the tier suite
+    // below; that is the one thing that legitimately moves these rows.)
     setup({ hasAccommodation: false });
 
     await updateRegistration("r1", input({ hasAccommodation: true }), CTX);
@@ -311,5 +351,180 @@ describe("updateRegistration — accommodation re-pricing (M39)", () => {
     expect(h.prisma.$transaction).toHaveBeenCalledTimes(1);
     expect(h.prisma.registration.update).not.toHaveBeenCalled();
     expect(h.prisma.participant.update).not.toHaveBeenCalled();
+  });
+});
+// ─── Editing a participant's two pricing tiers (M40c) ─────────────────────────
+// The tiers are the other editable thing that moves money. Both are re-priced
+// through the real engine, both are written back onto the participant, and a MEAL
+// tier change also re-snapshots every ParticipantMeal.price — otherwise the stored
+// per-meal figure would keep stating the old tier's price under a correct total.
+
+describe("updateRegistration — pricing-tier edits", () => {
+  const mealWrites = () =>
+    h.tx.participantMeal.update.mock.calls.map((c) => ({
+      id: c[0].where.id,
+      price: c[0].data.price,
+    }));
+
+  it("moving the participation tier re-prices the stay through the real engine", async () => {
+    setup({ hasAccommodation: false });
+
+    await updateRegistration(
+      "r1",
+      input({
+        hasAccommodation: false,
+        participants: [
+          { id: "p1", pricingType: "SUPPORTED", mealPricingType: "SUPPORTED" },
+          ...tiersAsStored([CHILD]),
+        ],
+      }),
+      CTX,
+    );
+
+    const adult = participantWrites().find((p) => p.id === "p1");
+    expect(adult?.participationPrice).toBe(180); // 60/day × 3, was 100/day × 3 = 300
+    expect(adult?.pricingType).toBe("SUPPORTED");
+  });
+
+  it("moving the participation tier leaves the meal price alone (the tiers are independent)", async () => {
+    setup({ hasAccommodation: false });
+
+    await updateRegistration(
+      "r1",
+      input({
+        hasAccommodation: false,
+        participants: [
+          { id: "p1", pricingType: "SUPPORTED", mealPricingType: "SUPPORTED" },
+          ...tiersAsStored([CHILD]),
+        ],
+      }),
+      CTX,
+    );
+
+    const adult = participantWrites().find((p) => p.id === "p1");
+    expect(adult?.mealPrice).toBe(ADULT_MEAL); // still the SUPPORTED breakfast, 55
+    expect(adult?.mealPricingType).toBe("SUPPORTED");
+    expect(mealWrites()).toEqual([]);
+  });
+
+  it("moving the meal tier re-prices the meals AND re-snapshots every ordered one", async () => {
+    setup({ hasAccommodation: false });
+
+    await updateRegistration(
+      "r1",
+      input({
+        hasAccommodation: false,
+        participants: [
+          { id: "p1", pricingType: "STANDARD", mealPricingType: "STANDARD" },
+          ...tiersAsStored([CHILD]),
+        ],
+      }),
+      CTX,
+    );
+
+    const adult = participantWrites().find((p) => p.id === "p1");
+    expect(adult?.mealPrice).toBe(80); // 15+ STANDARD breakfast, up from SUPPORTED 55
+    expect(adult?.participationPrice).toBe(300); // stay untouched
+    // The stored per-meal snapshot follows the new tier — 80, never the absurd
+    // flat EventMeal.price of 999 (that would mean the legacy fallback fired).
+    expect(mealWrites()).toEqual([{ id: "pm1", price: 80 }]);
+  });
+
+  it("writes both tiers in the same update as the prices they produced", async () => {
+    setup({ hasAccommodation: false });
+
+    await updateRegistration(
+      "r1",
+      input({
+        hasAccommodation: false,
+        participants: [
+          { id: "p1", pricingType: "SUPPORTED", mealPricingType: "STANDARD" },
+          ...tiersAsStored([CHILD]),
+        ],
+      }),
+      CTX,
+    );
+
+    expect(participantWrites().find((p) => p.id === "p1")).toMatchObject({
+      pricingType: "SUPPORTED",
+      mealPricingType: "STANDARD",
+      participationPrice: 180,
+      mealPrice: 80,
+      totalPrice: 260,
+    });
+  });
+
+  it("sending every tier UNCHANGED re-prices nothing and issues no extra query", async () => {
+    // The editor always posts the full tier list, so this is the ordinary save.
+    setup({ hasAccommodation: false, status: "REGISTERED" });
+
+    await updateRegistration(
+      "r1",
+      input({ hasAccommodation: false, status: "PAID", participants: tiersAsStored() }),
+      CTX,
+    );
+
+    expect(h.prisma.registration.findFirst).toHaveBeenCalledTimes(1);
+    expect(regUpdateData()).not.toHaveProperty("totalPrice");
+    expect(h.tx.participant.update).not.toHaveBeenCalled();
+    expect(mealWrites()).toEqual([]);
+  });
+
+  it("refuses a tier the event does not offer, writing nothing", async () => {
+    setup({ hasAccommodation: false, mealPricingTypes: ["STANDARD"] });
+
+    await expect(
+      updateRegistration(
+        "r1",
+        input({
+          hasAccommodation: false,
+          participants: [
+            { id: "p1", pricingType: "STANDARD", mealPricingType: "SURPLUS" },
+            ...tiersAsStored([CHILD]),
+          ],
+        }),
+        CTX,
+      ),
+    ).rejects.toBeInstanceOf(RegistrationPricingTypeUnavailableError);
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("refuses a participant that is not on this registration, writing nothing", async () => {
+    setup({ hasAccommodation: false });
+
+    await expect(
+      updateRegistration(
+        "r1",
+        input({
+          hasAccommodation: false,
+          participants: [{ id: "someone-elses", pricingType: "SURPLUS", mealPricingType: "SURPLUS" }],
+        }),
+        CTX,
+      ),
+    ).rejects.toBeInstanceOf(RegistrationParticipantMismatchError);
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("re-prices a CHILD's tier too — no age is special-cased", async () => {
+    setup({ hasAccommodation: false });
+
+    await updateRegistration(
+      "r1",
+      input({
+        hasAccommodation: false,
+        participants: [
+          ...tiersAsStored([ADULT]),
+          { id: "p2", pricingType: "STANDARD", mealPricingType: "SUPPORTED" },
+        ],
+      }),
+      CTX,
+    );
+
+    const child = participantWrites().find((p) => p.id === "p2");
+    expect(child?.mealPricingType).toBe("SUPPORTED");
+    // 8–14 has no SUPPORTED breakfast row, and the list EXISTS — so it resolves to
+    // 0, never to the flat 999 (invariant 21). A visible 0 beats a silent full charge.
+    expect(child?.mealPrice).toBe(0);
+    expect(mealWrites()).toEqual([{ id: "pm2", price: 0 }]);
   });
 });

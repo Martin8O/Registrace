@@ -103,6 +103,11 @@ next-intl 4 (i18n) · Zod 4 (validation — only lib) · React Hook Form · Rese
     exception is an incoming payload with no meal tier — it falls back to that participant's own
     participation tier, never STANDARD, and that fallback lives at the service boundary, never in
     the engine. Anything re-pricing a stored registration must load and pass **both** tiers.
+    An admin may **change either tier on an existing registration** (M40c) — the server re-prices
+    through the engine, writes the tiers in the same update as the amounts they produced, and a
+    **meal**-tier change also re-snapshots every `ParticipantMeal.price` (skipping that leaves the
+    per-meal record stating the old tier under a correct total). A tier the event does not offer
+    is refused with 422, never silently re-priced.
 - Fields named `*Discount` are **subtracted** from the total, not added
   (morningArrivalDiscount, afternoonArrivalDiscount, eveningArrivalDiscount, earlyDepartureDiscount).
 

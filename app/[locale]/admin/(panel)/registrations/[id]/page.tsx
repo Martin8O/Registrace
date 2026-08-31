@@ -77,6 +77,16 @@ export default async function RegistrationDetailPage({
         }
         initialHasAccommodation={detail.hasAccommodation}
         initialStatus={detail.status}
+        // Each participant's two tiers are editable here: they move money, and the
+        // server re-prices through the real engine before writing (invariants 3-4).
+        initialParticipants={detail.participants.map((p) => ({
+          id: p.id,
+          fullName: p.fullName,
+          pricingType: p.pricingType as 'STANDARD' | 'SUPPORTED' | 'SURPLUS',
+          mealPricingType: p.mealPricingType as 'STANDARD' | 'SUPPORTED' | 'SURPLUS',
+        }))}
+        participationPricingTypes={detail.eventParticipationPricingTypes}
+        mealPricingTypes={detail.eventMealPricingTypes}
       >
         {/* Read-only summary — the event name links to that event's registrations
             page (all info + every registration of the event). */}

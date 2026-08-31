@@ -526,6 +526,8 @@ export type AdminRegistrationListItem = {
 };
 
 export type AdminRegistrationDetailParticipant = {
+  // The Participant row id — the admin tier editor addresses each person by it.
+  id: string;
   fullName: string;
   ageCategory: string;
   // The two independent tiers this person was priced on (invariant 22), both
@@ -685,6 +687,7 @@ export async function getRegistrationForDetail(
     eventParticipationPricingTypes: r.event.participationPricingTypes,
     eventMealPricingTypes: r.event.mealPricingTypes,
     participants: r.participants.map((p) => ({
+      id: p.id,
       fullName: p.fullName,
       ageCategory: p.ageCategory,
       pricingType: p.pricingType,
@@ -711,7 +714,20 @@ async function assertRegistrationWritable(id: string, ctx: AdminContext) {
       hasAccommodation: true,
       status: true,
       totalPrice: true,
-      event: { select: { centerId: true } },
+      // The stored tiers and the event's two offered sets ride along on the query
+      // that already runs, so a status-only save can tell "nothing moved" without
+      // paying for a second round trip.
+      event: {
+        select: {
+          centerId: true,
+          participationPricingTypes: true,
+          mealPricingTypes: true,
+        },
+      },
+      participants: {
+        where: { deletedAt: null },
+        select: { id: true, pricingType: true, mealPricingType: true },
+      },
     },
   });
   if (!r) throw new RegistrationNotFoundError();
@@ -769,15 +785,85 @@ async function loadRegistrationForRepricing(id: string) {
           // supported or surplus participant the next time an admin toggles
           // accommodation — a silent change to money nobody asked to change.
           mealPricingType: true,
-          meals: { select: { eventMealId: true } },
+          // The join rows' OWN ids too: a meal-tier change re-prices each stored
+          // ParticipantMeal.price snapshot, and that needs a row to write to.
+          meals: { select: { id: true, eventMealId: true } },
         },
       },
     },
   });
 }
 
-// Re-price a stored registration for a NEW accommodation flag, via the same
-// engine the public submit uses (invariants 3–4 — the server owns the price).
+// Mirrors the Prisma PricingType enum without importing the generated client (the
+// same convention lib/validation uses). Kept narrow rather than `string` so a tier
+// written back onto a Participant row is checked at the type level.
+export type PricingTypeValue = "STANDARD" | "SUPPORTED" | "SURPLUS";
+type ParticipantTiers = { pricingType: PricingTypeValue; mealPricingType: PricingTypeValue };
+
+// Thrown when a tier edit names a participant that is not on this registration.
+// Handlers map it to HTTP 422. Silently ignoring the row is the wrong answer: the
+// admin would be told their change was saved when it was not.
+export class RegistrationParticipantMismatchError extends Error {
+  constructor(message = "Participant does not belong to this registration") {
+    super(message);
+    this.name = "RegistrationParticipantMismatchError";
+  }
+}
+
+// Which participants' tiers the admin actually changed — the empty map when the
+// payload carries none, or names only tiers already stored. Returning "what
+// moved" rather than "what was sent" is what keeps a status-only save from
+// issuing a re-price query or writing a single price.
+//
+// Both tiers are validated against the event's OWN two sets here, for the same
+// reason submitRegistration validates them: only this layer holds the event, and
+// a tier the event does not offer has no row in the price list, so accepting it
+// would re-price the person to 0 rather than to anything anyone chose. An EMPTY
+// set means "all three" (invariant 22) — validation forbids storing one, so it
+// can only be a data anomaly, and rejecting every edit on such an event would be
+// the worse failure.
+function resolveTierChanges(
+  stored: ReadonlyArray<{ id: string; pricingType: string; mealPricingType: string }>,
+  requested: ReadonlyArray<ParticipantTiers & { id: string }> | undefined,
+  offered: { participation: string[]; meals: string[] },
+): Map<string, ParticipantTiers> {
+  const changes = new Map<string, ParticipantTiers>();
+  if (!requested || requested.length === 0) return changes;
+
+  const storedById = new Map(stored.map((p) => [p.id, p]));
+  const allows = (set: string[], tier: string) => set.length === 0 || set.includes(tier);
+
+  for (const req of requested) {
+    const current = storedById.get(req.id);
+    if (!current) throw new RegistrationParticipantMismatchError();
+
+    if (!allows(offered.participation, req.pricingType)) {
+      throw new RegistrationPricingTypeUnavailableError(
+        `Participation tier ${req.pricingType} is not offered by this event`,
+      );
+    }
+    if (!allows(offered.meals, req.mealPricingType)) {
+      throw new RegistrationPricingTypeUnavailableError(
+        `Meal tier ${req.mealPricingType} is not offered by this event`,
+      );
+    }
+
+    if (
+      req.pricingType !== current.pricingType ||
+      req.mealPricingType !== current.mealPricingType
+    ) {
+      changes.set(req.id, {
+        pricingType: req.pricingType,
+        mealPricingType: req.mealPricingType,
+      });
+    }
+  }
+  return changes;
+}
+
+// Re-price a stored registration for a NEW accommodation flag and/or NEW tiers,
+// via the same engine the public submit uses (invariants 3–4 — the server owns
+// the price).
 //
 // Deliberately NOT applied here: the meal-ordering deadline. submitRegistration
 // strips meal selections once Event.mealRegistrationDeadline has passed, but that
@@ -788,18 +874,32 @@ async function loadRegistrationForRepricing(id: string) {
 // Meal prices cannot move as a result of this call: accommodation does not enter
 // the meal half of the engine, and an event's price lists are frozen once it has a
 // registration. `update-repricing.test.ts` pins that down.
-async function repriceForAccommodation(id: string, hasAccommodation: boolean) {
+async function repriceRegistration(
+  id: string,
+  hasAccommodation: boolean,
+  tiers: Map<string, ParticipantTiers>,
+) {
   const stored = await loadRegistrationForRepricing(id);
   if (!stored) return null;
+
+  // The tiers to price at: whatever the admin just chose for this person, else the
+  // pair they registered with. Read once here so the engine, the participant row
+  // and every per-meal snapshot below cannot end up on different tiers.
+  const tiersFor = (p: {
+    id: string;
+    pricingType: PricingTypeValue;
+    mealPricingType: PricingTypeValue;
+  }): ParticipantTiers =>
+    tiers.get(p.id) ?? { pricingType: p.pricingType, mealPricingType: p.mealPricingType };
 
   const priced = calculatePricing({
     participants: stored.participants.map((p) => ({
       ageCategory: p.ageCategory,
-      pricingType: p.pricingType,
-      // The stored meal tier, passed through verbatim — this is a re-price of an
-      // existing registration, so both tiers are exactly the ones the person
-      // registered with (M40).
-      mealPricingType: p.mealPricingType,
+      pricingType: tiersFor(p).pricingType,
+      // The meal tier, passed through explicitly and never inferred from the
+      // participation one (invariant 22) — they move independently here exactly
+      // as they do on the public form.
+      mealPricingType: tiersFor(p).mealPricingType,
       mealIds: p.meals.map((m) => m.eventMealId),
     })),
     pricingRules: stored.event.pricingRules,
@@ -818,24 +918,61 @@ async function repriceForAccommodation(id: string, hasAccommodation: boolean) {
     hasAccommodation,
   });
 
+  // A meal-slot lookup for the snapshot re-price below. The engine already
+  // charged these prices; re-resolving them here through the SAME shared lookup
+  // keeps ParticipantMeal.price agreeing with the participant's mealPrice instead
+  // of leaving a stale per-meal figure behind a correct total (invariant 21).
+  const mealById = new Map(stored.event.meals.map((m) => [m.id, m]));
+
   return {
-    participants: stored.participants.map((p, i) => ({
-      id: p.id,
-      participationPrice: priced.participants[i]?.participationPrice ?? 0,
-      mealPrice: priced.participants[i]?.mealPrice ?? 0,
-      totalPrice: priced.participants[i]?.subtotal ?? 0,
-    })),
+    participants: stored.participants.map((p, i) => {
+      const chosen = tiersFor(p);
+      const mealTierMoved = chosen.mealPricingType !== p.mealPricingType;
+      return {
+        id: p.id,
+        pricingType: chosen.pricingType,
+        mealPricingType: chosen.mealPricingType,
+        participationPrice: priced.participants[i]?.participationPrice ?? 0,
+        mealPrice: priced.participants[i]?.mealPrice ?? 0,
+        totalPrice: priced.participants[i]?.subtotal ?? 0,
+        // Only when the meal tier actually moved: accommodation never touches the
+        // meal half, so an accommodation-only edit still writes no meal rows.
+        mealSnapshots: mealTierMoved
+          ? p.meals.flatMap((pm) => {
+              const slot = mealById.get(pm.eventMealId);
+              if (!slot) return [];
+              return [
+                {
+                  id: pm.id,
+                  price: resolveMealPrice(
+                    slot.mealType,
+                    { ageCategory: p.ageCategory, mealPricingType: chosen.mealPricingType },
+                    stored.event.mealPricingRules,
+                    slot.price,
+                  ),
+                },
+              ];
+            })
+          : [],
+      };
+    }),
     totalPrice: priced.totalPrice,
   };
 }
 
-// Editable fields only (decision 2): home centre, accommodation, status.
+// Editable fields: home centre, accommodation, status, and each participant's two
+// pricing tiers.
 //
-// Price is recomputed ONLY when accommodation flips (M39). It is the one editable
-// field that moves the price — the engine adds nightRate × (days − 1) for it — so
-// leaving the stored figures alone charged people for nights they had given up (or
-// undercharged them for nights they had taken). Days and meals stay immutable, so
-// nothing else here can change a price; a centre or status edit writes none.
+// Price is recomputed when accommodation flips (M39) or when a tier actually moves
+// (M40c) — those are the only editable fields that touch money. Accommodation adds
+// nightRate × (days − 1); a participation tier switches which PricingRule prices
+// the stay; a meal tier switches which column of the meal price list feeds every
+// meal already ordered. Days and the meal SELECTION stay immutable, so a centre or
+// status edit still writes no price and issues no extra query.
+//
+// The two tiers move independently (invariant 22) — putting somebody in a surplus
+// room while keeping their supported food is the whole point — so neither is ever
+// derived from the other here either.
 export async function updateRegistration(
   id: string,
   input: RegistrationUpdateInput,
@@ -852,9 +989,16 @@ export async function updateRegistration(
   });
   if (!center) throw new RegistrationCenterInvalidError();
 
+  // Validated against the event's own sets, and reduced to what genuinely moved.
+  // Throws (→ 422) on an unoffered tier or a participant from another registration.
+  const tierChanges = resolveTierChanges(before.participants, input.participants, {
+    participation: before.event.participationPricingTypes,
+    meals: before.event.mealPricingTypes,
+  });
+
   const repricing =
-    before.hasAccommodation !== input.hasAccommodation
-      ? await repriceForAccommodation(id, input.hasAccommodation)
+    before.hasAccommodation !== input.hasAccommodation || tierChanges.size > 0
+      ? await repriceRegistration(id, input.hasAccommodation, tierChanges)
       : null;
 
   // One transaction: the registration row and every participant's prices move
@@ -873,11 +1017,21 @@ export async function updateRegistration(
       await tx.participant.update({
         where: { id: p.id },
         data: {
+          // The tiers ride in the same write as the prices they produced, so a
+          // stored row can never claim one tier while holding another's amount.
+          pricingType: p.pricingType,
+          mealPricingType: p.mealPricingType,
           participationPrice: p.participationPrice,
           mealPrice: p.mealPrice,
           totalPrice: p.totalPrice,
         },
       });
+      // Re-snapshot each ordered meal at the new meal tier. Skipping this would
+      // leave ParticipantMeal.price stating the OLD tier's figure underneath a
+      // correct new total — the per-meal record an admin reconciles against.
+      for (const m of p.mealSnapshots) {
+        await tx.participantMeal.update({ where: { id: m.id }, data: { price: m.price } });
+      }
     }
   });
 

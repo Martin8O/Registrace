@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-181%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-189%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -187,8 +187,10 @@ single source of orientation for anyone joining the project.
 - **Event lifecycle** — draft → published → closed → archived, with a public visibility
   window derived on read.
 - **Registration workflow** — filter by centre / status / archived, search by number, edit
-  status (registered / paid / cancelled), resend confirmations, and read **kitchen** (meat /
-  veg totals) and **accommodation** (per-night headcount) tables.
+  status (registered / paid / cancelled), accommodation, and **each participant's two pricing
+  tiers** — every one of which is re-priced server-side by the real engine, with a meal-tier
+  change also rewriting the stored price of each ordered meal. Plus resend confirmations, and
+  **kitchen** (meat / veg totals) and **accommodation** (per-night headcount) tables.
 - **Per-event XLSX export** — one click per event, with a formula-injection-safe serializer.
 - **Centre & admin management** — invite/edit/remove admins, assign centres, soft-delete and
   restore centres. An invited admin lands on a guided password setup: the requirements are
@@ -212,7 +214,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 181 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 189 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -611,7 +613,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **181 Vitest tests** across 13 files, with **no database required**:
+`npm test` runs **189 Vitest tests** across 13 files, with **no database required**:
 
 - **Pricing engine** (48) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -634,13 +636,17 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   the two halves independently, both being persisted, each meal snapshotted at the meal tier's
   price, a tier the event does not offer being refused before anything is written, and both
   tiers reaching the confirmation email — **for a child as well as an adult**.
-- **Admin re-pricing** (14) — that toggling a registration's accommodation re-prices it through
+- **Admin re-pricing** (22) — that toggling a registration's accommodation re-prices it through
   the real engine (both directions, children included — no age is special-cased), that a centre
   or status edit writes no price and issues no extra query, that the registration and its
   participants move in one transaction, that a participant eating on a non-standard tier keeps
   their meal price, and that the meals already ordered survive a re-price **after** the meal
   deadline. That last one is the trap: the submit path strips meals once the cut-off passes, and
-  copying that gate into an edit would delete what people had ordered.
+  copying that gate into an edit would delete what people had ordered. Plus the **tier edit**:
+  each of the two tiers re-prices its own half and only its own half, a meal-tier change also
+  re-snapshots every stored `ParticipantMeal.price`, an unchanged tier list re-prices nothing,
+  and a tier the event does not offer — or a participant from another registration — is refused
+  before anything is written.
 - **CSRF origin gate** (13) — that the admin origin check accepts the canonical origin and a
   Vercel preview's own url, and rejects everything else: foreign origins, a missing
   Origin + Referer, localhost in production, and — the regression that matters — a `vercel.app`

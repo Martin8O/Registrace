@@ -7,6 +7,24 @@ import { RegStatusBadge } from '@/components/admin/StatusBadge'
 import type { AdminRegistrationStatus } from '@/modules/registrations'
 
 const REG_STATUSES: AdminRegistrationStatus[] = ['REGISTERED', 'PAID', 'CANCELLED']
+const PRICING_TYPES = ['STANDARD', 'SUPPORTED', 'SURPLUS'] as const
+type PricingType = (typeof PRICING_TYPES)[number]
+
+// One editable row per participant: the two tiers they are priced on.
+export type EditableParticipantTiers = {
+  id: string
+  fullName: string
+  pricingType: PricingType
+  mealPricingType: PricingType
+}
+
+// The tiers this event actually offers for one half. An EMPTY set means all three
+// — the same reading the submit service, the public form and the price overview
+// use, so no surface can offer a choice another one would refuse.
+function offeredTiers(set: string[]): readonly PricingType[] {
+  const offered = PRICING_TYPES.filter((t) => set.includes(t))
+  return offered.length > 0 ? offered : PRICING_TYPES
+}
 
 // Editable card of the registration detail. Owns the status state so the badge
 // shown next to the registration number (top band) updates live as the admin
@@ -15,8 +33,13 @@ const REG_STATUSES: AdminRegistrationStatus[] = ['REGISTERED', 'PAID', 'CANCELLE
 // the band and the editable card). Data + ownership resolved server-side; this
 // island only persists edits via PUT and triggers the resend POST. The
 // registrant's home centre is NOT editable here (shown read-only in the summary)
-// — its unchanged id is still sent so the PUT payload stays complete. No price
-// recompute (decision 2).
+// — its unchanged id is still sent so the PUT payload stays complete.
+//
+// Accommodation and each participant's two pricing tiers all move money, and the
+// SERVER re-prices through the real engine before writing (invariants 3–4) — this
+// island sends choices, never amounts, exactly like the public form. A half the
+// event offers on one tier only renders no selector for it: there is nothing to
+// choose, and a narrowed set would otherwise invite an edit the server refuses.
 export default function RegistrationDetailEditor({
   registrationId,
   centerId,
@@ -25,6 +48,9 @@ export default function RegistrationDetailEditor({
   pricingButton,
   initialHasAccommodation,
   initialStatus,
+  initialParticipants,
+  participationPricingTypes,
+  mealPricingTypes,
   children,
 }: {
   registrationId: string
@@ -34,6 +60,9 @@ export default function RegistrationDetailEditor({
   pricingButton: ReactNode
   initialHasAccommodation: boolean
   initialStatus: AdminRegistrationStatus
+  initialParticipants: EditableParticipantTiers[]
+  participationPricingTypes: string[]
+  mealPricingTypes: string[]
   children: ReactNode
 }) {
   const t = useTranslations('admin')
@@ -41,9 +70,18 @@ export default function RegistrationDetailEditor({
 
   const [hasAccommodation, setHasAccommodation] = useState(initialHasAccommodation)
   const [status, setStatus] = useState<AdminRegistrationStatus>(initialStatus)
+  const [participants, setParticipants] = useState(initialParticipants)
   const [toast, setToast] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  const participationTiers = offeredTiers(participationPricingTypes)
+  const mealTiers = offeredTiers(mealPricingTypes)
+  const tiersEditable =
+    participants.length > 0 && (participationTiers.length > 1 || mealTiers.length > 1)
+
+  const setTier = (id: string, field: 'pricingType' | 'mealPricingType', value: PricingType) =>
+    setParticipants((prev) => prev.map((p) => (p.id === id ? { ...p, [field]: value } : p)))
 
   async function handleSave() {
     setBusy(true)
@@ -53,7 +91,9 @@ export default function RegistrationDetailEditor({
       const res = await fetch(`/api/admin/registrations/${registrationId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ centerId, hasAccommodation, status }),
+        // Tiers ride along unchanged when nothing was touched; the server
+        // re-prices only what actually moved, so this stays a no-op save.
+        body: JSON.stringify({ centerId, hasAccommodation, status, participants }),
       })
       if (res.ok) {
         setToast(t('registrationDetail.saved'))
@@ -187,6 +227,47 @@ export default function RegistrationDetailEditor({
           </div>
         </div>
 
+        {tiersEditable && (
+          <div>
+            <span className="form-label">{t('registrationDetail.pricingTiers')}</span>
+            <p className="-mt-1 mb-3 text-xs text-neutral-500">
+              {t('registrationDetail.pricingTiersHint')}
+            </p>
+            <div className="space-y-3">
+              {participants.map((p) => (
+                <div
+                  key={p.id}
+                  className="rounded-lg border border-neutral-200 bg-stone-50 px-3.5 py-3"
+                >
+                  <p className="text-sm font-medium text-neutral-900">{p.fullName}</p>
+                  <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {participationTiers.length > 1 && (
+                      <TierSelect
+                        id={`tier-participation-${p.id}`}
+                        label={t('registrationDetail.participationPriceType')}
+                        value={p.pricingType}
+                        options={participationTiers}
+                        optionLabel={(v) => t(`pricingType.${v}`)}
+                        onChange={(v) => setTier(p.id, 'pricingType', v)}
+                      />
+                    )}
+                    {mealTiers.length > 1 && (
+                      <TierSelect
+                        id={`tier-meal-${p.id}`}
+                        label={t('registrationDetail.mealPriceType')}
+                        value={p.mealPricingType}
+                        options={mealTiers}
+                        optionLabel={(v) => t(`pricingType.${v}`)}
+                        onChange={(v) => setTier(p.id, 'mealPricingType', v)}
+                      />
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Both actions centered (layout request) */}
         <div className="flex flex-wrap justify-center gap-3 pt-2">
           <button
@@ -207,6 +288,45 @@ export default function RegistrationDetailEditor({
           </button>
         </div>
       </section>
+    </div>
+  )
+}
+
+// Plain labelled select — the tier lists are short and a row can carry two of
+// them per participant, so a dropdown stays readable where the public form's
+// pill group would not.
+function TierSelect({
+  id,
+  label,
+  value,
+  options,
+  optionLabel,
+  onChange,
+}: {
+  id: string
+  label: string
+  value: PricingType
+  options: readonly PricingType[]
+  optionLabel: (value: PricingType) => string
+  onChange: (value: PricingType) => void
+}) {
+  return (
+    <div>
+      <label htmlFor={id} className="mb-1 block text-xs font-medium text-neutral-500">
+        {label}
+      </label>
+      <select
+        id={id}
+        className="bdc-input w-full"
+        value={value}
+        onChange={(e) => onChange(e.target.value as PricingType)}
+      >
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {optionLabel(o)}
+          </option>
+        ))}
+      </select>
     </div>
   )
 }
