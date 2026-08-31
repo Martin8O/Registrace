@@ -7,7 +7,7 @@
 
 import { prisma } from "@/lib/db";
 import { calculatePricing } from "@/modules/pricing";
-import { resolveMealPrice } from "@/lib/utils/mealPrice";
+import { resolveMealPrice, effectiveMealPricingType } from "@/lib/utils/mealPrice";
 import {
   isPubliclyVisible,
   type EventMealDTO,
@@ -47,6 +47,18 @@ export class RegistrationStayMismatchError extends Error {
   constructor(message = "Stay dates do not belong to this event") {
     super(message);
     this.name = "RegistrationStayMismatchError";
+  }
+}
+
+// A participant picked a pricing tier this event does not offer → 422 (M40).
+// The payload is well-formed — the tier is a valid enum value — so this is a
+// business-rule rejection like RegistrationCenterInvalidError, not a validation
+// failure (P3 reserves 400 + Zod issues for those). Never reachable from the real
+// form, which only ever offers the event's own tiers.
+export class RegistrationPricingTypeUnavailableError extends Error {
+  constructor(message = "Pricing tier not offered by this event") {
+    super(message);
+    this.name = "RegistrationPricingTypeUnavailableError";
   }
 }
 
@@ -174,7 +186,40 @@ export async function submitRegistration(
   const participantsInput = input.participants.map((p) => ({
     ...p,
     mealIds: mealsClosed ? [] : p.mealIds,
+    // The tier that prices THIS person's meals, resolved once here so the engine,
+    // the stored participant row and every per-meal price snapshot cannot drift
+    // apart. A payload that carries no meal tier predates M40, when one tier
+    // priced both halves — so it falls back to that person's participation tier,
+    // never to STANDARD (see lib/utils/mealPrice).
+    mealPricingType: effectiveMealPricingType(p) ?? "STANDARD",
   }));
+
+  // Both tiers must be ones this event actually offers (M40). Checked here rather
+  // than in the Zod schema because only the service has the event loaded, and the
+  // sets differ per event. A stale client on an event whose meal tiers were
+  // narrowed is rejected rather than quietly re-priced to STANDARD — refusing the
+  // registration is recoverable, charging the wrong price silently is not.
+  //
+  // An event with an EMPTY set offers all three, mirroring the empty-meal-price-
+  // list rule (invariant 21): validation forbids an empty set, so one can only
+  // come from a data anomaly, and "keep offering what every event has always
+  // offered" is the answer that cannot turn a bad row into a wall of rejected
+  // registrations.
+  const offeredParticipation: string[] = event.participationPricingTypes ?? [];
+  const offeredMeals: string[] = event.mealPricingTypes ?? [];
+  for (const p of participantsInput) {
+    const participationTier = p.pricingType ?? "STANDARD";
+    if (offeredParticipation.length > 0 && !offeredParticipation.includes(participationTier)) {
+      throw new RegistrationPricingTypeUnavailableError(
+        `Participation tier ${participationTier} is not offered by this event`,
+      );
+    }
+    if (offeredMeals.length > 0 && !offeredMeals.includes(p.mealPricingType)) {
+      throw new RegistrationPricingTypeUnavailableError(
+        `Meal tier ${p.mealPricingType} is not offered by this event`,
+      );
+    }
+  }
 
   // Server-authoritative recompute via the pricing seam (invariants 3–4). The
   // client sends no prices and none would be trusted.
@@ -182,6 +227,7 @@ export async function submitRegistration(
     participants: participantsInput.map((p) => ({
       ageCategory: p.ageCategory,
       pricingType: p.pricingType,
+      mealPricingType: p.mealPricingType,
       mealIds: p.mealIds,
     })),
     pricingRules: event.pricingRules,
@@ -273,6 +319,10 @@ export async function submitRegistration(
             // price list is keyed by — storing anything else would make the stored
             // row disagree with the price charged.
             pricingType: p.pricingType ?? "STANDARD",
+            // The second, independent tier (M40) — what this person's meals were
+            // priced at. Stored alongside the participation tier so a later
+            // re-price (the accommodation edit) reproduces the same meal prices.
+            mealPricingType: p.mealPricingType,
             mealType: p.mealType,
             participationPrice: priced?.participationPrice ?? 0,
             mealPrice: priced?.mealPrice ?? 0,
@@ -691,6 +741,11 @@ async function loadRegistrationForRepricing(id: string) {
           id: true,
           ageCategory: true,
           pricingType: true,
+          // BOTH tiers, always (M40). Dropping the meal tier here would let the
+          // engine fall back to STANDARD and quietly re-price the meals of every
+          // supported or surplus participant the next time an admin toggles
+          // accommodation — a silent change to money nobody asked to change.
+          mealPricingType: true,
           meals: { select: { eventMealId: true } },
         },
       },
@@ -718,6 +773,10 @@ async function repriceForAccommodation(id: string, hasAccommodation: boolean) {
     participants: stored.participants.map((p) => ({
       ageCategory: p.ageCategory,
       pricingType: p.pricingType,
+      // The stored meal tier, passed through verbatim — this is a re-price of an
+      // existing registration, so both tiers are exactly the ones the person
+      // registered with (M40).
+      mealPricingType: p.mealPricingType,
       mealIds: p.meals.map((m) => m.eventMealId),
     })),
     pricingRules: stored.event.pricingRules,

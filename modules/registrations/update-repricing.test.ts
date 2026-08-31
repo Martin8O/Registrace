@@ -65,26 +65,36 @@ const MEALS = [{ id: "m_b", eventDateId: "d1", mealType: "BREAKFAST", price: 999
 
 const MEAL_PRICING_RULES = [
   { mealType: "BREAKFAST", ageCategory: "AGE_15_PLUS", pricingType: "STANDARD", price: 80 },
+  { mealType: "BREAKFAST", ageCategory: "AGE_15_PLUS", pricingType: "SUPPORTED", price: 55 },
   { mealType: "BREAKFAST", ageCategory: "AGE_8_14", pricingType: "STANDARD", price: 40 },
 ];
 
+// The adult eats on the SUPPORTED tier while staying on the STANDARD one — the two
+// tiers are independent since M40. This is not decoration: if the re-price ever
+// stopped passing the stored meal tier through, the engine would resolve the
+// STANDARD breakfast (80) instead of the supported one (55) and the "meal prices
+// never move" assertions below would fail. With every participant on STANDARD, as
+// the fixture was until M40a, dropping the tier changed nothing and those
+// assertions could not catch it.
 const ADULT = {
   id: "p1",
   ageCategory: "AGE_15_PLUS",
   pricingType: "STANDARD",
+  mealPricingType: "SUPPORTED",
   meals: [{ eventMealId: "m_b" }],
 };
 const CHILD = {
   id: "p2",
   ageCategory: "AGE_8_14",
   pricingType: "STANDARD",
+  mealPricingType: "STANDARD",
   meals: [{ eventMealId: "m_b" }],
 };
 
-const ADULT_MEAL = 80;
+const ADULT_MEAL = 55; // 15+ / SUPPORTED breakfast — deliberately not the 80 above
 const CHILD_MEAL = 40;
-const TOTAL_WITHOUT = 300 + ADULT_MEAL + 120 + CHILD_MEAL; // 540
-const TOTAL_WITH = 400 + ADULT_MEAL + 160 + CHILD_MEAL; // 680
+const TOTAL_WITHOUT = 300 + ADULT_MEAL + 120 + CHILD_MEAL; // 515
+const TOTAL_WITH = 400 + ADULT_MEAL + 160 + CHILD_MEAL; // 655
 const NIGHTS_DELTA = TOTAL_WITH - TOTAL_WITHOUT; // 140 = (50 + 20) × 2 nights
 
 const CTX = {
@@ -281,6 +291,16 @@ describe("updateRegistration — accommodation re-pricing (M39)", () => {
     expect(entry.action).toBe("registration.status_change");
     expect(entry.oldData.totalPrice).toBe(TOTAL_WITH);
     expect(entry.newData.totalPrice).toBe(TOTAL_WITH);
+  });
+
+  it("loads the stored meal tier and keeps a supported participant's meals at their price", async () => {
+    setup({ hasAccommodation: false });
+
+    await updateRegistration("r1", input({ hasAccommodation: true }), CTX);
+
+    const select = h.prisma.registration.findFirst.mock.calls[1]?.[0]?.select;
+    expect(select.participants.select.mealPricingType).toBe(true);
+    expect(participantWrites().find((p) => p.id === "p1")?.mealPrice).toBe(55);
   });
 
   it("writes the registration and the participants in one transaction", async () => {

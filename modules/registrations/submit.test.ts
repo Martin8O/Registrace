@@ -42,6 +42,7 @@ import {
   RegistrationCapacityError,
   RegistrationEventNotFoundError,
   RegistrationStayMismatchError,
+  RegistrationPricingTypeUnavailableError,
 } from "./index";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -76,8 +77,21 @@ const fakeEvent = {
       eveningArrivalDiscount: 100,
       earlyDepartureDiscount: 80,
     },
+    { ageCategory: "AGE_15_PLUS", pricingType: "SUPPORTED", dailyRate: 30, nightRate: 50, morningArrivalDiscount: 0, afternoonArrivalDiscount: 50, eveningArrivalDiscount: 100, earlyDepartureDiscount: 80 },
+    { ageCategory: "AGE_15_PLUS", pricingType: "SURPLUS", dailyRate: 200, nightRate: 50, morningArrivalDiscount: 0, afternoonArrivalDiscount: 50, eveningArrivalDiscount: 100, earlyDepartureDiscount: 80 },
   ],
+  // Both tier sets, all three each — the column default every event carries (M40).
+  participationPricingTypes: ["STANDARD", "SUPPORTED", "SURPLUS"],
+  mealPricingTypes: ["STANDARD", "SUPPORTED", "SURPLUS"],
 };
+
+// A meal price list where the tier actually moves the price, so a test can tell
+// which of the two tiers priced the breakfast.
+const TIERED_MEAL_RULES = [
+  { mealType: "BREAKFAST", ageCategory: "AGE_15_PLUS", pricingType: "STANDARD", price: 80 },
+  { mealType: "BREAKFAST", ageCategory: "AGE_15_PLUS", pricingType: "SUPPORTED", price: 50 },
+  { mealType: "BREAKFAST", ageCategory: "AGE_15_PLUS", pricingType: "SURPLUS", price: 110 },
+];
 
 const fakeCenter = { id: "c1", name_cs: "Praha", name_en: "Prague" };
 
@@ -200,5 +214,121 @@ describe("submitRegistration", () => {
     expect(res).toEqual({ registrationId: "reg1", confirmationSent: false });
     // confirmationSentAt is only written on success → no update call here.
     expect(h.prisma.registration.update).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Two independent pricing tiers (M40) ──────────────────────────────────────
+// The stay and the meals are priced by two separate choices. This is the boundary
+// where an incoming payload's missing meal tier is filled in — and where a tier
+// the event does not offer is refused.
+
+describe("submitRegistration — the two pricing tiers", () => {
+  const participant = (over: Record<string, unknown> = {}) => ({
+    ...validInput,
+    participants: [{ ...validInput.participants[0]!, mealIds: ["m_b"], ...over }],
+  });
+  const tieredEvent = (over: Record<string, unknown> = {}) => {
+    h.prisma.event.findFirst.mockResolvedValue({
+      ...fakeEvent,
+      mealPricingRules: TIERED_MEAL_RULES,
+      ...over,
+    });
+  };
+  const participantData = () => h.prisma.participant.create.mock.calls[0]?.[0]?.data;
+  const mealSnapshotPrices = () =>
+    h.prisma.participantMeal.createMany.mock.calls[0]?.[0]?.data.map(
+      (r: { price: number }) => r.price,
+    );
+
+  it("prices the stay and the meals from the two tiers independently", async () => {
+    tieredEvent();
+
+    await submitRegistration(
+      participant({ pricingType: "SURPLUS", mealPricingType: "SUPPORTED" }),
+      meta,
+    );
+
+    // Surplus room over 3 days = 600; supported breakfast = 50.
+    expect(participantData()).toMatchObject({
+      participationPrice: 600,
+      mealPrice: 50,
+      totalPrice: 650,
+    });
+  });
+
+  it("persists both tiers on the participant", async () => {
+    tieredEvent();
+
+    await submitRegistration(
+      participant({ pricingType: "SURPLUS", mealPricingType: "SUPPORTED" }),
+      meta,
+    );
+
+    expect(participantData()).toMatchObject({
+      pricingType: "SURPLUS",
+      mealPricingType: "SUPPORTED",
+    });
+  });
+
+  it("snapshots each meal at the MEAL tier's price, not the stay tier's", async () => {
+    tieredEvent();
+
+    await submitRegistration(
+      participant({ pricingType: "SURPLUS", mealPricingType: "SUPPORTED" }),
+      meta,
+    );
+
+    expect(mealSnapshotPrices()).toEqual([50]);
+  });
+
+  it("an omitted meal tier falls back to the participant's OWN tier, not STANDARD", async () => {
+    // A client written before M40 sends one tier, and that tier priced its meals
+    // too. Falling back to STANDARD would re-price this supported person's
+    // breakfast from 50 up to 80 the moment M40a shipped.
+    tieredEvent();
+
+    await submitRegistration(participant({ pricingType: "SUPPORTED" }), meta);
+
+    expect(participantData()).toMatchObject({ mealPrice: 50, mealPricingType: "SUPPORTED" });
+    expect(mealSnapshotPrices()).toEqual([50]);
+  });
+
+  it("rejects a stay tier the event does not offer, writing nothing", async () => {
+    tieredEvent({ participationPricingTypes: ["STANDARD"] });
+
+    await expect(
+      submitRegistration(participant({ pricingType: "SUPPORTED" }), meta),
+    ).rejects.toBeInstanceOf(RegistrationPricingTypeUnavailableError);
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("rejects a meal tier the event does not offer, writing nothing", async () => {
+    tieredEvent({ mealPricingTypes: ["STANDARD"] });
+
+    await expect(
+      submitRegistration(
+        participant({ pricingType: "STANDARD", mealPricingType: "SURPLUS" }),
+        meta,
+      ),
+    ).rejects.toBeInstanceOf(RegistrationPricingTypeUnavailableError);
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("accepts a stay tier the event offers for meals only in the other set", async () => {
+    // The two sets are independent: an event may tier its meals while charging one
+    // price for the room. Nothing is propagated between them.
+    tieredEvent({ participationPricingTypes: ["STANDARD"] });
+
+    await submitRegistration(
+      participant({ pricingType: "STANDARD", mealPricingType: "SURPLUS" }),
+      meta,
+    );
+
+    expect(participantData()).toMatchObject({
+      participationPrice: 300,
+      mealPrice: 110,
+      pricingType: "STANDARD",
+      mealPricingType: "SURPLUS",
+    });
   });
 });

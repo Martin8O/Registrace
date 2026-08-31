@@ -134,6 +134,16 @@ model Event {
   // for new ones.
   numberPrefix     String?     @unique
   registrationSeq  Int         @default(0)
+  // Which pricing tiers this event offers, as TWO INDEPENDENT sets (M40): one for
+  // participation/accommodation, one for meals. A participant then picks one tier
+  // from each, and nothing is inferred or propagated between the two choices —
+  // SURPLUS accommodation with SUPPORTED meals is a valid, intended combination.
+  // Both default to all three tiers, so every event predating M40 keeps offering
+  // exactly what it offered before. STANDARD is always in both: it is the DB
+  // default for a participant's tier and the fallback in several lookups, so a set
+  // without it is unrepresentable (enforced in lib/validation/events.ts).
+  participationPricingTypes PricingType[] @default([STANDARD, SUPPORTED, SURPLUS])
+  mealPricingTypes          PricingType[] @default([STANDARD, SUPPORTED, SURPLUS])
 
   creator          User?             @relation(fields: [createdBy], references: [id])
   center           Center            @relation(fields: [centerId], references: [id])
@@ -290,7 +300,15 @@ model Participant {
   registrationId     String
   fullName           String
   ageCategory        AgeCategory
+  // The tier for PARTICIPATION / ACCOMMODATION only (M40). Until M40 this single
+  // column priced meals too, which is why the migration backfilled mealPricingType
+  // from it rather than letting the STANDARD default rewrite what people ordered.
   pricingType        PricingType @default(STANDARD)
+  // The tier for MEALS, chosen independently of pricingType (M40). Default
+  // STANDARD for migration safety; new registrations always send it explicitly,
+  // and a payload without it falls back to this participant's pricingType at the
+  // service boundary, never to STANDARD.
+  mealPricingType    PricingType @default(STANDARD)
   // Diet for this participant's ordered meals. Default MEAT for migration safety;
   // the form/Zod require an explicit choice on new registrations.
   mealType           MealCategory @default(MEAT)

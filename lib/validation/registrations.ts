@@ -15,7 +15,14 @@ const mealCategoryValues = ["MEAT", "VEGETARIAN"] as const;
 // 64 is generous; names/emails use RFC-ish ceilings.
 const calculateParticipantSchema = z.object({
   ageCategory: z.enum(ageCategoryValues),
+  // Two independent tiers since M40: this one prices the stay/accommodation,
+  // mealPricingType prices the meals. Both optional here and event-agnostic —
+  // whether THIS event actually offers a given tier is checked in the submit
+  // service, which is the only layer that has the event loaded. An absent meal
+  // tier falls back to pricingType at that boundary (see lib/utils/mealPrice),
+  // so a client written before M40 keeps being priced exactly as it is today.
   pricingType: z.enum(pricingTypeValues).optional(),
+  mealPricingType: z.enum(pricingTypeValues).optional(),
   mealIds: z.array(z.string().min(1).max(64)).max(200),
 });
 

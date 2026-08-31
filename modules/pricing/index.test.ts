@@ -50,9 +50,17 @@ function input(
   };
 }
 
-const adult = (pricingType = "STANDARD", mealIds: string[] = []): PricingParticipantInput => ({
+// `mealPricingType` is the SECOND, independent tier (M40): it prices the meals
+// while `pricingType` prices the stay. Left undefined by default so the many
+// pre-M40 cases below read exactly as they did.
+const adult = (
+  pricingType = "STANDARD",
+  mealIds: string[] = [],
+  mealPricingType?: string,
+): PricingParticipantInput => ({
   ageCategory: "AGE_15_PLUS",
   pricingType,
+  mealPricingType,
   mealIds,
 });
 
@@ -254,13 +262,16 @@ describe("meal price is data-driven by age and tier", () => {
       one({ ageCategory: "AGE_4_7", pricingType: "STANDARD", mealIds: ["m_b"] }, withRules())?.mealPrice,
     ).toBe(40);
   });
-  it("the tier changes an adult's meal price → SUPPORTED 50, SURPLUS 110", () => {
-    expect(one(adult("SUPPORTED", ["m_b"]), withRules())?.mealPrice).toBe(50);
-    expect(one(adult("SURPLUS", ["m_b"]), withRules())?.mealPrice).toBe(110);
+  it("the meal tier changes an adult's meal price → SUPPORTED 50, SURPLUS 110", () => {
+    expect(one(adult("STANDARD", ["m_b"], "SUPPORTED"), withRules())?.mealPrice).toBe(50);
+    expect(one(adult("STANDARD", ["m_b"], "SURPLUS"), withRules())?.mealPrice).toBe(110);
   });
-  it("the tier changes a CHILD's meal price too → supported 4–7 pays 20", () => {
+  it("the meal tier changes a CHILD's meal price too → supported 4–7 pays 20", () => {
     expect(
-      one({ ageCategory: "AGE_4_7", pricingType: "SUPPORTED", mealIds: ["m_b"] }, withRules())?.mealPrice,
+      one(
+        { ageCategory: "AGE_4_7", pricingType: "STANDARD", mealPricingType: "SUPPORTED", mealIds: ["m_b"] },
+        withRules(),
+      )?.mealPrice,
     ).toBe(20);
   });
   it("sums several meals at that participant's own prices → child 40 + 60 = 100", () => {
@@ -283,7 +294,10 @@ describe("meal price is data-driven by age and tier", () => {
   // adult flat price to a child.
   it("a combination missing from an existing price list → 0, not the flat price", () => {
     expect(
-      one({ ageCategory: "AGE_4_7", pricingType: "SURPLUS", mealIds: ["m_b"] }, withRules())?.mealPrice,
+      one(
+        { ageCategory: "AGE_4_7", pricingType: "STANDARD", mealPricingType: "SURPLUS", mealIds: ["m_b"] },
+        withRules(),
+      )?.mealPrice,
     ).toBe(0);
   });
 
@@ -296,6 +310,57 @@ describe("meal price is data-driven by age and tier", () => {
       { participationPrice: 0, mealPrice: 40, subtotal: 40 },
     ]);
     expect(r.totalPrice).toBe(420);
+  });
+});
+
+// ─── Two independent tiers (M40) ──────────────────────────────────────────────
+// The stay is priced by the participation tier, the meals by the meal tier, and
+// neither is derived from the other — someone may take a surplus room and eat at
+// the supported price. The fixture gives every tier a distinct number on both
+// halves, so a crossed wire cannot pass by coincidence.
+
+describe("participation and meals read two independent tiers", () => {
+  const mealPricingRules = [
+    { mealType: "BREAKFAST", ageCategory: "AGE_15_PLUS", pricingType: "STANDARD", price: 80 },
+    { mealType: "BREAKFAST", ageCategory: "AGE_15_PLUS", pricingType: "SUPPORTED", price: 50 },
+    { mealType: "BREAKFAST", ageCategory: "AGE_15_PLUS", pricingType: "SURPLUS", price: 110 },
+  ];
+  const withRules = (o: Partial<PricingInput> = {}) => ({ mealPricingRules, ...o });
+
+  it("surplus stay with supported meals → 200×3 stay, 50 meals", () => {
+    expect(one(adult("SURPLUS", ["m_b"], "SUPPORTED"), withRules())).toEqual({
+      participationPrice: 600,
+      mealPrice: 50,
+      subtotal: 650,
+    });
+  });
+
+  it("supported stay with surplus meals → 30×3 stay, 110 meals", () => {
+    expect(one(adult("SUPPORTED", ["m_b"], "SURPLUS"), withRules())).toEqual({
+      participationPrice: 90,
+      mealPrice: 110,
+      subtotal: 200,
+    });
+  });
+
+  it("moving only the meal tier leaves the stay price alone", () => {
+    const stay = (mealTier: string) =>
+      one(adult("STANDARD", ["m_b"], mealTier), withRules())?.participationPrice;
+    expect([stay("STANDARD"), stay("SUPPORTED"), stay("SURPLUS")]).toEqual([300, 300, 300]);
+  });
+
+  it("moving only the stay tier leaves the meal price alone", () => {
+    const meal = (stayTier: string) =>
+      one(adult(stayTier, ["m_b"], "SUPPORTED"), withRules())?.mealPrice;
+    expect([meal("STANDARD"), meal("SUPPORTED"), meal("SURPLUS")]).toEqual([50, 50, 50]);
+  });
+
+  it("takes the meal tier literally — an absent one is NOT inferred from the stay tier", () => {
+    // A supported stay with no meal tier resolves to the STANDARD meal price here.
+    // Substituting the stay tier is deliberately the caller's job (submit and
+    // calculate-price do it), which keeps this file a pure table lookup and keeps
+    // the two choices unlinked wherever a real choice exists.
+    expect(one(adult("SUPPORTED", ["m_b"]), withRules())?.mealPrice).toBe(80);
   });
 });
 

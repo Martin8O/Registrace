@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { validationError } from "@/app/api/_lib/http";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { calculatePriceSchema } from "@/lib/validation";
+import { effectiveMealPricingType } from "@/lib/utils/mealPrice";
 import { getPublicEventForDetail } from "@/modules/events";
 import { calculatePricing } from "@/modules/pricing";
 
@@ -37,6 +38,11 @@ export async function POST(req: NextRequest) {
     participants: result.data.participants.map((p) => ({
       ageCategory: p.ageCategory,
       pricingType: p.pricingType,
+      // A payload with no meal tier comes from a client written before M40, when
+      // one tier priced both halves — so it falls back to that person's own
+      // participation tier, never to STANDARD, and the quoted price stays exactly
+      // what it is today. Informational only; submit recomputes authoritatively.
+      mealPricingType: effectiveMealPricingType(p),
       mealIds: p.mealIds,
     })),
     pricingRules: event.pricingRules,

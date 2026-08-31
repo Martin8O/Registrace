@@ -67,7 +67,7 @@ export default function PricingModal({
     meals.find((m) => m.mealType === type && !m.isClosed)?.price ?? 0
 
   const mealPrice = (type: string, age: string, tier: string): number =>
-    resolveMealPrice(type, { ageCategory: age, pricingType: tier }, mealPricingRules, flatPriceFor(type))
+    resolveMealPrice(type, { ageCategory: age, mealPricingType: tier }, mealPricingRules, flatPriceFor(type))
 
   // Every age category, every time. A category whose three tiers carry identical
   // values collapses to one row labelled by age alone — the tier heading would be

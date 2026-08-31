@@ -18,7 +18,7 @@ list of invariants before changing anything structural.
 ```bash
 npm run dev                 # dev server on :3000
 npm run build               # production build
-npm test                    # Vitest (147 tests, no database needed)
+npm test                    # Vitest (178 tests, no database needed)
 npm run lint                # ESLint
 npx prisma migrate deploy   # apply migrations (needs DIRECT_URL)
 ```
@@ -63,6 +63,17 @@ These are enforced across the codebase — do not violate them to make something
   backfilled to their existing price). A combination absent from a list that exists is 0, not the
   flat price — do not "fix" that into a fallback, it would bill a child the adult price whenever
   the list has a gap. Per-day meal control is availability, not price.
+- **There are TWO tiers per person, and they are independent.** `Participant.pricingType` prices
+  the stay/accommodation; `Participant.mealPricingType` prices the meals. An event declares which
+  tiers it offers for each half separately (`Event.participationPricingTypes` /
+  `Event.mealPricingTypes`, both defaulting to all three, both always containing `STANDARD`).
+  Surplus room with supported meals is intended — **never derive one from the other**. The single
+  exception is an *incoming payload* whose meal tier is absent: it falls back to that participant's
+  own participation tier, never to `STANDARD` (`effectiveMealPricingType`), because before this
+  existed one tier priced both halves. That fallback belongs at the service boundary — the engine
+  takes the meal tier literally. Anything that re-prices a stored registration must load **both**
+  tiers: dropping the meal one silently re-prices 65 live participants' meals downward, and it is
+  pinned by a fixture in `update-repricing.test.ts` that stays STANDARD but eats SUPPORTED.
 - **RLS is enabled deny-all** on the data tables as a backstop, but Prisma connects directly
   and bypasses it. The real authorization is the role/ownership gate in the handlers and
   services. It lives in a migration and is guarded by `prisma/rls.test.ts` — **a new model

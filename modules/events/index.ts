@@ -80,6 +80,13 @@ export type EventDetailDTO = PublishedEventDTO & {
   // form compares it against `now` to close meal selection; the admin edit form
   // converts it to a Prague wall-clock datetime-local for display.
   mealRegistrationDeadline: string | null;
+  // The two independent tier sets this event offers (M40): which tiers a person
+  // may pick for their stay, and which for their meals. Both always contain
+  // STANDARD; an event predating M40 offers all three in both, which is what it
+  // has always offered. Carried on the DTO so the admin form can prefill them and
+  // the public form can offer exactly these — neither is wired up yet (M40b/M40c).
+  participationPricingTypes: string[];
+  mealPricingTypes: string[];
   dates: EventDateDTO[];
   meals: EventMealDTO[];
   pricingRules: PricingRuleDTO[];
@@ -228,6 +235,8 @@ function toEventDetailDTO(event: EventDetailRow): EventDetailDTO {
     mealRegistrationDeadline: event.mealRegistrationDeadline
       ? event.mealRegistrationDeadline.toISOString()
       : null,
+    participationPricingTypes: event.participationPricingTypes,
+    mealPricingTypes: event.mealPricingTypes,
     startDate: toIsoDay(event.startDate),
     endDate: toIsoDay(event.endDate),
     status: event.status,
@@ -426,6 +435,12 @@ export async function createEvent(
         createdBy: ctx.userId,
         startDate: input.startDate,
         endDate: input.endDate,
+        // Omitted when the payload doesn't carry them, so the column default
+        // (all three tiers) applies — the pre-M40 behaviour (M40b sends them).
+        ...(input.participationPricingTypes
+          ? { participationPricingTypes: input.participationPricingTypes }
+          : {}),
+        ...(input.mealPricingTypes ? { mealPricingTypes: input.mealPricingTypes } : {}),
       },
     });
 
@@ -723,6 +738,17 @@ async function replaceDraftEventRelations(
       data.mealRegistrationDeadline = input.mealRegistrationDeadline
         ? pragueLocalToUtc(input.mealRegistrationDeadline)
         : null;
+    }
+    // The two tier sets travel with the price lists they govern, so they are
+    // writable exactly where those are: an editable draft with no registrations.
+    // They deliberately do NOT appear in the scalar-only whitelist above — once
+    // people have registered against a set of tiers, narrowing it would orphan
+    // the tier they chose.
+    if (input.participationPricingTypes !== undefined) {
+      data.participationPricingTypes = input.participationPricingTypes;
+    }
+    if (input.mealPricingTypes !== undefined) {
+      data.mealPricingTypes = input.mealPricingTypes;
     }
     await tx.event.update({ where: { id }, data });
 

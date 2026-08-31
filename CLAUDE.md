@@ -85,6 +85,15 @@ next-intl 4 (i18n) · Zod 4 (validation — only lib) · React Hook Form · Rese
     price list at all (every event predating M37 was backfilled to its current price, so no live
     price moved). A combination missing from a list that *exists* resolves to 0, never the flat
     price. Per-day control is availability (`isClosed`), not price. (M37.)
+22. **Two INDEPENDENT tiers per person (M40a).** `Participant.pricingType` prices the
+    stay/accommodation, `Participant.mealPricingType` prices the meals, and an event declares which
+    tiers it offers for each half separately (`Event.participationPricingTypes` /
+    `Event.mealPricingTypes` — both default to all three and must always contain STANDARD; a price
+    list may only quote tiers from its OWN set; an empty set means all three). Surplus accommodation
+    with supported meals is intended: **never propagate or infer one tier from the other.** The one
+    exception is an incoming payload with no meal tier — it falls back to that participant's own
+    participation tier, never STANDARD, and that fallback lives at the service boundary, never in
+    the engine. Anything re-pricing a stored registration must load and pass **both** tiers.
 - Fields named `*Discount` are **subtracted** from the total, not added
   (morningArrivalDiscount, afternoonArrivalDiscount, eveningArrivalDiscount, earlyDepartureDiscount).
 

@@ -9,8 +9,10 @@
 // floored at 0 (SESSION_BOOTSTRAP §D.7). All values are whole-CZK integers
 // (invariant 10); inputs are already integers, so no rounding is introduced.
 //
-// BOTH halves of a participant's price are DATA-DRIVEN by (ageCategory,
-// pricingType) — no age and no tier is hard-coded anywhere in this file:
+// BOTH halves of a participant's price are DATA-DRIVEN by (ageCategory, tier) —
+// no age and no tier is hard-coded anywhere in this file. Since M40 the two halves
+// read TWO INDEPENDENT tiers: participation uses pricingType, meals use
+// mealPricingType, and neither is derived from the other:
 //
 //  • Participation comes from the matching PricingRule (revised invariant 15,
 //    M30). Young children (0–3/4–7) carry a 0-rate rule → 0; ages 8–14 follow the
@@ -23,7 +25,9 @@
 //    a meal cost the same for everyone, so a child's lunch could not be cheaper
 //    and the supported/surplus tiers priced only participation. The tier now
 //    applies at every age (revised invariant 15 again), which is why the lookup
-//    keys on both fields for meals exactly as it does for participation.
+//    keys on both fields for meals exactly as it does for participation — with
+//    the participant's MEAL tier, which M40 made a separate choice from the one
+//    that prices their stay.
 //
 // An event with NO meal price list at all falls back to the flat EventMeal.price
 // (invariant 21) — that is what every event charged before M37, so a row the
@@ -36,7 +40,13 @@ import { resolveMealPrice } from "@/lib/utils/mealPrice";
 
 export type PricingParticipantInput = {
   ageCategory: string;
+  // The PARTICIPATION / accommodation tier.
   pricingType?: string;
+  // The MEAL tier, independent of the one above (M40). The engine uses it
+  // literally — deciding what an absent meal tier means is the caller's job, and
+  // every caller that takes an outside payload substitutes that participant's
+  // participation tier before calling in (see lib/utils/mealPrice).
+  mealPricingType?: string;
   mealIds: string[];
 };
 
@@ -155,10 +165,12 @@ function participationPriceFor(
 // only for meals that exist on this event and are open. Unknown / closed ids
 // contribute 0 (mirrors the submit service, which drops them before persisting).
 //
-// Each slot is priced for THIS participant's (ageCategory, pricingType) from the
+// Each slot is priced for THIS participant's (ageCategory, MEAL tier) from the
 // event's meal price list — so a child's lunch and an adult's lunch on the same
 // day cost different amounts (invariant 21). Applies to every age: children pay
-// for meals even when their participation is 0.
+// for meals even when their participation is 0. Since M40 the meal tier is the
+// participant's own second choice, so someone in a surplus room may still eat at
+// the supported price; nothing here reads the participation tier.
 function mealPriceFor(participant: PricingParticipantInput, input: PricingInput): number {
   const mealById = new Map(input.meals.map((m) => [m.id, m]));
   let total = 0;

@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-147%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-178%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -207,7 +207,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 147 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 178 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -321,12 +321,12 @@ because child rules carry `0` discounts — not via any age branch.
 | **User** | `id @db.Uuid` (= Supabase Auth id), `email`, `role`. |
 | **UserCenter** | Explicit `User ↔ Center` join (which centres an admin manages). |
 | **Center** | 25 seeded rows — 23 BDC centres plus the `Jiné` / `Mimo ČR` (Other / outside CZ) catch-alls a visitor can pick as their home centre. Bilingual names, `sortOrder`, soft-active. |
-| **Event** | Bilingual title/subtitle/description, contact fields, `status`, `centerId` (host centre), dates, `createdBy`, `mealRegistrationDeadline`, `numberPrefix` + `registrationSeq` (reg-number support). |
+| **Event** | Bilingual title/subtitle/description, contact fields, `status`, `centerId` (host centre), dates, `createdBy`, `mealRegistrationDeadline`, `numberPrefix` + `registrationSeq` (reg-number support), and the two independent sets of offered tiers — `participationPricingTypes` / `mealPricingTypes`. |
 | **EventDate** | A day of the event; used as arrival/departure reference. |
 | **PricingRule** | Per `event × ageCategory × pricingType`: `dailyRate`, `nightRate` and the four `*Discount` fields (subtracted). |
 | **EventMeal** | A meal slot on a given day: `mealType`, `price`, `isClosed`. |
 | **Registration** | The submission: home `centerId`, arrival/departure, `hasAccommodation`, `email`, `gdprConsent`, `totalPrice`, `status`, `idempotencyKey`, `registrationNumber`, `locale`, `ipAddress`. |
-| **Participant** | One person: `ageCategory`, `pricingType`, `mealType` (diet), computed prices. |
+| **Participant** | One person: `ageCategory`, two independent tiers — `pricingType` (stay/accommodation) and `mealPricingType` (meals) — `mealType` (diet), computed prices. |
 | **ParticipantMeal** | `Participant ↔ EventMeal` join with the charged price. |
 | **AuditLog** | Append-only trail: `userId`, `action`, `entityType`, `entityId`, `oldData`/`newData`, `ip`. |
 
@@ -592,24 +592,35 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **147 Vitest tests** across 11 files, with **no database required**:
+`npm test` runs **178 Vitest tests** across 13 files, with **no database required**:
 
-- **Pricing engine** (43) — the arithmetic against the hand-derived BDC formula, grouped by
+- **Pricing engine** (48) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
   subtracted, accommodation nights, meal pricing per age × tier (a child's lunch priced
-  differently from an adult's, and the tier moving both), the flat-price fallback that keeps
+  differently from an adult's, and the tier moving both), the two independent tiers pricing the
+  stay and the meals without either leaking into the other, the flat-price fallback that keeps
   pre-matrix events billing exactly what they always did, defensive behaviour (missing rule,
   degenerate stay, over-large discount → `0`, never a throw) and the full aggregated result.
-- **Validation** (13) — the Zod submit/price schemas (honeypot, participant caps, the tier
-  accepted at every age but still bounded by its enum, diet).
-- **Submit service** (9) — control-flow with a **mocked Prisma** (`vi.mock('@/lib/db')`) while
-  keeping the real engine, so `totalPrice` is asserted end-to-end.
-- **Admin re-pricing** (13) — that toggling a registration's accommodation re-prices it through
+- **Meal price lookup** (7) — the one shared definition of what a meal costs one person, and its
+  two fallback contracts: no price list at all → the event's flat price; a gap in a list that
+  exists → `0`, never the flat price. Plus the rule that a payload arriving without a meal tier
+  falls back to that person's own tier rather than to the standard one.
+- **Validation** (16) — the Zod submit/price schemas (honeypot, participant caps, the tier
+  accepted at every age but still bounded by its enum, the independent meal tier, diet).
+- **Event configuration** (8) — that an event's two tier sets must each be non-empty and contain
+  the standard tier, and that neither price list may quote a tier the event does not offer —
+  each list checked against its own set, never the other's.
+- **Submit service** (16) — control-flow with a **mocked Prisma** (`vi.mock('@/lib/db')`) while
+  keeping the real engine, so `totalPrice` is asserted end-to-end; plus the two tiers pricing
+  the two halves independently, both being persisted, each meal snapshotted at the meal tier's
+  price, and a tier the event does not offer being refused before anything is written.
+- **Admin re-pricing** (14) — that toggling a registration's accommodation re-prices it through
   the real engine (both directions, children included — no age is special-cased), that a centre
   or status edit writes no price and issues no extra query, that the registration and its
-  participants move in one transaction, and that the meals already ordered survive a re-price
-  **after** the meal deadline. That last one is the trap: the submit path strips meals once the
-  cut-off passes, and copying that gate into an edit would delete what people had ordered.
+  participants move in one transaction, that a participant eating on a non-standard tier keeps
+  their meal price, and that the meals already ordered survive a re-price **after** the meal
+  deadline. That last one is the trap: the submit path strips meals once the cut-off passes, and
+  copying that gate into an edit would delete what people had ordered.
 - **CSRF origin gate** (13) — that the admin origin check accepts the canonical origin and a
   Vercel preview's own url, and rejects everything else: foreign origins, a missing
   Origin + Referer, localhost in production, and — the regression that matters — a `vercel.app`

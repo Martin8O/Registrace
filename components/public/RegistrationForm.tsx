@@ -561,7 +561,7 @@ export default function RegistrationForm({
                               // pill agrees with the subtotal below it.
                               const slotPrice = resolveMealPrice(
                                 slot.mealType,
-                                { ageCategory: age ?? 'AGE_15_PLUS', pricingType: tier },
+                                { ageCategory: age ?? 'AGE_15_PLUS', mealPricingType: tier },
                                 mealPricingRules,
                                 slot.price,
                               )

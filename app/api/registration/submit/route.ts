@@ -7,6 +7,7 @@ import {
   RegistrationCapacityError,
   RegistrationEventNotFoundError,
   RegistrationStayMismatchError,
+  RegistrationPricingTypeUnavailableError,
 } from "@/modules/registrations";
 
 // POST /api/registration/submit — thin wrapper over modules/registrations
@@ -80,6 +81,7 @@ export async function POST(req: NextRequest) {
       fullName: p.fullName,
       ageCategory: p.ageCategory,
       pricingType: p.pricingType,
+      mealPricingType: p.mealPricingType,
       mealType: p.mealType,
       mealIds: p.mealIds,
     })),
@@ -97,6 +99,12 @@ export async function POST(req: NextRequest) {
     }
     if (err instanceof RegistrationCapacityError) {
       return NextResponse.json({ error: "Event capacity reached" }, { status: 409 });
+    }
+    if (err instanceof RegistrationPricingTypeUnavailableError) {
+      // Well-formed payload, tier this event doesn't offer → 422 (business rule),
+      // mirroring the admin edit's unknown-centre rejection. 400 is reserved for
+      // Zod validation failures (P3).
+      return NextResponse.json({ error: err.message }, { status: 422 });
     }
     if (err instanceof RegistrationStayMismatchError) {
       // Invalid request data (ids not on this event) → 400, not 422 (P3: 422 no

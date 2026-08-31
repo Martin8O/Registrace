@@ -18,10 +18,33 @@ export type MealPriceRule = {
   price: number;
 };
 
+// A meal is priced by the MEAL tier, which since M40 is chosen independently of
+// the participation/accommodation tier. The field is named for that explicitly so
+// no caller can pass the wrong one of the two without the type telling it off.
 export type MealPriceWho = {
   ageCategory: string;
-  pricingType?: string;
+  mealPricingType?: string;
 };
+
+// The meal tier to use for an INCOMING payload participant (public form → submit
+// or calculate-price). A payload written before the meal tier existed carries only
+// one tier, and that tier priced its meals too — so the fallback is that
+// participant's own participation tier, NEVER STANDARD. Falling back to STANDARD
+// would quietly re-price a supported or surplus person's meals downward.
+//
+// This is backward compatibility, not the inference the design rejects: the two
+// CHOICES stay unlinked, this only reconstructs a choice an old client never made.
+// It fires between M40a and M40c (the public form still sends one tier) and, after
+// that, only for a stale cached client during a deploy window.
+// Generic over the tier type so a caller holding the narrow enum union keeps it —
+// the submit service stores the result straight onto Participant.mealPricingType,
+// which is a Prisma enum, not a bare string.
+export function effectiveMealPricingType<T extends string>(participant: {
+  pricingType?: T;
+  mealPricingType?: T;
+}): T | undefined {
+  return participant.mealPricingType ?? participant.pricingType;
+}
 
 // Price of `mealType` for `who`, from the event's meal price list.
 //
@@ -39,12 +62,12 @@ export function resolveMealPrice(
 ): number {
   if (!mealPricingRules || mealPricingRules.length === 0) return fallbackPrice;
 
-  const pricingType = who.pricingType ?? "STANDARD";
+  const mealPricingType = who.mealPricingType ?? "STANDARD";
   const rule = mealPricingRules.find(
     (r) =>
       r.mealType === mealType &&
       r.ageCategory === who.ageCategory &&
-      r.pricingType === pricingType,
+      r.pricingType === mealPricingType,
   );
   return rule?.price ?? 0;
 }

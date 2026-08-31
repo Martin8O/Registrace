@@ -7,6 +7,18 @@ const ageCategoryValues = ["AGE_0_3", "AGE_4_7", "AGE_8_14", "AGE_15_PLUS"] as c
 const pricingTypeValues = ["STANDARD", "SUPPORTED", "SURPLUS"] as const;
 const mealTypeValues = ["BREAKFAST", "LUNCH", "DINNER"] as const;
 
+// One of the event's two tier sets (M40). Must be non-empty, and must contain
+// STANDARD: it is the DB default for a participant's tier and the fallback in
+// several lookups, so an event that does not offer it is unrepresentable rather
+// than merely unusual.
+const pricingTypeSetSchema = z
+  .array(z.enum(pricingTypeValues))
+  .min(1)
+  .max(pricingTypeValues.length)
+  .refine((set) => set.includes("STANDARD"), {
+    message: "STANDARD must always be offered",
+  });
+
 // ─── Base shape ───────────────────────────────────────────────────────────────
 
 // String length caps (P8 item 7) — bound every free-text/id input.
@@ -36,6 +48,13 @@ const eventFields = {
       z.literal(""),
     ])
     .optional(),
+  // The two independent tier sets this event offers (M40): one for
+  // participation/accommodation, one for meals. Optional — a payload that omits
+  // them (anything written before M40) leaves the DB default of all three tiers,
+  // which is exactly what every event offered before. Only an editable draft
+  // actually writes them; see replaceDraftEventRelations.
+  participationPricingTypes: pricingTypeSetSchema.optional(),
+  mealPricingTypes: pricingTypeSetSchema.optional(),
 };
 
 // ─── Relation child shapes (the full create payload) ────────────────────────────
@@ -67,7 +86,10 @@ const eventMealInputSchema = z.object({
 });
 
 // One cell of the event's meal price list: mealType × ageCategory × tier → price.
-// A complete list is 3 × 4 × 3 = 36 rows; the admin form always sends all of them.
+// A list covering all three tiers is 3 × 4 × 3 = 36 rows, which is what every
+// event carried before M40; an event that offers fewer meal tiers sends only the
+// cells for the tiers it offers, and requireRuleTiersInSets below is what keeps a
+// list from quoting a tier its own set does not contain.
 const mealPricingRuleInputSchema = z.object({
   mealType: z.enum(mealTypeValues),
   ageCategory: z.enum(ageCategoryValues),
@@ -118,6 +140,41 @@ function requireDeadlineInWindow(
   }
 }
 
+// A price list may only quote tiers the event actually offers, and each list is
+// checked against its OWN set — participation rules against the participation
+// set, meal rules against the meal set. A rule outside its set would be a price
+// nobody can ever pick, and (worse) would make the two sets look wider than they
+// are to anything that reads the rules instead of the sets. Skipped when a set is
+// absent from the payload, because the event then keeps offering all three.
+function requireRuleTiersInSets(
+  data: {
+    participationPricingTypes?: string[];
+    mealPricingTypes?: string[];
+    pricingRules?: { pricingType: string }[];
+    mealPricingRules?: { pricingType: string }[];
+  },
+  ctx: z.RefinementCtx
+): void {
+  const check = (
+    rules: { pricingType: string }[] | undefined,
+    offered: string[] | undefined,
+    path: string
+  ): void => {
+    if (rules === undefined || offered === undefined) return;
+    rules.forEach((rule, i) => {
+      if (!offered.includes(rule.pricingType)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Pricing tier ${rule.pricingType} is not offered by this event`,
+          path: [path, i, "pricingType"],
+        });
+      }
+    });
+  };
+  check(data.pricingRules, data.participationPricingTypes, "pricingRules");
+  check(data.mealPricingRules, data.mealPricingTypes, "mealPricingRules");
+}
+
 // ─── Public schemas ───────────────────────────────────────────────────────────
 
 export const eventCreateSchema = z
@@ -140,6 +197,7 @@ export const eventCreateWithRelationsSchema = z
   .superRefine((data, ctx) => {
     requireEndAfterStart(data, ctx);
     requireDeadlineInWindow(data, ctx);
+    requireRuleTiersInSets(data, ctx);
   });
 
 // Update accepts the scalar fields (all optional) AND, for a fully-editable
@@ -157,6 +215,7 @@ export const eventUpdateSchema = z
   .superRefine((data, ctx) => {
     requireEndAfterStart(data, ctx);
     requireDeadlineInWindow(data, ctx);
+    requireRuleTiersInSets(data, ctx);
   });
 
 export const eventStatusSchema = z.object({

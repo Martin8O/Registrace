@@ -83,6 +83,29 @@ describe("registrationSubmitSchema", () => {
     expect(registrationSubmitSchema.safeParse(payload).success).toBe(true);
   });
 
+  // M40 — the meal tier is a SECOND, independent choice. This layer is
+  // event-agnostic on purpose: whether a given event offers a tier is checked in
+  // the submit service, the only layer that has the event loaded.
+  it("accepts a meal tier different from the participation tier", () => {
+    const payload = {
+      ...validSubmit,
+      participants: [{ fullName: "Jan Novák", ageCategory: "AGE_15_PLUS", pricingType: "SURPLUS", mealPricingType: "SUPPORTED", mealType: "MEAT", mealIds: [] }],
+    };
+    expect(registrationSubmitSchema.safeParse(payload).success).toBe(true);
+  });
+
+  it("accepts a payload with no meal tier at all (a client written before M40)", () => {
+    expect(registrationSubmitSchema.safeParse(validSubmit).success).toBe(true);
+  });
+
+  it("rejects a meal tier outside the enum", () => {
+    const payload = {
+      ...validSubmit,
+      participants: [{ fullName: "Jan Novák", ageCategory: "AGE_15_PLUS", pricingType: "STANDARD", mealPricingType: "FREE", mealType: "MEAT", mealIds: [] }],
+    };
+    expect(registrationSubmitSchema.safeParse(payload).success).toBe(false);
+  });
+
   it("rejects an invalid email", () => {
     expect(registrationSubmitSchema.safeParse({ ...validSubmit, email: "not-an-email" }).success).toBe(false);
   });
