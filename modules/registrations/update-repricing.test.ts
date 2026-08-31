@@ -175,6 +175,7 @@ function setup(
       // answerable without a second round trip.
       participants: participants.map((p) => ({
         id: p.id,
+        fullName: p.id === "p1" ? "Dospělý" : p.id === "p2" ? "Dítě" : p.id,
         pricingType: p.pricingType,
         mealPricingType: p.mealPricingType,
       })),
@@ -656,5 +657,75 @@ describe("updateRegistration — meal re-snapshot cost", () => {
     // 8-14 has no SUPPORTED breakfast row and the list exists -> 0 (invariant 21)
     expect(calls[0]![0].data.price).toBe(0);
     expect((calls[0]![0].where.id.in as string[]).sort()).toEqual(["pm2", "pm3"]);
+  });
+});
+// ─── The audit trail must say WHICH tier moved ────────────────────────────────
+// The entry already carried the old and new totalPrice, which is how an admin
+// sees that money moved. Since a tier edit is a second way to move it, the trail
+// has to say whose tier changed and to what — otherwise it records that an amount
+// changed while withholding the only fact that explains it.
+
+describe("updateRegistration — tier changes in the audit entry", () => {
+  const entry = () => h.logAuditEvent.mock.calls.at(-1)![0];
+
+  it("records the before/after tiers of exactly the people who moved", async () => {
+    setup({ hasAccommodation: false });
+
+    await updateRegistration(
+      "r1",
+      input({
+        hasAccommodation: false,
+        participants: [
+          { id: "p1", pricingType: "SUPPORTED", mealPricingType: "SUPPORTED" },
+          ...tiersAsStored([CHILD]),
+        ],
+      }),
+      CTX,
+    );
+
+    const a = entry();
+    expect(a.oldData.participantTiers).toEqual([
+      { fullName: "Dospělý", pricingType: "STANDARD", mealPricingType: "SUPPORTED" },
+    ]);
+    expect(a.newData.participantTiers).toEqual([
+      { fullName: "Dospělý", pricingType: "SUPPORTED", mealPricingType: "SUPPORTED" },
+    ]);
+    // The child did not move, so it is not in the trail.
+    expect(a.oldData.participantTiers).toHaveLength(1);
+  });
+
+  it("still records the old and new total beside them", async () => {
+    setup({ hasAccommodation: false, totalPrice: TOTAL_WITHOUT });
+
+    await updateRegistration(
+      "r1",
+      input({
+        hasAccommodation: false,
+        participants: [
+          { id: "p1", pricingType: "SUPPORTED", mealPricingType: "SUPPORTED" },
+          ...tiersAsStored([CHILD]),
+        ],
+      }),
+      CTX,
+    );
+
+    const a = entry();
+    expect(a.oldData.totalPrice).toBe(TOTAL_WITHOUT);
+    // adult 180 + 55, child 120 + 40
+    expect(a.newData.totalPrice).toBe(180 + ADULT_MEAL + 120 + CHILD_MEAL);
+  });
+
+  it("omits the tier block entirely when no tier moved", async () => {
+    setup({ hasAccommodation: false, status: "REGISTERED" });
+
+    await updateRegistration(
+      "r1",
+      input({ hasAccommodation: false, status: "PAID", participants: tiersAsStored() }),
+      CTX,
+    );
+
+    const a = entry();
+    expect(a.oldData).not.toHaveProperty("participantTiers");
+    expect(a.newData).not.toHaveProperty("participantTiers");
   });
 });

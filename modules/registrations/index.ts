@@ -726,7 +726,9 @@ async function assertRegistrationWritable(id: string, ctx: AdminContext) {
       },
       participants: {
         where: { deletedAt: null },
-        select: { id: true, pricingType: true, mealPricingType: true },
+        // fullName rides along for the audit trail: "p3 moved to SURPLUS" is not
+        // something anyone can act on months later.
+        select: { id: true, fullName: true, pricingType: true, mealPricingType: true },
       },
     },
   });
@@ -1065,6 +1067,30 @@ export async function updateRegistration(
     }
   });
 
+  // Which tiers moved, for the audit trail. Present ONLY when something actually
+  // moved, and listing only the people it moved for: a total that changed without
+  // saying whose tier changed is a trail nobody can act on, but attaching every
+  // participant to every centre edit would bury that signal in noise.
+  const tierAudit =
+    tierChanges.size > 0
+      ? {
+          before: before.participants
+            .filter((p) => tierChanges.has(p.id))
+            .map((p) => ({
+              fullName: p.fullName,
+              pricingType: p.pricingType,
+              mealPricingType: p.mealPricingType,
+            })),
+          after: before.participants
+            .filter((p) => tierChanges.has(p.id))
+            .map((p) => ({
+              fullName: p.fullName,
+              pricingType: tierChanges.get(p.id)!.pricingType,
+              mealPricingType: tierChanges.get(p.id)!.mealPricingType,
+            })),
+        }
+      : null;
+
   // One endpoint covers both spec actions: emit `registration.status_change`
   // when the lifecycle status flipped, else the generic `registration.update`.
   // totalPrice rides along so a re-price is visible in the audit trail — it is
@@ -1080,12 +1106,14 @@ export async function updateRegistration(
       hasAccommodation: before.hasAccommodation,
       status: before.status,
       totalPrice: before.totalPrice,
+      ...(tierAudit ? { participantTiers: tierAudit.before } : {}),
     },
     newData: {
       centerId: input.centerId,
       hasAccommodation: input.hasAccommodation,
       status: input.status,
       totalPrice: repricing ? repricing.totalPrice : before.totalPrice,
+      ...(tierAudit ? { participantTiers: tierAudit.after } : {}),
     },
   });
 
