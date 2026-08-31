@@ -18,7 +18,7 @@ list of invariants before changing anything structural.
 ```bash
 npm run dev                 # dev server on :3000
 npm run build               # production build
-npm test                    # Vitest (178 tests, no database needed)
+npm test                    # Vitest (181 tests, no database needed)
 npm run lint                # ESLint
 npx prisma migrate deploy   # apply migrations (needs DIRECT_URL)
 ```
@@ -56,13 +56,18 @@ These are enforced across the codebase — do not violate them to make something
 - **Pricing is data-driven.** No age is hard-coded to 0 — every age is charged by its
   `PricingRule.dailyRate`. Arrival/departure discounts apply to 15+ only because child rules
   carry `0` discounts, not via an age branch.
-- **The pricing tier applies at every age, and prices meals too.** A meal costs
-  `MealPricingRule(mealType, ageCategory, pricingType)` — one 36-cell price list per event — so a
-  child's lunch and a supported adult's lunch differ. `EventMeal.price` is a legacy mirror of the
-  15+/STANDARD cell, used **only** when an event has no price list at all (pre-M37 events, all
-  backfilled to their existing price). A combination absent from a list that exists is 0, not the
-  flat price — do not "fix" that into a fallback, it would bill a child the adult price whenever
-  the list has a gap. Per-day meal control is availability, not price.
+- **Both tiers apply at every age, and every display must show both.** A meal costs
+  `MealPricingRule(mealType, ageCategory, pricingType)` — one 36-cell price list per event, keyed
+  by the eater's **meal** tier — so a child's lunch and a supported adult's lunch differ.
+  `EventMeal.price` is a legacy mirror of the 15+/STANDARD cell, used **only** when an event has
+  no price list at all (pre-M37 events, all backfilled to their existing price). A combination
+  absent from a list that exists is 0, not the flat price — do not "fix" that into a fallback, it
+  would bill a child the adult price whenever the list has a gap. Per-day meal control is
+  availability, not price. The admin registration detail, the confirmation email and the export
+  print **both** tiers for **every** participant, children included: blanking a child's tier is
+  the pre-M37 rule and was a bug, because the engine has no age branch and the hidden tier is the
+  one that produced the amount beside it. Anywhere a price list is shown or chosen, only the
+  tiers that half is offered on are listed — each table filtered by its **own** set.
 - **There are TWO tiers per person, and they are independent.** `Participant.pricingType` prices
   the stay/accommodation; `Participant.mealPricingType` prices the meals. An event declares which
   tiers it offers for each half separately (`Event.participationPricingTypes` /

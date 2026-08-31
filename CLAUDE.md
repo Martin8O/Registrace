@@ -67,24 +67,33 @@ next-intl 4 (i18n) · Zod 4 (validation — only lib) · React Hook Form · Rese
 12. User.id = @db.Uuid (matches Supabase Auth auth.users.id UUID format).
 13. Supabase needs two connection strings: pooled DATABASE_URL (port 6543) and direct DIRECT_URL (port 5432).
 14. Registration submission = idempotent (client sends UUID v4 idempotencyKey).
-15. **PricingType applies to EVERY age**, children included: an event may price a supported
-    child differently from a standard one, for participation *and* meals. Pricing is
-    **data-driven** — the engine charges every age by its PricingRule's `dailyRate` (no age
-    hard-coded to 0). Children default to 0 in the form, but an admin may set a non-zero rate
-    per event (e.g. real BDC "MLK" charges ages 8–14). Arrival/departure discounts apply to 15+
-    only because child rules carry 0 discounts — not via an age branch. (Revised M37; was
-    "PricingType applies only to AGE_15_PLUS" — revised M30 from "ages 0–14 always dailyRate = 0".)
+15. **BOTH pricing tiers apply at EVERY age**, children included: a person carries two of them
+    (invariant 22) — one pricing the stay, one the meals — and an event may price a supported
+    child differently from a standard one on either. Pricing is **data-driven** — the engine
+    charges every age by its PricingRule's `dailyRate` (no age hard-coded to 0). Children
+    default to 0 in the form, but an admin may set a non-zero rate per event (e.g. real BDC
+    "MLK" charges ages 8–14). Arrival/departure discounts apply to 15+ only because child rules
+    carry 0 discounts — not via an age branch. **Every display shows both tiers at every age**:
+    the admin registration detail, the confirmation email and the export. Blanking a child's
+    tier is the pre-M37 rule and is a bug — the engine has no age branch, so hiding the tier
+    hides which price list produced the amount printed beside it. (Revised M40c; revised M37
+    from "PricingType applies only to AGE_15_PLUS" — revised M30 from
+    "ages 0–14 always dailyRate = 0".)
 16. User cancellation not supported — admins only. Deliberate product decision.
 17. Export endpoint = POST (not GET), filters in body.
 18. Honeypot field on registration form, validated server-side.
 19. Max 10 participants per registration.
 20. SUPER_ADMIN sees all. ADMIN is scoped to their center(s) only.
 21. **A meal's price is `MealPricingRule(mealType, ageCategory, pricingType)`** — one price list
-    per event (3 × 4 × 3 = 36 cells), not one flat price per slot. `EventMeal.price` is a legacy
-    mirror of the 15+/STANDARD cell and is the engine's fallback **only** for an event carrying no
-    price list at all (every event predating M37 was backfilled to its current price, so no live
-    price moved). A combination missing from a list that *exists* resolves to 0, never the flat
-    price. Per-day control is availability (`isClosed`), not price. (M37.)
+    per event (3 × 4 × 3 = 36 cells), not one flat price per slot. Its `pricingType` is the eater's
+    **meal** tier (`Participant.mealPricingType`), never their participation tier — the two are
+    chosen apart (invariant 22), so a surplus room and a supported lunch is a normal row.
+    `EventMeal.price` is a legacy mirror of the 15+/STANDARD cell and is the engine's fallback
+    **only** for an event carrying no price list at all (every event predating M37 was backfilled
+    to its current price, so no live price moved). A combination missing from a list that *exists*
+    resolves to 0, never the flat price. Per-day control is availability (`isClosed`), not price.
+    Only the tiers the event offers for that half are quoted anywhere a price list is shown
+    (public overview, admin popup) or chosen (the registration form). (M37; meal tier M40.)
 22. **Two INDEPENDENT tiers per person (M40a).** `Participant.pricingType` prices the
     stay/accommodation, `Participant.mealPricingType` prices the meals, and an event declares which
     tiers it offers for each half separately (`Event.participationPricingTypes` /

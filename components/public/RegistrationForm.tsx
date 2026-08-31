@@ -61,6 +61,11 @@ type Props = {
   centers: CenterDTO[]
   pricingRules: PricingRuleDTO[]
   mealPricingRules: MealPricingRuleDTO[]
+  // The two INDEPENDENT tier sets this event offers (invariant 22): which tiers a
+  // person may pick for their stay, and which for their meals. Each is offered on
+  // its own — choosing surplus accommodation must not force surplus meals.
+  participationPricingTypes: string[]
+  mealPricingTypes: string[]
   // UTC ISO meal-ordering cut-off (or null). Past it, meal selection is disabled
   // (the server is authoritative — it strips meals submitted after the deadline).
   mealRegistrationDeadline: string | null
@@ -106,7 +111,26 @@ const mealLabelKey: Record<string, string> = {
 
 function makeParticipant(): RegistrationFormValues['participants'][number] {
   // mealType starts undefined — the registrant must actively choose meat/vege.
-  return { fullName: '', ageCategory: 'AGE_15_PLUS', pricingType: 'STANDARD', mealType: undefined, mealIds: [] }
+  // Both tiers start STANDARD: it is every event's mandatory tier (invariant 22),
+  // so it is the one default that is always a valid choice, and it is what gets
+  // submitted for a half whose selector is not rendered at all.
+  return {
+    fullName: '',
+    ageCategory: 'AGE_15_PLUS',
+    pricingType: 'STANDARD',
+    mealPricingType: 'STANDARD',
+    mealType: undefined,
+    mealIds: [],
+  }
+}
+
+// The tiers actually on offer for one half of the price. An EMPTY set means "all
+// three" — validation forbids storing one, so it can only be a data anomaly, and
+// mirroring the submit service's reading of it (modules/registrations) keeps the
+// form from hiding a choice the server would happily accept.
+function offeredTiers(set: string[]): readonly string[] {
+  const offered = PRICING_TYPES.filter((t) => set.includes(t))
+  return offered.length > 0 ? offered : PRICING_TYPES
 }
 
 function formatCzk(value: number): string {
@@ -120,10 +144,22 @@ export default function RegistrationForm({
   centers,
   pricingRules,
   mealPricingRules,
+  participationPricingTypes,
+  mealPricingTypes,
   mealRegistrationDeadline,
 }: Props) {
   const t = useTranslations('form')
   const locale = useLocale()
+
+  // One selector per half, and only when there is something to choose. A set of
+  // exactly one tier is always [STANDARD] (invariant 22), so the single-tier
+  // event — by far the most common — renders NO tier selector at all rather than
+  // a radio group with one option, which is noise, not a choice.
+  const participationTiers = useMemo(
+    () => offeredTiers(participationPricingTypes),
+    [participationPricingTypes],
+  )
+  const mealTiers = useMemo(() => offeredTiers(mealPricingTypes), [mealPricingTypes])
 
   // Meal ordering closed once the deadline has passed (computed at mount; the
   // server re-checks and strips meals submitted after the cut-off).
@@ -286,6 +322,7 @@ export default function RegistrationForm({
     participants: (allValues.participants ?? []).map((p) => ({
       ageCategory: p.ageCategory,
       pricingType: p.pricingType,
+      mealPricingType: p.mealPricingType,
       mealIds: p.mealIds ?? [],
     })),
   }
@@ -461,7 +498,10 @@ export default function RegistrationForm({
         <div className="mt-5 space-y-4">
           {fields.map((field, i) => {
             const age = allValues.participants?.[i]?.ageCategory
-            const tier = allValues.participants?.[i]?.pricingType
+            // Two independent tiers (invariant 22): the first prices the stay, the
+            // second the meals. The meal pills below must use the MEAL one, or a
+            // pill would disagree with the subtotal printed under it.
+            const mealTier = allValues.participants?.[i]?.mealPricingType
             const pricing = price?.participants?.[i]
 
             return (
@@ -510,17 +550,33 @@ export default function RegistrationForm({
                   />
                 </Field>
 
-                {/* The tier applies at every age (invariant 15): an event can price
-                    a supported child differently from a standard one, for both
-                    participation and meals. */}
-                <Field label={t('price_type')}>
-                  <PillRadioGroup
-                    name={`participants.${i}.pricingType`}
-                    options={PRICING_TYPES}
-                    labelFor={(v) => t(pricingLabelKey[v] ?? v)}
-                    register={register}
-                  />
-                </Field>
+                {/* Both tiers apply at every age (invariant 15): an event can price
+                    a supported child differently from a standard one, for the stay
+                    and for the meals — and the two are chosen independently
+                    (invariant 22), so surplus accommodation can go with supported
+                    meals. A half the event offers on one tier only renders nothing;
+                    its STANDARD default is submitted. */}
+                {participationTiers.length > 1 && (
+                  <Field label={t('price_type_participation')}>
+                    <PillRadioGroup
+                      name={`participants.${i}.pricingType`}
+                      options={participationTiers}
+                      labelFor={(v) => t(pricingLabelKey[v] ?? v)}
+                      register={register}
+                    />
+                  </Field>
+                )}
+
+                {mealTiers.length > 1 && (
+                  <Field label={t('price_type_meals')}>
+                    <PillRadioGroup
+                      name={`participants.${i}.mealPricingType`}
+                      options={mealTiers}
+                      labelFor={(v) => t(pricingLabelKey[v] ?? v)}
+                      register={register}
+                    />
+                  </Field>
+                )}
 
                 {!mealsClosed && (
                   <Field label={t('meal_type')}>
@@ -561,7 +617,7 @@ export default function RegistrationForm({
                               // pill agrees with the subtotal below it.
                               const slotPrice = resolveMealPrice(
                                 slot.mealType,
-                                { ageCategory: age ?? 'AGE_15_PLUS', mealPricingType: tier },
+                                { ageCategory: age ?? 'AGE_15_PLUS', mealPricingType: mealTier },
                                 mealPricingRules,
                                 slot.price,
                               )

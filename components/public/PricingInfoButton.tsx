@@ -10,6 +10,10 @@ type Props = {
   meals: EventMealDTO[]
   pricingRules: PricingRuleDTO[]
   mealPricingRules: MealPricingRuleDTO[]
+  // The event's two independent tier sets — each table in the overview is filtered
+  // by its OWN set (invariant 22), so the list quotes only what can be chosen.
+  participationPricingTypes: string[]
+  mealPricingTypes: string[]
 }
 
 export default function PricingInfoButton({
@@ -17,6 +21,8 @@ export default function PricingInfoButton({
   meals,
   pricingRules,
   mealPricingRules,
+  participationPricingTypes,
+  mealPricingTypes,
 }: Props) {
   const [open, setOpen] = useState(false)
   const t = useTranslations('event')
@@ -36,6 +42,8 @@ export default function PricingInfoButton({
         meals={meals}
         pricingRules={pricingRules}
         mealPricingRules={mealPricingRules}
+        participationPricingTypes={participationPricingTypes}
+        mealPricingTypes={mealPricingTypes}
       />
     </>
   )

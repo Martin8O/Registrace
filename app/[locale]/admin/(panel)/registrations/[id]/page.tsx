@@ -71,6 +71,8 @@ export default async function RegistrationDetailPage({
             meals={detail.eventMeals}
             pricingRules={detail.eventPricingRules}
             mealPricingRules={detail.eventMealPricingRules}
+            participationPricingTypes={detail.eventParticipationPricingTypes}
+            mealPricingTypes={detail.eventMealPricingTypes}
           />
         }
         initialHasAccommodation={detail.hasAccommodation}
@@ -108,6 +110,12 @@ export default async function RegistrationDetailPage({
         <div className="space-y-4">
           {detail.participants.map((p, i) => {
             const meals = p.meals.map((m) => (lang === 'cs' ? m.label_cs : m.label_en))
+            // Both tiers, at every age (invariants 15 + 22) — this used to print
+            // nothing under 15, which left an admin unable to reconcile a child's
+            // amount against the price list on a course that charges 8–14.
+            // They are named apart only when they DIFFER (surplus room, supported
+            // food); when they agree, the single label already describes both.
+            const tiersDiffer = p.mealPricingType !== p.pricingType
             return (
               <div key={i} className={`participant-card ${i % 2 === 1 ? 'bg-gold-50' : ''}`}>
                 <div className="flex items-center justify-between gap-3">
@@ -118,8 +126,10 @@ export default async function RegistrationDetailPage({
                 </div>
                 <p className="mt-1 text-sm text-neutral-600">
                   {t(`age.${p.ageCategory}`)}
-                  {p.pricingType &&
-                    ` · ${t(`pricingType.${p.pricingType}`)} ${t('registrationDetail.priceWord')}`}
+                  {tiersDiffer
+                    ? ` · ${t('registrationDetail.participationPriceType')}: ${t(`pricingType.${p.pricingType}`)}` +
+                      ` · ${t('registrationDetail.mealPriceType')}: ${t(`pricingType.${p.mealPricingType}`)}`
+                    : ` · ${t(`pricingType.${p.pricingType}`)} ${t('registrationDetail.priceWord')}`}
                   {` · ${t(`mealCategory.${p.mealType}`)} ${t('registrationDetail.mealWord')}`}
                 </p>
                 <div className="mt-3">

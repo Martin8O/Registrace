@@ -42,6 +42,8 @@ export default async function EventPage({
           meals={event.meals}
           pricingRules={event.pricingRules}
           mealPricingRules={event.mealPricingRules}
+          participationPricingTypes={event.participationPricingTypes}
+          mealPricingTypes={event.mealPricingTypes}
         />
       </div>
 
@@ -52,6 +54,8 @@ export default async function EventPage({
         centers={centers}
         pricingRules={event.pricingRules}
         mealPricingRules={event.mealPricingRules}
+        participationPricingTypes={event.participationPricingTypes}
+        mealPricingTypes={event.mealPricingTypes}
         mealRegistrationDeadline={event.mealRegistrationDeadline}
       />
     </div>

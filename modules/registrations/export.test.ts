@@ -43,9 +43,12 @@ function fakeRows() {
       departureDate: { label_cs: "Ne", label_en: "Sun" },
       participants: [
         {
+          // Surplus room, supported food — the two-tier case the feature exists
+          // for. One tier column could not say this.
           fullName: "Jan Novák",
           ageCategory: "AGE_15_PLUS",
-          pricingType: "STANDARD",
+          pricingType: "SURPLUS",
+          mealPricingType: "SUPPORTED",
           mealType: "MEAT",
           participationPrice: 200,
           mealPrice: 100,
@@ -53,9 +56,12 @@ function fakeRows() {
           meals: [{ eventMeal: { label_cs: "Pá oběd", label_en: "Fri lunch" } }],
         },
         {
+          // A CHILD on a non-standard tier — four such people are already live,
+          // and a real BDC course charges ages 8–14.
           fullName: "Eva Malá",
           ageCategory: "AGE_8_14",
-          pricingType: "STANDARD",
+          pricingType: "SUPPORTED",
+          mealPricingType: "SUPPORTED",
           mealType: "VEGETARIAN",
           participationPrice: 0,
           mealPrice: 50,
@@ -77,8 +83,9 @@ describe("buildRegistrationExport", () => {
     expect(headers).toContain("Centrum akce");
     expect(headers).toContain("Domovské centrum");
     expect(headers).not.toContain("Akce"); // event name is now the sheet title, not a column
-    // 13 base columns + 2 participants × 8 = 29 (Akce column removed)
-    expect(headers).toHaveLength(29);
+    // 13 base columns + 2 participants × 9 = 31 (Akce column removed; the group
+    // gained a second tier column — participation and meals are priced apart)
+    expect(headers).toHaveLength(31);
 
     const row = rows[0]!;
     expect(row[0]).toBe("260020001");
@@ -89,16 +96,32 @@ describe("buildRegistrationExport", () => {
     expect(row[10]).toBe("Ano"); // accommodation YES → Ano
     expect(row[11]).toBe(300); // total stays a number
     expect(row[12]).toBe(2); // participant count
-    // Participant 1 (15+): name=13, age=14, type=15, diet=16 … meals=20
+    // Participant 1 (15+): name=13, age=14, stay tier=15, meal tier=16,
+    // diet=17 … meals=21
     expect(row[13]).toBe("Jan Novák");
     expect(row[14]).toBe("15 let a více");
-    expect(row[15]).toBe("Standardní");
-    expect(row[16]).toBe("Masitá"); // diet (MEAT)
-    expect(row[20]).toBe("Pá oběd"); // joined meal labels
-    // Participant 2 (child): name=21, type=23, diet=24
-    expect(row[21]).toBe("Eva Malá");
-    expect(row[23]).toBe(""); // pricingType omitted for under-15 (invariant 15)
-    expect(row[24]).toBe("Vegetariánská"); // diet shown for every age
+    expect(row[15]).toBe("Nadbytek"); // participation tier
+    expect(row[16]).toBe("Podporovaná"); // meal tier — independent of the above
+    expect(row[17]).toBe("Masitá"); // diet (MEAT)
+    expect(row[21]).toBe("Pá oběd"); // joined meal labels
+    // Participant 2 (child): name=22, age=23, stay tier=24, meal tier=25, diet=26
+    expect(row[22]).toBe("Eva Malá");
+    expect(row[26]).toBe("Vegetariánská"); // diet shown for every age
+  });
+
+  it("shows both tiers for a CHILD too — the tier applies at every age", async () => {
+    // This replaces an assertion that pinned the opposite: the sheet used to blank
+    // the tier for anyone under 15 (the pre-M37 invariant 15, when tiers were a
+    // 15+ concept). The engine never had that age branch, so the export was hiding
+    // the tier that produced the very amount in the next column, and an admin
+    // could not reconcile a child's price against the price list.
+    h.findMany.mockResolvedValue(fakeRows());
+    const { headers, rows } = await buildRegistrationExport({}, ctx, "cs");
+
+    expect(headers[24]).toBe("Účastník 2 — typ ceny za účast");
+    expect(headers[25]).toBe("Účastník 2 — typ ceny za stravu");
+    expect(rows[0]![24]).toBe("Podporovaná"); // child's participation tier
+    expect(rows[0]![25]).toBe("Podporovaná"); // child's meal tier
   });
 
   it("localizes to English when lang = en", async () => {
@@ -114,7 +137,7 @@ describe("buildRegistrationExport", () => {
     h.findMany.mockResolvedValue([]);
     const { headers, rows } = await buildRegistrationExport({}, ctx, "cs");
     expect(rows).toHaveLength(0);
-    expect(headers).toHaveLength(21); // 13 base + 1 group × 8
+    expect(headers).toHaveLength(22); // 13 base + 1 group × 9
   });
 });
 

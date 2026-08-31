@@ -11,7 +11,11 @@ import { Resend } from "resend";
 export type ConfirmationParticipant = {
   fullName: string;
   ageCategory: string;
-  pricingType?: string; // present only for AGE_15_PLUS (invariant 15)
+  // The two independent tiers this person was priced on (invariant 22), present at
+  // EVERY age (invariant 15). They used to be one tier, blanked out under 15 — so a
+  // parent of a supported child was mailed a dash where their tier should be.
+  pricingType?: string;
+  mealPricingType?: string;
   mealType: string; // MEAT | VEGETARIAN — diet for the ordered meals
   meals: string[]; // localized meal labels
   subtotal: number; // whole CZK (invariant 10)
@@ -80,6 +84,8 @@ const TEXT: Record<Lang, Record<string, string>> = {
     STANDARD: "standardní cena",
     SUPPORTED: "podporovaná cena",
     SURPLUS: "cena nadbytek",
+    tier_participation: "účast",
+    tier_meals: "strava",
     MEAT: "masitá",
     VEGETARIAN: "vegetariánská",
   },
@@ -122,6 +128,8 @@ const TEXT: Record<Lang, Record<string, string>> = {
     STANDARD: "standard price",
     SUPPORTED: "supported price",
     SURPLUS: "surplus price",
+    tier_participation: "stay",
+    tier_meals: "meals",
     MEAT: "meat",
     VEGETARIAN: "vegetarian",
   },
@@ -243,7 +251,17 @@ function buildHtml(data: ConfirmationEmailData, lang: Lang): string {
       // diet if none were ordered). Keeps the table at five columns.
       const diet = t(p.mealType);
       const meals = p.meals.length > 0 ? `${diet} · ${p.meals.map(esc).join(", ")}` : diet;
-      const type = p.pricingType ? t(p.pricingType) : t("none_dash");
+      // Both tiers, at every age. They are named separately only when they
+      // DIFFER — the case the two-tier feature exists for (surplus room, supported
+      // food), which one label cannot express. When they agree, that one label is
+      // already true of both halves, and repeating it under two headings would be
+      // the same noise the price overview collapses away.
+      const stayTier = p.pricingType ? t(p.pricingType) : t("none_dash");
+      const mealTier = p.mealPricingType ? t(p.mealPricingType) : stayTier;
+      const type =
+        p.mealPricingType && p.mealPricingType !== p.pricingType
+          ? `${t("tier_participation")}: ${stayTier}<br />${t("tier_meals")}: ${mealTier}`
+          : stayTier;
       return `<tr>
         <td style="${cell}">${esc(p.fullName)}</td>
         <td style="${cell}">${t(p.ageCategory)}</td>

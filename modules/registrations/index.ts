@@ -385,8 +385,12 @@ export async function submitRegistration(
       participants: participantsInput.map((p, i) => ({
         fullName: p.fullName,
         ageCategory: p.ageCategory,
-        // Shown for every age now that children have tiers too (invariant 15).
+        // Both tiers, shown for every age now that children have tiers too
+        // (invariants 15 + 22) — and shown separately, because they are chosen
+        // separately: surplus accommodation with supported meals is the case the
+        // feature exists for, and one label cannot say that.
         pricingType: p.pricingType ?? "STANDARD",
+        mealPricingType: p.mealPricingType,
         mealType: p.mealType,
         subtotal: pricing.participants[i]?.subtotal ?? 0,
         meals: [...new Set(p.mealIds)]
@@ -450,7 +454,12 @@ type ConfirmationSource = {
   participants: Array<{
     fullName: string;
     ageCategory: string;
-    pricingType: string | null; // null → omitted (children, invariant 15)
+    // BOTH tiers, at EVERY age (invariants 15 + 22). These used to be a single
+    // tier blanked out under 15, back when tiers were a 15+ concept; the engine
+    // never had that age branch, so the mail hid which tier produced the amount
+    // it was printing — and a parent of a supported child read a dash.
+    pricingType: string;
+    mealPricingType: string;
     mealType: string; // MEAT | VEGETARIAN
     subtotal: number;
     meals: { label_cs: string; label_en: string }[];
@@ -480,7 +489,8 @@ function buildConfirmationEmailData(
     participants: src.participants.map((p) => ({
       fullName: p.fullName,
       ageCategory: p.ageCategory,
-      pricingType: p.pricingType ?? undefined,
+      pricingType: p.pricingType,
+      mealPricingType: p.mealPricingType,
       mealType: p.mealType,
       meals: p.meals.map((m) => pick(m.label_cs, m.label_en)),
       subtotal: p.subtotal,
@@ -518,7 +528,12 @@ export type AdminRegistrationListItem = {
 export type AdminRegistrationDetailParticipant = {
   fullName: string;
   ageCategory: string;
-  pricingType: string | null;
+  // The two independent tiers this person was priced on (invariant 22), both
+  // shown at every age (invariant 15) — an admin reconciling an amount against
+  // the price list needs to know which tier priced which half, and a child's
+  // tier is as real as an adult's.
+  pricingType: string;
+  mealPricingType: string;
   mealType: string; // MEAT | VEGETARIAN
   totalPrice: number;
   meals: { label_cs: string; label_en: string; mealType: string }[];
@@ -549,6 +564,11 @@ export type AdminRegistrationDetailDTO = {
   eventMeals: EventMealDTO[];
   eventPricingRules: PricingRuleDTO[];
   eventMealPricingRules: MealPricingRuleDTO[];
+  // The event's two offered-tier sets, so that popup filters each of its tables by
+  // the same set the public page does (invariant 22) instead of quoting tiers this
+  // event never offered.
+  eventParticipationPricingTypes: string[];
+  eventMealPricingTypes: string[];
   participants: AdminRegistrationDetailParticipant[];
 };
 
@@ -662,10 +682,13 @@ export async function getRegistrationForDetail(
       pricingType: mr.pricingType,
       price: mr.price,
     })),
+    eventParticipationPricingTypes: r.event.participationPricingTypes,
+    eventMealPricingTypes: r.event.mealPricingTypes,
     participants: r.participants.map((p) => ({
       fullName: p.fullName,
       ageCategory: p.ageCategory,
-      pricingType: p.ageCategory === "AGE_15_PLUS" ? p.pricingType : null,
+      pricingType: p.pricingType,
+      mealPricingType: p.mealPricingType,
       mealType: p.mealType,
       totalPrice: p.totalPrice,
       meals: p.meals.map((pm) => ({
@@ -931,7 +954,8 @@ export async function resendConfirmation(
       participants: r.participants.map((p) => ({
         fullName: p.fullName,
         ageCategory: p.ageCategory,
-        pricingType: p.ageCategory === "AGE_15_PLUS" ? p.pricingType : null,
+        pricingType: p.pricingType,
+        mealPricingType: p.mealPricingType,
         mealType: p.mealType,
         subtotal: p.totalPrice,
         meals: p.meals.map((pm) => ({
@@ -1101,7 +1125,7 @@ const EXPORT_HEADERS: Record<ExportLang, {
   arrival: string; arrivalTime: string; departure: string;
   earlyDeparture: string; accommodation: string; total: string; count: string;
   participant: string; pName: string; pAge: string; pType: string;
-  pDiet: string;
+  pMealType: string; pDiet: string;
   pParticipation: string; pMeal: string; pTotal: string; pMeals: string;
   yes: string; no: string; sheet: string;
 }> = {
@@ -1111,7 +1135,8 @@ const EXPORT_HEADERS: Record<ExportLang, {
     arrival: "Příjezd", arrivalTime: "Čas příjezdu", departure: "Odjezd",
     earlyDeparture: "Dřívější odjezd", accommodation: "Ubytování",
     total: "Celková cena (Kč)", count: "Počet účastníků",
-    participant: "Účastník", pName: "jméno", pAge: "věk", pType: "typ ceny",
+    participant: "Účastník", pName: "jméno", pAge: "věk",
+    pType: "typ ceny za účast", pMealType: "typ ceny za stravu",
     pDiet: "typ stravy",
     pParticipation: "cena za účast (Kč)", pMeal: "cena za stravu (Kč)",
     pTotal: "celkem (Kč)", pMeals: "strava",
@@ -1123,7 +1148,8 @@ const EXPORT_HEADERS: Record<ExportLang, {
     arrival: "Arrival", arrivalTime: "Arrival time", departure: "Departure",
     earlyDeparture: "Early departure", accommodation: "Accommodation",
     total: "Total price (CZK)", count: "Participants",
-    participant: "Participant", pName: "name", pAge: "age", pType: "price type",
+    participant: "Participant", pName: "name", pAge: "age",
+    pType: "participation price type", pMealType: "meal price type",
     pDiet: "diet",
     pParticipation: "participation price (CZK)", pMeal: "meal price (CZK)",
     pTotal: "total (CZK)", pMeals: "meals",
@@ -1277,6 +1303,7 @@ export async function buildRegistrationExport(
       `${L.participant} ${i} — ${L.pName}`,
       `${L.participant} ${i} — ${L.pAge}`,
       `${L.participant} ${i} — ${L.pType}`,
+      `${L.participant} ${i} — ${L.pMealType}`,
       `${L.participant} ${i} — ${L.pDiet}`,
       `${L.participant} ${i} — ${L.pParticipation}`,
       `${L.participant} ${i} — ${L.pMeal}`,
@@ -1304,14 +1331,18 @@ export async function buildRegistrationExport(
     for (let i = 0; i < maxParticipants; i++) {
       const p = r.participants[i];
       if (!p) {
-        row.push("", "", "", "", "", "", "", "");
+        row.push("", "", "", "", "", "", "", "", "");
         continue;
       }
-      const is15 = p.ageCategory === "AGE_15_PLUS";
+      // Both tiers, for every age. The participation tier used to be blanked out
+      // under 15 (the pre-M37 invariant 15, when tiers were 15+-only) — the engine
+      // never had that branch, so the sheet was hiding the tier that produced the
+      // amount in the column beside it, on a course that really does charge 8–14.
       row.push(
         p.fullName,
         AGE_LABELS[lang][p.ageCategory] ?? p.ageCategory,
-        is15 ? (PRICING_LABELS[lang][p.pricingType] ?? p.pricingType) : "",
+        PRICING_LABELS[lang][p.pricingType] ?? p.pricingType,
+        PRICING_LABELS[lang][p.mealPricingType] ?? p.mealPricingType,
         MEAL_CATEGORY_LABELS[lang][p.mealType] ?? p.mealType,
         p.participationPrice,
         p.mealPrice,

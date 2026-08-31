@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-178%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-181%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -158,7 +158,9 @@ single source of orientation for anyone joining the project.
 - **Bilingual throughout** — every page and email in Czech or English; the switch preserves
   the current place.
 - **Group registration** — one submission for up to **10 participants**, each with their own
-  age category, price tier (standard / supported / surplus) and diet (meat / vegetarian).
+  age category, diet (meat / vegetarian) and **two independent price tiers** (standard /
+  supported / surplus) — one for the stay, one for the meals, so a surplus room can go with
+  supported food. A tier the event offers only one of is not asked about at all.
 - **Per-day meal selection** with a per-event **meal-ordering deadline** (after the cut-off,
   meal choice is closed and enforced server-side).
 - **Live, server-authoritative pricing** — the form shows a running total, but the backend
@@ -210,7 +212,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 178 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 181 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -311,6 +313,19 @@ age is hard-coded to `0`. Young children carry a `0`-rate rule, but an event may
 ages 8–14 (the real BDC "MLK" course does, at 100 CZK/day). Discounts apply to 15+ only
 because child rules carry `0` discounts — not via any age branch.
 
+Each person carries **two independent price tiers**, and both apply **at every age**:
+`pricingType` prices the stay, `mealPricingType` prices the meals. Surplus accommodation with
+supported meals is a normal, intended combination — neither tier is ever derived from the
+other. A meal costs `MealPricingRule(mealType, ageCategory, pricingType)`, a 36-cell price list
+per event keyed by the eater's **meal** tier; `EventMeal.price` is a legacy mirror of the
+15+/standard cell and is used only by an event that has no price list at all. An event declares
+which tiers it offers for each half separately, and every surface honours that: the price
+overview filters each of its two tables by its own set, and the registration form renders a
+selector only for a half that offers more than one tier — so the common single-tier event shows
+none at all. Because the tier is real at every age, the admin registration detail, the
+confirmation email and the export all print **both** tiers for **every** participant, children
+included.
+
 ### Data model
 
 11 Prisma models, 9 enums, 6 applied migrations. The source of truth is
@@ -327,7 +342,8 @@ because child rules carry `0` discounts — not via any age branch.
 | **Event** | Bilingual title/subtitle/description, contact fields, `status`, `centerId` (host centre), dates, `createdBy`, `mealRegistrationDeadline`, `numberPrefix` + `registrationSeq` (reg-number support), and the two independent sets of offered tiers — `participationPricingTypes` / `mealPricingTypes`. |
 | **EventDate** | A day of the event; used as arrival/departure reference. |
 | **PricingRule** | Per `event × ageCategory × pricingType`: `dailyRate`, `nightRate` and the four `*Discount` fields (subtracted). |
-| **EventMeal** | A meal slot on a given day: `mealType`, `price`, `isClosed`. |
+| **MealPricingRule** | The event's meal price list: per `mealType × ageCategory × pricingType` (36 cells), what one meal costs one person. Keyed by the eater's **meal** tier. |
+| **EventMeal** | A meal slot on a given day: `mealType`, `price`, `isClosed`. `price` is a legacy mirror of the 15+/standard cell, used only by an event with no price list. |
 | **Registration** | The submission: home `centerId`, arrival/departure, `hasAccommodation`, `email`, `gdprConsent`, `totalPrice`, `status`, `idempotencyKey`, `registrationNumber`, `locale`, `ipAddress`. |
 | **Participant** | One person: `ageCategory`, two independent tiers — `pricingType` (stay/accommodation) and `mealPricingType` (meals) — `mealType` (diet), computed prices. |
 | **ParticipantMeal** | `Participant ↔ EventMeal` join with the charged price. |
@@ -595,7 +611,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **178 Vitest tests** across 13 files, with **no database required**:
+`npm test` runs **181 Vitest tests** across 13 files, with **no database required**:
 
 - **Pricing engine** (48) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -613,10 +629,11 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 - **Event configuration** (8) — that an event's two tier sets must each be non-empty and contain
   the standard tier, and that neither price list may quote a tier the event does not offer —
   each list checked against its own set, never the other's.
-- **Submit service** (16) — control-flow with a **mocked Prisma** (`vi.mock('@/lib/db')`) while
+- **Submit service** (18) — control-flow with a **mocked Prisma** (`vi.mock('@/lib/db')`) while
   keeping the real engine, so `totalPrice` is asserted end-to-end; plus the two tiers pricing
   the two halves independently, both being persisted, each meal snapshotted at the meal tier's
-  price, and a tier the event does not offer being refused before anything is written.
+  price, a tier the event does not offer being refused before anything is written, and both
+  tiers reaching the confirmation email — **for a child as well as an adult**.
 - **Admin re-pricing** (14) — that toggling a registration's accommodation re-prices it through
   the real engine (both directions, children included — no age is special-cased), that a centre
   or status edit writes no price and issues no extra query, that the registration and its
@@ -628,8 +645,9 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   Vercel preview's own url, and rejects everything else: foreign origins, a missing
   Origin + Referer, localhost in production, and — the regression that matters — a `vercel.app`
   origin while running in **production**.
-- **Export & auth** (7 + 4) — the registration-export scoping (including the cross-centre IDOR
-  regression) and the owner-tier auth helpers.
+- **Export & auth** (8 + 4) — the registration-export scoping (including the cross-centre IDOR
+  regression), the export's two independent tier columns shown **at every age**, and the
+  owner-tier auth helpers.
 - **Auth error wording** (8) — the Supabase-code → message mapping, plus a check that every key
   it can return is translated in **both** locales (an unmapped key would render as raw text).
 - **Password policy** (24) — that the rules mirror GoTrue's literal ASCII sets (Czech accented

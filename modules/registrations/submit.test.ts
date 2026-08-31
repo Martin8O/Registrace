@@ -332,3 +332,89 @@ describe("submitRegistration — the two pricing tiers", () => {
     });
   });
 });
+// ─── The confirmation email carries both tiers, at every age (M40c) ───────────
+// The mail used to print ONE tier and blank it out under 15 — the pre-M37
+// invariant 15, from when tiers were a 15+ concept. The engine never had that age
+// branch, so a parent of a supported child was mailed a dash where the tier that
+// produced their amount should have been.
+
+describe("submitRegistration — the confirmation email's tiers", () => {
+  const emailData = () => h.sendRegistrationConfirmation.mock.calls[0]?.[0];
+
+  const twoPeople = (over: Record<string, unknown> = {}): RegistrationSubmitInput => ({
+    ...validInput,
+    participants: [
+      {
+        fullName: "Jan Novák",
+        ageCategory: "AGE_15_PLUS",
+        pricingType: "SURPLUS",
+        mealPricingType: "SUPPORTED",
+        mealType: "MEAT",
+        mealIds: ["m_b"],
+      },
+      {
+        // A child on a non-standard tier — the case that used to render "—".
+        fullName: "Eva Malá",
+        ageCategory: "AGE_8_14",
+        pricingType: "SUPPORTED",
+        mealPricingType: "STANDARD",
+        mealType: "VEGETARIAN",
+        mealIds: [],
+      },
+    ],
+    ...over,
+  });
+
+  it("mails both tiers for an adult AND for a child", async () => {
+    h.prisma.event.findFirst.mockResolvedValue({
+      ...fakeEvent,
+      mealPricingRules: TIERED_MEAL_RULES,
+    });
+
+    await submitRegistration(twoPeople(), meta);
+
+    expect(emailData().participants).toEqual([
+      expect.objectContaining({
+        fullName: "Jan Novák",
+        pricingType: "SURPLUS",
+        mealPricingType: "SUPPORTED",
+      }),
+      expect.objectContaining({
+        fullName: "Eva Malá",
+        ageCategory: "AGE_8_14",
+        pricingType: "SUPPORTED",
+        mealPricingType: "STANDARD",
+      }),
+    ]);
+  });
+
+  it("mails the meal tier a missing one was filled in from, never STANDARD", async () => {
+    // A pre-M40 client sends one tier; the service fills the meal tier from that
+    // person's own tier. The mail must state what they were actually charged at.
+    h.prisma.event.findFirst.mockResolvedValue({
+      ...fakeEvent,
+      mealPricingRules: TIERED_MEAL_RULES,
+    });
+
+    await submitRegistration(
+      {
+        ...validInput,
+        participants: [
+          {
+            fullName: "Jan Novák",
+            ageCategory: "AGE_15_PLUS",
+            pricingType: "SUPPORTED",
+            mealType: "MEAT",
+            mealIds: ["m_b"],
+          },
+        ],
+      },
+      meta,
+    );
+
+    expect(emailData().participants[0]).toMatchObject({
+      pricingType: "SUPPORTED",
+      mealPricingType: "SUPPORTED",
+    });
+  });
+});

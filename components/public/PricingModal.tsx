@@ -10,6 +10,11 @@ type Props = {
   meals: EventMealDTO[]
   pricingRules: PricingRuleDTO[]
   mealPricingRules: MealPricingRuleDTO[]
+  // The event's two independent tier sets (invariant 22). Each table is filtered
+  // by its OWN set, never the other's — an event that tiers the stay but quotes a
+  // single meal price must not advertise three meal tiers.
+  participationPricingTypes: string[]
+  mealPricingTypes: string[]
 }
 
 const AGES = ['AGE_0_3', 'AGE_4_7', 'AGE_8_14', 'AGE_15_PLUS'] as const
@@ -33,6 +38,14 @@ const mealKey: Record<string, string> = {
   DINNER: 'dinner',
 }
 
+// The tiers one half of the price is actually offered on. An EMPTY set means "all
+// three" — the same reading the submit service and the registration form use, so
+// a data anomaly cannot make the overview disagree with what the form accepts.
+function offeredTiers(set: string[]): readonly string[] {
+  const offered = TIERS.filter((t) => set.includes(t))
+  return offered.length > 0 ? offered : TIERS
+}
+
 // Informational overview only (invariant 3) — the server price is authoritative.
 //
 // Both halves are a matrix of age category × pricing tier, so the flat label/value
@@ -45,12 +58,20 @@ const mealKey: Record<string, string> = {
 // an identical price under three tier headings, so a category whose tiers are all
 // equal collapses to a single row labelled by age alone (which is every category on
 // an event that does not differentiate, e.g. any event predating the price list).
+//
+// Each table lists only the tiers ITS half is offered on (invariant 22), so a stay
+// tiered three ways alongside a single meal price reads as three rows per age in
+// the first table and one per age in the second. A half offered on one tier alone
+// therefore collapses to age-only rows through the existing rule above — no special
+// case is needed for it.
 export default function PricingModal({
   isOpen,
   onClose,
   meals,
   pricingRules,
   mealPricingRules,
+  participationPricingTypes,
+  mealPricingTypes,
 }: Props) {
   const t = useTranslations('event.pricingModal')
 
@@ -73,9 +94,12 @@ export default function PricingModal({
   // values collapses to one row labelled by age alone — the tier heading would be
   // telling the reader something that isn't true of the price.
   type Row = { key: string; label: string; values: number[] }
-  const buildRows = (valuesFor: (age: string, tier: string) => number[]): Row[] =>
+  const buildRows = (
+    tiers: readonly string[],
+    valuesFor: (age: string, tier: string) => number[],
+  ): Row[] =>
     AGES.flatMap((age) => {
-      const perTier = TIERS.map((tier) => ({ tier, values: valuesFor(age, tier) }))
+      const perTier = tiers.map((tier) => ({ tier, values: valuesFor(age, tier) }))
       const allSame = perTier.every(
         (x) => JSON.stringify(x.values) === JSON.stringify(perTier[0]!.values),
       )
@@ -90,12 +114,12 @@ export default function PricingModal({
     })
 
   const stayColumns = [t('dailyRateShort'), t('pricePerNightShort')]
-  const stayRows = buildRows((age, tier) => {
+  const stayRows = buildRows(offeredTiers(participationPricingTypes), (age, tier) => {
     const r = rule(age, tier)
     return [r?.dailyRate ?? 0, r?.nightRate ?? 0]
   })
 
-  const mealRows = buildRows((age, tier) =>
+  const mealRows = buildRows(offeredTiers(mealPricingTypes), (age, tier) =>
     servedMeals.map((type) => mealPrice(type, age, tier)),
   )
 
