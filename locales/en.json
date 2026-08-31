@@ -389,6 +389,13 @@
         "derivedNote": "Event days are derived from the date range; edit each day's meals in the Meals step.",
         "selectDates": "First choose a start and end date."
       },
+      "tiers": {
+        "participationTitle": "Pricing tiers offered — participation and accommodation",
+        "participationNote": "Tick the tiers a participant may choose from for participation and accommodation. The price list below is filled in for the ticked tiers only. The meal tier is entirely independent of this — it is set separately in the Meals step.",
+        "mealsTitle": "Pricing tiers offered — meals",
+        "mealsNote": "Tick the tiers a participant may choose from for meals. This does not depend on the participation and accommodation tier — each is chosen separately.",
+        "standardNote": "always available"
+      },
       "pricing": {
         "intro": "Pricing rules are saved with the event.",
         "ageCategory": "Age category",

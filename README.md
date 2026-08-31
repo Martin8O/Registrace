@@ -178,7 +178,10 @@ single source of orientation for anyone joining the project.
 - **Role-based access** — `SUPER_ADMIN` sees everything; `ADMIN` is scoped to their assigned
   centre(s); an **owner tier** guards super-admin management.
 - **7-step event wizard** — bilingual titles/descriptions, dates, pricing rules per age &
-  tier, meals per day, capacity, and the meal deadline. Empty drafts stay fully editable.
+  tier, meals per day, capacity, and the meal deadline. The pricing and meals steps each carry
+  their own **independent** row of offered tiers, so an event can price the stay across three
+  tiers while quoting a single meal price — only the ticked tiers are filled in and stored
+  (the standard tier is always offered). Empty drafts stay fully editable.
 - **Event lifecycle** — draft → published → closed → archived, with a public visibility
   window derived on read.
 - **Registration workflow** — filter by centre / status / archived, search by number, edit

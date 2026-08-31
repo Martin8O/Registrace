@@ -55,6 +55,11 @@ export type EventStepperEditData = {
   meals: EventMealDTO[]
   pricingRules: PricingRuleDTO[]
   mealPricingRules: MealPricingRuleDTO[]
+  // The two independent tier sets the stored event offers (M40). The checkbox
+  // rows in steps 3 and 4 prefill from these, so editing a draft keeps the
+  // admin's earlier choice instead of quietly reopening all three tiers.
+  participationPricingTypes: string[]
+  mealPricingTypes: string[]
 }
 
 type CenterOption = { id: string; name_cs: string; name_en: string }
@@ -105,6 +110,24 @@ const PRICING15_FIELDS: (keyof PricingRow)[] = [
 const CHILD_FIELDS: (keyof PricingRow)[] = ['dailyRate', 'nightRate']
 const fieldsForAge = (age: string): (keyof PricingRow)[] =>
   age === 'AGE_15_PLUS' ? PRICING15_FIELDS : CHILD_FIELDS
+
+// Which tiers this event offers, held as TWO INDEPENDENT sets (M40): one for
+// participation/accommodation (step 3), one for meals (step 4). STANDARD is
+// always on — it is the DB default for a participant's tier and the fallback in
+// several lookups, so an event without it is unrepresentable, not merely unusual.
+type TierFlags = Record<MockPricingType, boolean>
+
+const ALL_TIERS: TierFlags = { STANDARD: true, SUPPORTED: true, SURPLUS: true }
+
+// A brand-new event, and every event created before M40, offers all three.
+function initialTierFlags(offered?: string[]): TierFlags {
+  if (!offered || offered.length === 0) return { ...ALL_TIERS }
+  return {
+    STANDARD: true,
+    SUPPORTED: offered.includes('SUPPORTED'),
+    SURPLUS: offered.includes('SURPLUS'),
+  }
+}
 
 // Both price lists are keyed by the combination they price, so every lookup in
 // this file goes through one of these two helpers.
@@ -306,6 +329,16 @@ export default function EventStepper({
   const [mealExcluded, setMealExcluded] = useState<Record<string, boolean>>(() =>
     initialMealExcluded(editData),
   )
+  // The two tier sets are independent by design: ticking a tier for
+  // accommodation must not tick it for meals, and nothing is inferred from one
+  // to the other. Toggling changes only which tiers are shown and written — the
+  // typed prices live in the state above and survive an accidental untick.
+  const [participationTiers, setParticipationTiers] = useState<TierFlags>(() =>
+    initialTierFlags(editData?.participationPricingTypes),
+  )
+  const [mealTiers, setMealTiers] = useState<TierFlags>(() =>
+    initialTierFlags(editData?.mealPricingTypes),
+  )
 
   const {
     register,
@@ -364,6 +397,27 @@ export default function EventStepper({
       [mealKey(date, meal)]: !(prev[mealKey(date, meal)] ?? false),
     }))
 
+  // Rendered and written in the canonical STANDARD → SUPPORTED → SURPLUS order,
+  // whatever order the admin ticked them in.
+  const enabledParticipationTiers = useMemo(
+    () => PRICING_TYPES.filter((type) => participationTiers[type]),
+    [participationTiers],
+  )
+  const enabledMealTiers = useMemo(
+    () => PRICING_TYPES.filter((type) => mealTiers[type]),
+    [mealTiers],
+  )
+  // STANDARD can never be switched off, so it is ignored here rather than
+  // rendered as a checkbox that silently refuses to move.
+  const toggleParticipationTier = (type: MockPricingType) => {
+    if (type === 'STANDARD') return
+    setParticipationTiers((prev) => ({ ...prev, [type]: !prev[type] }))
+  }
+  const toggleMealTier = (type: MockPricingType) => {
+    if (type === 'STANDARD') return
+    setMealTiers((prev) => ({ ...prev, [type]: !prev[type] }))
+  }
+
   const rule = (age: string, type: string): PricingRow =>
     pricingRules[ruleKey(age, type)] ?? ZERO_ROW
   const updateRule = (age: string, type: string, patch: Partial<PricingRow>) =>
@@ -402,6 +456,11 @@ export default function EventStepper({
   function buildPayload(data: EventCreateInput) {
     return {
       ...data,
+      // What the event offers. Sent explicitly so the stored event records the
+      // admin's actual choice; all three ticked writes exactly the set the
+      // column already defaults to, which is what every event carried before.
+      participationPricingTypes: enabledParticipationTiers,
+      mealPricingTypes: enabledMealTiers,
       dates: days.map((d, i) => ({
         date: d.date,
         label_cs: d.label_cs,
@@ -409,7 +468,7 @@ export default function EventStepper({
         sortOrder: i + 1,
       })),
       pricingRules: ALL_AGES.flatMap((age) =>
-        PRICING_TYPES.map((type) => {
+        enabledParticipationTiers.map((type) => {
           const r = rule(age, type)
           return {
             ageCategory: age,
@@ -436,7 +495,7 @@ export default function EventStepper({
       ),
       mealPricingRules: MEAL_TYPES.flatMap((meal) =>
         ALL_AGES.flatMap((age) =>
-          PRICING_TYPES.map((type) => ({
+          enabledMealTiers.map((type) => ({
             mealType: meal,
             ageCategory: age,
             pricingType: type,
@@ -721,7 +780,19 @@ export default function EventStepper({
             {relationsLocked ? t('eventForm.editLockedNote') : t('eventForm.pricing.intro')}
           </p>
 
-          {/* One block per age category, each carrying all three tiers. Children
+          {/* Which tiers this event offers for participation/accommodation. Fully
+              independent of the meal row in step 4 — nothing propagates either way. */}
+          <TierChecklist
+            title={t('eventForm.tiers.participationTitle')}
+            note={t('eventForm.tiers.participationNote')}
+            standardNote={t('eventForm.tiers.standardNote')}
+            tiers={participationTiers}
+            label={(type) => t(`pricingType.${type}`)}
+            disabled={relationsLocked}
+            onToggle={toggleParticipationTier}
+          />
+
+          {/* One block per age category, each carrying the offered tiers. Children
               expose only the daily + night rate; 15+ adds the arrival/departure
               discounts. The engine charges exactly what's entered here. */}
           <div className="space-y-5">
@@ -732,7 +803,7 @@ export default function EventStepper({
               >
                 <h3 className="text-sm font-semibold text-neutral-900">{t(`age.${age}`)}</h3>
                 <div className="mt-3 space-y-3">
-                  {PRICING_TYPES.map((type) => {
+                  {enabledParticipationTiers.map((type) => {
                     const stored = (editData?.pricingRules ?? []).find(
                       (r) => r.ageCategory === age && r.pricingType === type,
                     )
@@ -792,6 +863,18 @@ export default function EventStepper({
             {relationsLocked ? t('eventForm.editLockedNote') : t('eventForm.meals.intro')}
           </p>
 
+          {/* The event's meal tiers — its own set, not the one above. A SURPLUS
+              stay with SUPPORTED meals is a valid, intended combination. */}
+          <TierChecklist
+            title={t('eventForm.tiers.mealsTitle')}
+            note={t('eventForm.tiers.mealsNote')}
+            standardNote={t('eventForm.tiers.standardNote')}
+            tiers={mealTiers}
+            label={(type) => t(`pricingType.${type}`)}
+            disabled={relationsLocked}
+            onToggle={toggleMealTier}
+          />
+
           {/* Price list — meal type × (age category × tier). Set once for the whole
               event; the same prices apply on every day it is served. */}
           <div>
@@ -823,7 +906,7 @@ export default function EventStepper({
                 </thead>
                 <tbody>
                   {ALL_AGES.map((age) =>
-                    PRICING_TYPES.map((type, ti) => (
+                    enabledMealTiers.map((type, ti) => (
                       <tr
                         key={`${age}|${type}`}
                         className={ti === 0 ? 'border-t border-neutral-200' : ''}
@@ -1066,7 +1149,7 @@ export default function EventStepper({
 
           <PreviewBlock title={t('eventForm.preview.pricing')}>
             {ALL_AGES.flatMap((age) =>
-              PRICING_TYPES.map((type) => (
+              enabledParticipationTiers.map((type) => (
                 <PreviewRow
                   key={`${age}|${type}`}
                   label={`${t(`age.${age}`)} · ${t(`pricingType.${type}`)}`}
@@ -1080,7 +1163,7 @@ export default function EventStepper({
 
           <PreviewBlock title={t('eventForm.preview.mealPrices')}>
             {ALL_AGES.flatMap((age) =>
-              PRICING_TYPES.map((type) => (
+              enabledMealTiers.map((type) => (
                 <PreviewRow
                   key={`${age}|${type}`}
                   label={`${t(`age.${age}`)} · ${t(`pricingType.${type}`)}`}
@@ -1264,6 +1347,59 @@ function TextField({
       <span className="form-label">{label}</span>
       {children}
       {error && <p className="mt-1 text-sm text-danger-600">{error}</p>}
+    </div>
+  )
+}
+
+// One event's offered tiers, for a single step. STANDARD renders ticked and
+// disabled with a hint saying it is always available, so it reads as "included
+// by definition" rather than as a checkbox that will not move.
+function TierChecklist({
+  title,
+  note,
+  standardNote,
+  tiers,
+  label,
+  disabled,
+  onToggle,
+}: {
+  title: string
+  note: string
+  standardNote: string
+  tiers: TierFlags
+  label: (type: MockPricingType) => string
+  disabled: boolean
+  onToggle: (type: MockPricingType) => void
+}) {
+  return (
+    <div className="rounded-xl border border-neutral-200 bg-stone-50 p-4">
+      <h3 className="text-sm font-semibold text-neutral-900">{title}</h3>
+      <p className="mt-1 text-xs text-neutral-500">{note}</p>
+      <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
+        {PRICING_TYPES.map((type) => {
+          const fixed = disabled || type === 'STANDARD'
+          return (
+            <label
+              key={type}
+              className={`flex items-center gap-2 text-sm ${
+                fixed ? 'cursor-default text-neutral-500' : 'cursor-pointer text-neutral-800'
+              }`}
+            >
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-neutral-300 accent-primary-600"
+                checked={tiers[type]}
+                disabled={fixed}
+                onChange={() => onToggle(type)}
+              />
+              <span className="font-medium">{label(type)}</span>
+              {type === 'STANDARD' && (
+                <span className="text-xs font-normal text-neutral-400">({standardNote})</span>
+              )}
+            </label>
+          )
+        })}
+      </div>
     </div>
   )
 }

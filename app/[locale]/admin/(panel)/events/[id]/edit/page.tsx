@@ -62,6 +62,8 @@ export default async function EditEventPage({
     meals: event.meals,
     pricingRules: event.pricingRules,
     mealPricingRules: event.mealPricingRules,
+    participationPricingTypes: event.participationPricingTypes,
+    mealPricingTypes: event.mealPricingTypes,
   }
 
   return (
