@@ -360,11 +360,15 @@ describe("updateRegistration — accommodation re-pricing (M39)", () => {
 // per-meal figure would keep stating the old tier's price under a correct total.
 
 describe("updateRegistration — pricing-tier edits", () => {
+  // The re-snapshot is grouped by price into updateMany calls, so a large
+  // registration costs a handful of statements instead of one per meal row.
+  // Flattened back to {id, price} pairs here so the assertions read plainly.
   const mealWrites = () =>
-    h.tx.participantMeal.update.mock.calls.map((c) => ({
-      id: c[0].where.id,
-      price: c[0].data.price,
-    }));
+    h.tx.participantMeal.updateMany.mock.calls
+      .flatMap((c) =>
+        (c[0].where.id.in as string[]).map((id) => ({ id, price: c[0].data.price as number })),
+      )
+      .sort((a, b) => a.id.localeCompare(b.id));
 
   it("moving the participation tier re-prices the stay through the real engine", async () => {
     setup({ hasAccommodation: false });
@@ -526,5 +530,131 @@ describe("updateRegistration — pricing-tier edits", () => {
     // 0, never to the flat 999 (invariant 21). A visible 0 beats a silent full charge.
     expect(child?.mealPrice).toBe(0);
     expect(mealWrites()).toEqual([{ id: "pm2", price: 0 }]);
+  });
+});
+// ─── Robustness: a stored tier the event no longer offers ─────────────────────
+// The editor posts EVERY participant's tiers on every save, so validating the
+// unchanged ones too would let one stranded row block the whole registration —
+// status edits included. An event with registrations cannot have its sets
+// narrowed today, so this is a backstop; it is cheap and the failure it prevents
+// is total.
+
+describe("updateRegistration — a stored tier outside the event's set", () => {
+  const mealStatements = () => h.tx.participantMeal.updateMany.mock.calls.length;
+
+  it("lets an unrelated edit through even though a stored tier is no longer offered", async () => {
+    // The adult eats SUPPORTED, but the event now offers meals on STANDARD only.
+    setup({ hasAccommodation: false, status: "REGISTERED", mealPricingTypes: ["STANDARD"] });
+
+    await updateRegistration(
+      "r1",
+      input({ hasAccommodation: false, status: "PAID", participants: tiersAsStored() }),
+      CTX,
+    );
+
+    expect(regUpdateData().status).toBe("PAID");
+    // Nothing moved, so nothing was re-priced — and crucially, no 422.
+    expect(h.tx.participant.update).not.toHaveBeenCalled();
+    expect(mealStatements()).toBe(0);
+  });
+
+  it("still refuses to MOVE somebody onto a tier the event does not offer", async () => {
+    setup({ hasAccommodation: false, mealPricingTypes: ["STANDARD"] });
+
+    await expect(
+      updateRegistration(
+        "r1",
+        input({
+          hasAccommodation: false,
+          participants: [
+            { id: "p1", pricingType: "STANDARD", mealPricingType: "SURPLUS" },
+            ...tiersAsStored([CHILD]),
+          ],
+        }),
+        CTX,
+      ),
+    ).rejects.toBeInstanceOf(RegistrationPricingTypeUnavailableError);
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("lets the OTHER half move while a stranded tier stays put", async () => {
+    // Meals are STANDARD-only and the adult is stranded on SUPPORTED; changing
+    // their stay tier must still work.
+    setup({ hasAccommodation: false, mealPricingTypes: ["STANDARD"] });
+
+    await updateRegistration(
+      "r1",
+      input({
+        hasAccommodation: false,
+        participants: [
+          { id: "p1", pricingType: "SUPPORTED", mealPricingType: "SUPPORTED" },
+          ...tiersAsStored([CHILD]),
+        ],
+      }),
+      CTX,
+    );
+
+    expect(participantWrites().find((p) => p.id === "p1")).toMatchObject({
+      pricingType: "SUPPORTED",
+      mealPricingType: "SUPPORTED",
+      participationPrice: 180,
+      mealPrice: ADULT_MEAL, // the stranded meal tier still prices the meals
+    });
+    expect(mealStatements()).toBe(0); // the meal tier did not move
+  });
+});
+
+// ─── The re-snapshot is grouped, not row-at-a-time ────────────────────────────
+
+describe("updateRegistration — meal re-snapshot cost", () => {
+  it("writes one statement per distinct price, not one per meal row", async () => {
+    // Both meal tiers move, and they land on DIFFERENT prices: the adult's
+    // breakfast becomes the 15+ STANDARD 80, the child's the 8-14 SUPPORTED row
+    // that does not exist -> 0 (invariant 21). Two prices, so two statements.
+    // On a real 10-person booking row-at-a-time would be ~130 round trips
+    // against Prisma's 5s transaction limit; the live maximum today is 46 rows.
+    setup({ hasAccommodation: false });
+
+    await updateRegistration(
+      "r1",
+      input({
+        hasAccommodation: false,
+        participants: [
+          { id: "p1", pricingType: "STANDARD", mealPricingType: "STANDARD" },
+          { id: "p2", pricingType: "STANDARD", mealPricingType: "SUPPORTED" },
+        ],
+      }),
+      CTX,
+    );
+
+    const calls = h.tx.participantMeal.updateMany.mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls.map((c) => c[0].data.price).sort((a: number, b: number) => a - b)).toEqual([0, 80]);
+    // Never the row-at-a-time form.
+    expect(h.tx.participantMeal.update).not.toHaveBeenCalled();
+  });
+
+  it("collapses rows that share a price into a single statement", async () => {
+    // Two participants whose meals land on the SAME price: one statement, two ids.
+    const TWIN = { ...CHILD, id: "p3", meals: [{ id: "pm3", eventMealId: "m_b" }] };
+    setup({ hasAccommodation: false }, [CHILD, TWIN]);
+
+    await updateRegistration(
+      "r1",
+      input({
+        hasAccommodation: false,
+        participants: [
+          { id: "p2", pricingType: "STANDARD", mealPricingType: "SUPPORTED" },
+          { id: "p3", pricingType: "STANDARD", mealPricingType: "SUPPORTED" },
+        ],
+      }),
+      CTX,
+    );
+
+    const calls = h.tx.participantMeal.updateMany.mock.calls;
+    expect(calls).toHaveLength(1);
+    // 8-14 has no SUPPORTED breakfast row and the list exists -> 0 (invariant 21)
+    expect(calls[0]![0].data.price).toBe(0);
+    expect((calls[0]![0].where.id.in as string[]).sort()).toEqual(["pm2", "pm3"]);
   });
 });

@@ -837,26 +837,32 @@ function resolveTierChanges(
     const current = storedById.get(req.id);
     if (!current) throw new RegistrationParticipantMismatchError();
 
-    if (!allows(offered.participation, req.pricingType)) {
+    const stayMoved = req.pricingType !== current.pricingType;
+    const mealMoved = req.mealPricingType !== current.mealPricingType;
+    if (!stayMoved && !mealMoved) continue;
+
+    // Only a tier the admin is actually CHANGING is checked against the event's
+    // set. Validating an unchanged one too would be a trap: the editor always
+    // posts every participant's tiers, so a stored tier the event no longer
+    // offers would make every save fail with 422 — including a plain status
+    // change, and including the single-tier case where the editor renders no
+    // control at all and the admin has no way to correct it. A tier already in
+    // the database is a fact to preserve, not a request to approve.
+    if (stayMoved && !allows(offered.participation, req.pricingType)) {
       throw new RegistrationPricingTypeUnavailableError(
         `Participation tier ${req.pricingType} is not offered by this event`,
       );
     }
-    if (!allows(offered.meals, req.mealPricingType)) {
+    if (mealMoved && !allows(offered.meals, req.mealPricingType)) {
       throw new RegistrationPricingTypeUnavailableError(
         `Meal tier ${req.mealPricingType} is not offered by this event`,
       );
     }
 
-    if (
-      req.pricingType !== current.pricingType ||
-      req.mealPricingType !== current.mealPricingType
-    ) {
-      changes.set(req.id, {
-        pricingType: req.pricingType,
-        mealPricingType: req.mealPricingType,
-      });
-    }
+    changes.set(req.id, {
+      pricingType: req.pricingType,
+      mealPricingType: req.mealPricingType,
+    });
   }
   return changes;
 }
@@ -960,6 +966,22 @@ async function repriceRegistration(
   };
 }
 
+// The re-snapshot writes, collapsed to one statement per distinct price. Order is
+// irrelevant (each row is written exactly once, and the map keys are disjoint).
+function groupMealSnapshotsByPrice(
+  participants: ReadonlyArray<{ mealSnapshots: ReadonlyArray<{ id: string; price: number }> }>,
+): Map<number, string[]> {
+  const byPrice = new Map<number, string[]>();
+  for (const p of participants) {
+    for (const m of p.mealSnapshots) {
+      const ids = byPrice.get(m.price);
+      if (ids) ids.push(m.id);
+      else byPrice.set(m.price, [m.id]);
+    }
+  }
+  return byPrice;
+}
+
 // Editable fields: home centre, accommodation, status, and each participant's two
 // pricing tiers.
 //
@@ -1026,12 +1048,20 @@ export async function updateRegistration(
           totalPrice: p.totalPrice,
         },
       });
-      // Re-snapshot each ordered meal at the new meal tier. Skipping this would
-      // leave ParticipantMeal.price stating the OLD tier's figure underneath a
-      // correct new total — the per-meal record an admin reconciles against.
-      for (const m of p.mealSnapshots) {
-        await tx.participantMeal.update({ where: { id: m.id }, data: { price: m.price } });
-      }
+    }
+
+    // Re-snapshot every ordered meal at its new meal tier. Skipping this would
+    // leave ParticipantMeal.price stating the OLD tier's figure underneath a
+    // correct new total — the per-meal record an admin reconciles against.
+    //
+    // Grouped by price rather than written row by row: a meal has at most three
+    // distinct prices per participant (breakfast/lunch/dinner), while a large
+    // registration holds dozens of rows. Row-at-a-time turned a 10-person
+    // booking into ~140 sequential round trips inside one interactive
+    // transaction, against Prisma's 5s default — the live maximum today is 46
+    // meal rows on one registration. By price it is a handful of statements.
+    for (const [price, ids] of groupMealSnapshotsByPrice(repricing?.participants ?? [])) {
+      await tx.participantMeal.updateMany({ where: { id: { in: ids } }, data: { price } });
     }
   });
 

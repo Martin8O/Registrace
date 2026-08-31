@@ -26,6 +26,17 @@ function offeredTiers(set: string[]): readonly PricingType[] {
   return offered.length > 0 ? offered : PRICING_TYPES
 }
 
+// What one select lists: the offered tiers, plus the one this person is actually
+// on if the event no longer offers it. A `<select>` whose value matches no option
+// renders a DIFFERENT tier than the row holds, so the admin would be shown — and
+// could unknowingly save — something they never chose. Keeping the stored tier
+// visible states the truth; the server still refuses to MOVE anyone onto a tier
+// the event does not offer. An event with registrations cannot have its sets
+// narrowed today, so this is a backstop, not a path anyone walks.
+function optionsFor(offered: readonly PricingType[], current: PricingType): readonly PricingType[] {
+  return offered.includes(current) ? offered : [current, ...offered]
+}
+
 // Editable card of the registration detail. Owns the status state so the badge
 // shown next to the registration number (top band) updates live as the admin
 // changes the dropdown — that's why the number band + pricing-info button live
@@ -77,8 +88,14 @@ export default function RegistrationDetailEditor({
 
   const participationTiers = offeredTiers(participationPricingTypes)
   const mealTiers = offeredTiers(mealPricingTypes)
+  // Show the block when there is a real choice — or when somebody sits on a tier
+  // the event no longer offers, which the admin must at least be able to SEE.
+  const strandedTier = participants.some(
+    (p) => !participationTiers.includes(p.pricingType) || !mealTiers.includes(p.mealPricingType),
+  )
   const tiersEditable =
-    participants.length > 0 && (participationTiers.length > 1 || mealTiers.length > 1)
+    participants.length > 0 &&
+    (participationTiers.length > 1 || mealTiers.length > 1 || strandedTier)
 
   const setTier = (id: string, field: 'pricingType' | 'mealPricingType', value: PricingType) =>
     setParticipants((prev) => prev.map((p) => (p.id === id ? { ...p, [field]: value } : p)))
@@ -246,7 +263,7 @@ export default function RegistrationDetailEditor({
                         id={`tier-participation-${p.id}`}
                         label={t('registrationDetail.participationPriceType')}
                         value={p.pricingType}
-                        options={participationTiers}
+                        options={optionsFor(participationTiers, p.pricingType)}
                         optionLabel={(v) => t(`pricingType.${v}`)}
                         onChange={(v) => setTier(p.id, 'pricingType', v)}
                       />
@@ -256,7 +273,7 @@ export default function RegistrationDetailEditor({
                         id={`tier-meal-${p.id}`}
                         label={t('registrationDetail.mealPriceType')}
                         value={p.mealPricingType}
-                        options={mealTiers}
+                        options={optionsFor(mealTiers, p.mealPricingType)}
                         optionLabel={(v) => t(`pricingType.${v}`)}
                         onChange={(v) => setTier(p.id, 'mealPricingType', v)}
                       />
