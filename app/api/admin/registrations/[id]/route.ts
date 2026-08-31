@@ -47,23 +47,35 @@ export async function PUT(
     await updateRegistration(id, result.data, guard.ctx);
     return NextResponse.json({ data: { id } });
   } catch (err) {
+    // Each failure carries a stable `code` beside its human-readable `error`.
+    // The editor maps it to a message that says what to DO — a 422 is never
+    // fixed by "try again", which is what the one generic failure line advised.
     if (err instanceof RegistrationForbiddenError) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return NextResponse.json({ error: "Forbidden", code: "forbidden" }, { status: 403 });
     }
     if (err instanceof RegistrationNotFoundError) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json({ error: "Not found", code: "not_found" }, { status: 404 });
     }
     if (err instanceof RegistrationCenterInvalidError) {
-      return NextResponse.json({ error: "Unknown or inactive center" }, { status: 422 });
+      return NextResponse.json(
+        { error: "Unknown or inactive center", code: "center_invalid" },
+        { status: 422 },
+      );
     }
     // A tier this event does not offer, or a participant from another
     // registration — both are a well-formed body naming something invalid, so
     // they share the 422 lane with the unknown-centre case (400 stays Zod's).
     if (err instanceof RegistrationPricingTypeUnavailableError) {
-      return NextResponse.json({ error: "Pricing tier not offered by this event" }, { status: 422 });
+      return NextResponse.json(
+        { error: "Pricing tier not offered by this event", code: "tier_unavailable" },
+        { status: 422 },
+      );
     }
     if (err instanceof RegistrationParticipantMismatchError) {
-      return NextResponse.json({ error: "Unknown participant" }, { status: 422 });
+      return NextResponse.json(
+        { error: "Unknown participant", code: "participant_unknown" },
+        { status: 422 },
+      );
     }
     throw err;
   }

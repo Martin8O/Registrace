@@ -501,6 +501,13 @@
       "save": "Uložit změny",
       "saved": "Změny uloženy.",
       "saveFailed": "Uložení se nezdařilo. Zkuste to prosím znovu.",
+      "saveRefused": {
+        "tier_unavailable": "Tuto cenovou hladinu akce nenabízí. Načtěte stránku znovu — nabídka akce se mohla změnit.",
+        "center_invalid": "Zvolené centrum neexistuje nebo už není aktivní.",
+        "participant_unknown": "Účastník už k této registraci nepatří. Načtěte stránku znovu.",
+        "forbidden": "K této registraci nemáte oprávnění.",
+        "not_found": "Registrace nebyla nalezena — mohla být mezitím smazána."
+      },
       "resend": "Znovu odeslat potvrzení",
       "resent": "Potvrzení znovu odesláno.",
       "resendFailed": "Potvrzení se nepodařilo odeslat — v zkušebním režimu e-mailu dorazí jen na adresu vlastníka účtu."

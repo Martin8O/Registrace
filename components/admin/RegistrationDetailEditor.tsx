@@ -116,7 +116,15 @@ export default function RegistrationDetailEditor({
         setToast(t('registrationDetail.saved'))
         router.refresh()
       } else {
-        setError(t('registrationDetail.saveFailed'))
+        // A refused save has a reason, and "try again" is the wrong advice for
+        // every one of them — the body carries a stable code for exactly that.
+        const json = (await res.json().catch(() => null)) as { code?: string } | null
+        const known = ['tier_unavailable', 'center_invalid', 'participant_unknown', 'forbidden', 'not_found']
+        setError(
+          json?.code && known.includes(json.code)
+            ? t(`registrationDetail.saveRefused.${json.code}`)
+            : t('registrationDetail.saveFailed'),
+        )
       }
     } catch {
       setError(t('registrationDetail.saveFailed'))

@@ -501,6 +501,13 @@
       "save": "Save changes",
       "saved": "Changes saved.",
       "saveFailed": "Could not save. Please try again.",
+      "saveRefused": {
+        "tier_unavailable": "This event does not offer that pricing tier. Reload the page — what the event offers may have changed.",
+        "center_invalid": "That centre does not exist or is no longer active.",
+        "participant_unknown": "That participant no longer belongs to this registration. Reload the page.",
+        "forbidden": "You do not have access to this registration.",
+        "not_found": "Registration not found — it may have been deleted."
+      },
       "resend": "Resend confirmation",
       "resent": "Confirmation resent.",
       "resendFailed": "Confirmation could not be sent — in email test mode it only reaches the account owner's address."
