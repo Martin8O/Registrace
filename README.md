@@ -313,7 +313,9 @@ subtotal      = participation + meals
 Pricing is **data-driven**: every age is charged by its matching `PricingRule.dailyRate` — no
 age is hard-coded to `0`. Young children carry a `0`-rate rule, but an event may charge, say,
 ages 8–14 (the real BDC "MLK" course does, at 100 CZK/day). Discounts apply to 15+ only
-because child rules carry `0` discounts — not via any age branch.
+because child rules carry `0` discounts — not via any age branch. The discounts are **per
+tier**, not per event: most events give a supported arrival a smaller discount than a standard
+one, so the price overview lists them by tier whenever they differ.
 
 Each person carries **two independent price tiers**, and both apply **at every age**:
 `pricingType` prices the stay, `mealPricingType` prices the meals. Surplus accommodation with

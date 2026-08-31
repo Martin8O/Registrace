@@ -38,6 +38,8 @@ const mealKey: Record<string, string> = {
   DINNER: 'dinner',
 }
 
+type Row = { key: string; label: string; values: number[] }
+
 // The tiers one half of the price is actually offered on. An EMPTY set means "all
 // three" — the same reading the submit service and the registration form use, so
 // a data anomaly cannot make the overview disagree with what the form accepts.
@@ -93,7 +95,6 @@ export default function PricingModal({
   // Every age category, every time. A category whose three tiers carry identical
   // values collapses to one row labelled by age alone — the tier heading would be
   // telling the reader something that isn't true of the price.
-  type Row = { key: string; label: string; values: number[] }
   const buildRows = (
     tiers: readonly string[],
     valuesFor: (age: string, tier: string) => number[],
@@ -123,16 +124,41 @@ export default function PricingModal({
     servedMeals.map((type) => mealPrice(type, age, tier)),
   )
 
-  // Discounts stay a 15+ concept (child rules carry 0), so they keep a plain list.
-  const std15 = rule('AGE_15_PLUS', 'STANDARD')
-  const discounts: Array<{ label: string; value: number }> = []
-  const pushDiscount = (label: string, value: number | undefined) => {
-    if (value !== undefined && value > 0) discounts.push({ label, value })
-  }
-  pushDiscount(t('morningArrivalDiscount'), std15?.morningArrivalDiscount)
-  pushDiscount(t('afternoonArrivalDiscount'), std15?.afternoonArrivalDiscount)
-  pushDiscount(t('eveningArrivalDiscount'), std15?.eveningArrivalDiscount)
-  pushDiscount(t('earlyDepartureDiscount'), std15?.earlyDepartureDiscount)
+  // Discounts stay a 15+ concept (child rules carry 0) — but they are NOT the same
+  // across tiers. Nine of twelve live events discount a supported arrival less than
+  // a standard one, and listing only the standard figures quoted every supported
+  // visitor a discount they do not get. So the same rule the tables use applies
+  // here: identical across the offered tiers collapses to one plain list, and
+  // otherwise each tier gets its own row.
+  const discountKinds = [
+    { label: t('morningArrivalDiscount'), of: (r?: PricingRuleDTO) => r?.morningArrivalDiscount ?? 0 },
+    { label: t('afternoonArrivalDiscount'), of: (r?: PricingRuleDTO) => r?.afternoonArrivalDiscount ?? 0 },
+    { label: t('eveningArrivalDiscount'), of: (r?: PricingRuleDTO) => r?.eveningArrivalDiscount ?? 0 },
+    { label: t('earlyDepartureDiscount'), of: (r?: PricingRuleDTO) => r?.earlyDepartureDiscount ?? 0 },
+  ]
+  const discountTiers = offeredTiers(participationPricingTypes)
+  // Only the kinds this event actually gives on some offered tier — a row of
+  // zeros here is noise, unlike in the price tables where 0 is a real answer.
+  const shownKinds = discountKinds.filter((k) =>
+    discountTiers.some((tier) => k.of(rule('AGE_15_PLUS', tier)) > 0),
+  )
+  const perTierDiscounts = discountTiers.map((tier) => ({
+    tier,
+    values: shownKinds.map((k) => k.of(rule('AGE_15_PLUS', tier))),
+  }))
+  const discountsIdentical = perTierDiscounts.every(
+    (x) => JSON.stringify(x.values) === JSON.stringify(perTierDiscounts[0]!.values),
+  )
+  const discounts = discountsIdentical
+    ? shownKinds.map((k, i) => ({ label: k.label, value: perTierDiscounts[0]!.values[i]! }))
+    : []
+  const discountRows: Row[] = discountsIdentical
+    ? []
+    : perTierDiscounts.map((x) => ({
+        key: x.tier,
+        label: t(`tier.${tierKey[x.tier]}`),
+        values: x.values,
+      }))
 
   return (
     <div
@@ -165,6 +191,19 @@ export default function PricingModal({
             rows={mealRows}
             className="mt-6"
           />
+        )}
+
+        {discountRows.length > 0 && (
+          <div className="mt-6">
+            <h3 className="text-sm font-semibold text-neutral-900">{t('discountsTitle')}</h3>
+            <p className="mt-1 mb-2 text-xs text-neutral-500">{t('discountsNote')}</p>
+            <PriceTable
+              categoryLabel={t('tierColumn')}
+              columns={shownKinds.map((k) => k.label)}
+              rows={discountRows}
+              negative
+            />
+          </div>
         )}
 
         {discounts.length > 0 && (
@@ -204,17 +243,28 @@ function PriceTable({
   columns,
   rows,
   className = '',
+  categoryLabel,
+  negative = false,
 }: {
-  title: string
+  // Omitted when the caller renders its own heading (the discount table puts an
+  // explanatory line between the heading and the table).
+  title?: string
   columns: string[]
   rows: Array<{ key: string; label: string; values: number[] }>
   className?: string
+  // Header of the first column — "Kategorie" for a price table, the tier for the
+  // discount one. `negative` renders each amount as a deduction (invariant: every
+  // *Discount field is SUBTRACTED from the total).
+  categoryLabel?: string
+  negative?: boolean
 }) {
   const t = useTranslations('event.pricingModal')
 
   return (
     <div className={className}>
-      <h3 className="text-sm font-semibold text-neutral-900">{title}</h3>
+      {title !== undefined && (
+        <h3 className="text-sm font-semibold text-neutral-900">{title}</h3>
+      )}
       {rows.length === 0 ? (
         <p className="mt-2 text-sm text-neutral-500">{t('free')}</p>
       ) : (
@@ -223,7 +273,7 @@ function PriceTable({
             <thead>
               <tr className="bg-stone-100">
                 <th className="px-4 py-2 text-left font-semibold text-neutral-700">
-                  {t('categoryColumn')}
+                  {categoryLabel ?? t('categoryColumn')}
                 </th>
                 {columns.map((c) => (
                   <th
@@ -244,7 +294,7 @@ function PriceTable({
                       key={columns[vi] ?? vi}
                       className="whitespace-nowrap px-4 py-2 text-right font-mono tabular-nums text-primary-600"
                     >
-                      {v} CZK
+                      {negative ? '−' : ''}{v} CZK
                     </td>
                   ))}
                 </tr>

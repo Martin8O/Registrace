@@ -113,6 +113,7 @@
       "discountsTitle": "Discounts",
       "discountsNote": "Discounts apply to the 15 and over category.",
       "categoryColumn": "Category",
+      "tierColumn": "Price tier",
       "free": "No charge.",
       "dailyRateShort": "Daily rate",
       "pricePerNightShort": "Per night",

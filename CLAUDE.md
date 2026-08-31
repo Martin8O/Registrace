@@ -110,6 +110,9 @@ next-intl 4 (i18n) · Zod 4 (validation — only lib) · React Hook Form · Rese
     is refused with 422, never silently re-priced.
 - Fields named `*Discount` are **subtracted** from the total, not added
   (morningArrivalDiscount, afternoonArrivalDiscount, eveningArrivalDiscount, earlyDepartureDiscount).
+  They live on the PricingRule, so they differ **per tier** as well as per age — 9 of 12 live
+  events discount a supported arrival less than a standard one. Anything quoting a discount must
+  quote it per tier, or it promises money it will not deduct.
 
 ## Roles
 - **SUPER_ADMIN** — full access to everything; assigns center admins via User

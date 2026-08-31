@@ -113,6 +113,7 @@
       "discountsTitle": "Slevy",
       "discountsNote": "Slevy se vztahují na kategorii 15 let a více.",
       "categoryColumn": "Kategorie",
+      "tierColumn": "Cenová hladina",
       "free": "Bez poplatku.",
       "dailyRateShort": "Denní sazba",
       "pricePerNightShort": "Za noc",
