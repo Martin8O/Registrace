@@ -395,7 +395,7 @@
         "participationTitle": "Nabízené cenové hladiny — účast a ubytování",
         "participationNote": "Zaškrtněte hladiny, ze kterých si účastník bude moci vybrat u účasti a ubytování. Ceník níže se vyplňuje jen pro zaškrtnuté hladiny. Volba hladiny u stravy je na tomto zcela nezávislá — nastavuje se zvlášť v kroku Strava.",
         "mealsTitle": "Nabízené cenové hladiny — strava",
-        "mealsNote": "Zaškrtněte hladiny, ze kterých si účastník bude moci vybrat u stravy. Na hladině účasti a ubytování to nezávisí — každý si volí oboí samostatně.",
+        "mealsNote": "Zaškrtněte hladiny, ze kterých si účastník bude moci vybrat u stravy. Na hladině účasti a ubytování to nezávisí — každý si volí obojí samostatně.",
         "standardNote": "vždy k dispozici"
       },
       "pricing": {
