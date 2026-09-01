@@ -5,15 +5,29 @@ import type { AdminContext } from "@/modules/auth";
 // for real. No live DB exists for tests (Supabase is the only instance) — same
 // strategy as submit.test.ts. findMany ignores its args here; the where-clause /
 // ownership scoping is the DB's job and isn't what this unit asserts.
-const h = vi.hoisted(() => ({ findMany: vi.fn(), eventFindMany: vi.fn() }));
+const h = vi.hoisted(() => ({
+  findMany: vi.fn(),
+  eventFindMany: vi.fn(),
+  eventFindFirst: vi.fn(),
+  eventDateFindMany: vi.fn(),
+  eventMealFindMany: vi.fn(),
+  participantMealFindMany: vi.fn(),
+}));
 vi.mock("@/lib/db", () => ({
   prisma: {
     registration: { findMany: h.findMany },
-    event: { findMany: h.eventFindMany },
+    event: { findMany: h.eventFindMany, findFirst: h.eventFindFirst },
+    eventDate: { findMany: h.eventDateFindMany },
+    eventMeal: { findMany: h.eventMealFindMany },
+    participantMeal: { findMany: h.participantMealFindMany },
   },
 }));
 
-import { buildRegistrationExport, buildRegistrationExportWorkbook } from "./index";
+import {
+  buildRegistrationExport,
+  buildRegistrationExportWorkbook,
+  RegistrationEventNotFoundError,
+} from "./index";
 
 const ctx = {
   role: "SUPER_ADMIN",
@@ -210,5 +224,65 @@ describe("buildRegistrationExportWorkbook", () => {
     expect(sel.rows[0]).toEqual([
       "260020001", "Registrován/a", "Pá", "Dopoledne", "Ne", "Ne", "Ano", 300, 2, "Jan Novák",
     ]);
+  });
+
+  // The selection sheet picks its columns BY NAME out of the full sheet. This
+  // pins the mapping itself: the last selected column must be the FIRST
+  // participant's name, i.e. the column right after the registration-level block
+  // — the thing a newly inserted registration column would otherwise shift.
+  it("selection's last column is participant 1's name, not whatever sits at index 13", async () => {
+    h.findMany.mockResolvedValue(fakeRows());
+    h.eventFindMany.mockResolvedValue([]);
+    const { sheets } = await buildRegistrationExportWorkbook({}, ctx, "cs");
+    const [main, sel] = [sheets[0]!, sheets[1]!];
+
+    expect(sel.headers.at(-1)).toBe("Účastník 1 — jméno");
+    // Every selected header really exists in the full sheet, in the same order.
+    const positions = sel.headers.map((hd) => main.headers.indexOf(hd));
+    expect(positions).not.toContain(-1);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+    // …and the participant block starts immediately after the last selected
+    // registration-level column, so the two never overlap.
+    expect(main.headers.indexOf("Účastník 1 — jméno")).toBe(
+      main.headers.indexOf("Počet účastníků") + 1,
+    );
+  });
+});
+
+// An eventId the admin may not see used to yield 200 + an empty workbook (no
+// leak — every query is ownership-scoped — but it answered with a file where the
+// registration detail answers 404). M41 finding N4.
+describe("buildRegistrationExportWorkbook — unknown / out-of-scope event", () => {
+  it("throws RegistrationEventNotFoundError instead of returning an empty workbook", async () => {
+    h.eventFindFirst.mockResolvedValue(null); // not found, or not this admin's
+    await expect(
+      buildRegistrationExportWorkbook({ eventId: "foreign" }, ctx, "cs"),
+    ).rejects.toBeInstanceOf(RegistrationEventNotFoundError);
+  });
+
+  it("does not even run the row query when the event is out of scope", async () => {
+    h.eventFindFirst.mockResolvedValue(null);
+    h.findMany.mockClear();
+    await expect(
+      buildRegistrationExportWorkbook({ eventId: "foreign" }, ctx, "cs"),
+    ).rejects.toBeInstanceOf(RegistrationEventNotFoundError);
+    expect(h.findMany).not.toHaveBeenCalled();
+  });
+
+  it("an in-scope event still builds all four sheets, titled with its label", async () => {
+    h.eventFindFirst.mockResolvedValue({
+      id: "e1",
+      title_cs: "Letní kurz",
+      title_en: "Summer course",
+      center: { name_cs: "Praha", name_en: "Prague" },
+    });
+    h.findMany.mockResolvedValue(fakeRows());
+    h.eventDateFindMany.mockResolvedValue([]);
+    h.eventMealFindMany.mockResolvedValue([]);
+    h.participantMealFindMany.mockResolvedValue([]);
+
+    const { sheets } = await buildRegistrationExportWorkbook({ eventId: "e1" }, ctx, "cs");
+    expect(sheets).toHaveLength(4);
+    expect(sheets.every((s) => s.title === "Praha — Letní kurz")).toBe(true);
   });
 });

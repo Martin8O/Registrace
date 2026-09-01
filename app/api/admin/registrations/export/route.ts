@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdminContext } from "@/app/api/_lib/guard";
 import { validationError } from "@/app/api/_lib/http";
 import { registrationExportSchema } from "@/lib/validation";
-import { buildRegistrationExportWorkbook } from "@/modules/registrations";
+import {
+  buildRegistrationExportWorkbook,
+  RegistrationEventNotFoundError,
+} from "@/modules/registrations";
 import { logAuditEvent } from "@/lib/audit";
 import { toXlsx } from "@/lib/export/xlsx";
 
@@ -22,7 +25,17 @@ export async function POST(req: NextRequest) {
 
   // The full workbook: full data, the trimmed selection, plus the kitchen
   // meal-prep and accommodation tables — one sheet each, the event name as title.
-  const { sheets } = await buildRegistrationExportWorkbook(filters, guard.ctx, lang);
+  // An eventId outside this admin's scope (or simply unknown) is a 404, the same
+  // answer the registration detail gives — not a 200 carrying an empty file.
+  let sheets;
+  try {
+    ({ sheets } = await buildRegistrationExportWorkbook(filters, guard.ctx, lang));
+  } catch (err) {
+    if (err instanceof RegistrationEventNotFoundError) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    throw err;
+  }
 
   // Exporting registrant PII is audit-worthy (who pulled what, when) — best-effort.
   await logAuditEvent({

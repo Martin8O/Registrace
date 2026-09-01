@@ -1472,6 +1472,27 @@ function exportRegistrationWhere(filters: RegistrationExportFilters, ctx: AdminC
   };
 }
 
+// The sheet's column order, as NAMES rather than positions: first the
+// registration-level columns, then one group per participant. The selection sheet
+// below picks its columns out of these by name, so inserting a column here can no
+// longer shift what that sheet shows (M41 finding N3 — the old hard-coded indices
+// happened to still line up after M40c added a second tier column, and the
+// export test would have caught it if they hadn't, but nothing in the code said
+// WHICH columns the selection meant).
+const REGISTRATION_COLUMN_KEYS = [
+  "regNo", "created", "email", "eventCenter", "homeCenter", "status",
+  "arrival", "arrivalTime", "departure", "earlyDeparture", "accommodation",
+  "total", "count",
+] as const;
+
+const PARTICIPANT_COLUMN_KEYS = [
+  "pName", "pAge", "pType", "pMealType", "pDiet",
+  "pParticipation", "pMeal", "pTotal", "pMeals",
+] as const;
+
+type RegistrationColumnKey = (typeof REGISTRATION_COLUMN_KEYS)[number];
+type ParticipantColumnKey = (typeof PARTICIPANT_COLUMN_KEYS)[number];
+
 export async function buildRegistrationExport(
   filters: RegistrationExportFilters,
   ctx: AdminContext,
@@ -1505,62 +1526,57 @@ export async function buildRegistrationExport(
 
   // The event name is no longer a column — it's now the per-event sheet title (the
   // export is always scoped to a single event), set by buildRegistrationExportWorkbook.
-  const headers: string[] = [
-    L.regNo, L.created, L.email, L.eventCenter, L.homeCenter, L.status,
-    L.arrival, L.arrivalTime, L.departure, L.earlyDeparture, L.accommodation,
-    L.total, L.count,
-  ];
+  const headers: string[] = REGISTRATION_COLUMN_KEYS.map((k) => L[k]);
   for (let i = 1; i <= maxParticipants; i++) {
-    headers.push(
-      `${L.participant} ${i} — ${L.pName}`,
-      `${L.participant} ${i} — ${L.pAge}`,
-      `${L.participant} ${i} — ${L.pType}`,
-      `${L.participant} ${i} — ${L.pMealType}`,
-      `${L.participant} ${i} — ${L.pDiet}`,
-      `${L.participant} ${i} — ${L.pParticipation}`,
-      `${L.participant} ${i} — ${L.pMeal}`,
-      `${L.participant} ${i} — ${L.pTotal}`,
-      `${L.participant} ${i} — ${L.pMeals}`,
-    );
+    for (const k of PARTICIPANT_COLUMN_KEYS) {
+      headers.push(`${L.participant} ${i} — ${L[k]}`);
+    }
   }
 
   const dataRows: (string | number)[][] = rows.map((r) => {
-    const row: (string | number)[] = [
-      r.registrationNumber ?? "",
-      formatExportDate(r.createdAt, lang),
-      r.email,
-      pick(r.event.center.name_cs, r.event.center.name_en),
-      pick(r.center.name_cs, r.center.name_en),
-      REG_STATUS_LABELS[lang][r.status] ?? r.status,
-      pick(r.arrivalDate.label_cs, r.arrivalDate.label_en),
-      ARRIVAL_TIME_LABELS[lang][r.arrivalTime] ?? r.arrivalTime,
-      pick(r.departureDate.label_cs, r.departureDate.label_en),
-      r.earlyDeparture === "AFTER_BREAKFAST" ? L.yes : L.no,
-      r.hasAccommodation ? L.yes : L.no,
-      r.totalPrice,
-      r.participants.length,
-    ];
+    // Keyed by the same names as the headers above, then emitted in that order —
+    // so a column added to one and not the other is a type error, not a silently
+    // shifted sheet.
+    const regValues: Record<RegistrationColumnKey, string | number> = {
+      regNo: r.registrationNumber ?? "",
+      created: formatExportDate(r.createdAt, lang),
+      email: r.email,
+      eventCenter: pick(r.event.center.name_cs, r.event.center.name_en),
+      homeCenter: pick(r.center.name_cs, r.center.name_en),
+      status: REG_STATUS_LABELS[lang][r.status] ?? r.status,
+      arrival: pick(r.arrivalDate.label_cs, r.arrivalDate.label_en),
+      arrivalTime: ARRIVAL_TIME_LABELS[lang][r.arrivalTime] ?? r.arrivalTime,
+      departure: pick(r.departureDate.label_cs, r.departureDate.label_en),
+      earlyDeparture: r.earlyDeparture === "AFTER_BREAKFAST" ? L.yes : L.no,
+      accommodation: r.hasAccommodation ? L.yes : L.no,
+      total: r.totalPrice,
+      count: r.participants.length,
+    };
+    const row: (string | number)[] = REGISTRATION_COLUMN_KEYS.map((k) => regValues[k]);
     for (let i = 0; i < maxParticipants; i++) {
       const p = r.participants[i];
       if (!p) {
-        row.push("", "", "", "", "", "", "", "", "");
+        row.push(...PARTICIPANT_COLUMN_KEYS.map(() => ""));
         continue;
       }
       // Both tiers, for every age. The participation tier used to be blanked out
       // under 15 (the pre-M37 invariant 15, when tiers were 15+-only) — the engine
       // never had that branch, so the sheet was hiding the tier that produced the
       // amount in the column beside it, on a course that really does charge 8–14.
-      row.push(
-        p.fullName,
-        AGE_LABELS[lang][p.ageCategory] ?? p.ageCategory,
-        PRICING_LABELS[lang][p.pricingType] ?? p.pricingType,
-        PRICING_LABELS[lang][p.mealPricingType] ?? p.mealPricingType,
-        MEAL_CATEGORY_LABELS[lang][p.mealType] ?? p.mealType,
-        p.participationPrice,
-        p.mealPrice,
-        p.totalPrice,
-        p.meals.map((pm) => pick(pm.eventMeal.label_cs, pm.eventMeal.label_en)).join(", "),
-      );
+      const pValues: Record<ParticipantColumnKey, string | number> = {
+        pName: p.fullName,
+        pAge: AGE_LABELS[lang][p.ageCategory] ?? p.ageCategory,
+        pType: PRICING_LABELS[lang][p.pricingType] ?? p.pricingType,
+        pMealType: PRICING_LABELS[lang][p.mealPricingType] ?? p.mealPricingType,
+        pDiet: MEAL_CATEGORY_LABELS[lang][p.mealType] ?? p.mealType,
+        pParticipation: p.participationPrice,
+        pMeal: p.mealPrice,
+        pTotal: p.totalPrice,
+        pMeals: p.meals
+          .map((pm) => pick(pm.eventMeal.label_cs, pm.eventMeal.label_en))
+          .join(", "),
+      };
+      for (const k of PARTICIPANT_COLUMN_KEYS) row.push(pValues[k]);
     }
     return row;
   });
@@ -1569,11 +1585,19 @@ export async function buildRegistrationExport(
 }
 
 // "Data – výběr": the on-site quick-reference columns the team asked for, sliced
-// straight out of the full sheet (no extra query) so the two never drift. Column
-// indices into the full-sheet header order above (Akce column removed): reg-no(0),
-// status(5), arrival(6), arrival-time(7), departure(8), early-departure(9),
-// accommodation(10), total(11), count(12), participant-1 name(13).
-const SELECTION_COLUMN_INDICES = [0, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+// straight out of the full sheet (no extra query) so the two never drift. Named,
+// not positional: the columns are looked up in REGISTRATION_COLUMN_KEYS, plus the
+// FIRST participant's name — the first column of the first participant group,
+// which begins where the registration-level columns end.
+const SELECTION_COLUMN_KEYS = [
+  "regNo", "status", "arrival", "arrivalTime", "departure",
+  "earlyDeparture", "accommodation", "total", "count",
+] as const satisfies readonly RegistrationColumnKey[];
+
+const SELECTION_COLUMN_INDICES = [
+  ...SELECTION_COLUMN_KEYS.map((k) => REGISTRATION_COLUMN_KEYS.indexOf(k)),
+  REGISTRATION_COLUMN_KEYS.length + PARTICIPANT_COLUMN_KEYS.indexOf("pName"),
+];
 
 function buildSelectionSheet(main: ExportTable, lang: ExportLang): ExportTable {
   const headers = SELECTION_COLUMN_INDICES.map((i) => main.headers[i] ?? "");
@@ -1661,6 +1685,16 @@ export async function buildRegistrationExportWorkbook(
   ctx: AdminContext,
   lang: ExportLang,
 ): Promise<{ sheets: ExportTable[] }> {
+  // Resolve the event FIRST. An eventId the admin may not see (or that does not
+  // exist) used to fall through to a 200 with an empty workbook — no leak, since
+  // every query is ownership-scoped, but it answered a question it should have
+  // refused, and unlike the registration detail it did so with a file. Now it is
+  // the same 404 that detail gives, and the expensive queries below never run.
+  const title = filters.eventId
+    ? await scopedEventLabel(filters.eventId, ctx, lang)
+    : undefined;
+  if (filters.eventId && !title) throw new RegistrationEventNotFoundError();
+
   const main = await buildRegistrationExport(filters, ctx, lang);
   const selection = buildSelectionSheet(main, lang);
   const { meals, accommodation } = await buildMealAndAccommodationSheets(
@@ -1668,9 +1702,6 @@ export async function buildRegistrationExportWorkbook(
     ctx,
     lang,
   );
-  const title = filters.eventId
-    ? await scopedEventLabel(filters.eventId, ctx, lang)
-    : undefined;
 
   const sheets = [main, selection, meals, accommodation];
   for (const sheet of sheets) sheet.title = title;

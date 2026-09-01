@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-197%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-201%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -214,7 +214,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 197 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 201 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -615,7 +615,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **197 Vitest tests** across 13 files, with **no database required**:
+`npm test` runs **201 Vitest tests** across 13 files, with **no database required**:
 
 - **Pricing engine** (48) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -659,9 +659,12 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   Vercel preview's own url, and rejects everything else: foreign origins, a missing
   Origin + Referer, localhost in production, and — the regression that matters — a `vercel.app`
   origin while running in **production**.
-- **Export & auth** (8 + 4) — the registration-export scoping (including the cross-centre IDOR
+- **Export & auth** (12 + 4) — the registration-export scoping (including the cross-centre IDOR
   regression), the export's two independent tier columns shown **at every age**, and the
-  owner-tier auth helpers.
+  owner-tier auth helpers. Plus two properties of the workbook itself: the “selection” sheet
+  picks its columns out of the full sheet **by name**, so its last column is provably participant
+  1's name rather than whatever now sits at a fixed index; and an `eventId` this admin may not
+  see is a **404** rather than a 200 carrying an empty file — refused before the row query runs.
 - **Auth error wording** (8) — the Supabase-code → message mapping, plus a check that every key
   it can return is translated in **both** locales (an unmapped key would render as raw text).
 - **Password policy** (24) — that the rules mirror GoTrue's literal ASCII sets (Czech accented
