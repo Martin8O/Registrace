@@ -53,12 +53,6 @@ export default function UsersManager({
   const sortedCenters = [...centers].sort((a, b) =>
     a.name_cs.localeCompare(b.name_cs, 'cs'),
   )
-  const centerName = (id: string) => {
-    const c = centers.find((c) => c.id === id)
-    if (!c) return id
-    return locale === 'cs' ? c.name_cs : c.name_en
-  }
-
   const assignedLabel = (u: AdminUserListItem) => {
     if (u.role === 'SUPER_ADMIN') return t('users.allCenters')
     if (u.assignedCenters.length === 0) return t('users.noCenters')
