@@ -8,6 +8,7 @@ import {
   RegistrationEventNotFoundError,
   RegistrationStayMismatchError,
   RegistrationPricingTypeUnavailableError,
+  type SubmitResult,
 } from "@/modules/registrations";
 
 // POST /api/registration/submit — thin wrapper over modules/registrations
@@ -55,7 +56,16 @@ export async function POST(req: NextRequest) {
 
   if (rawHoneypot(body) !== "") {
     console.warn(`[registration/submit] honeypot triggered (ip: ${clientIp(req) ?? "unknown"})`);
-    return NextResponse.json({ registrationId: "bot-detected", confirmationSent: false });
+    // Byte-identical to what the service returns for the same case: this branch
+    // exists only to skip the work, not to answer differently, and a bot must
+    // not be able to tell the two apart. Typed so that widening SubmitResult
+    // again fails the build here instead of quietly splitting the contract.
+    const botOutcome: SubmitResult = {
+      registrationId: "bot-detected",
+      registrationNumber: null,
+      confirmationSent: false,
+    };
+    return NextResponse.json(botOutcome);
   }
 
   const result = registrationSubmitSchema.safeParse(body);
