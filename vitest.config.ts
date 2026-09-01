@@ -10,7 +10,15 @@ export default defineConfig({
   test: {
     environment: "node",
     // Keep in step with `lib/readme-claims.test.ts`, which counts every *.test.ts
-    // in the repo: a file matched by one and not the other silently miscounts.
-    include: ["modules/**/*.test.ts", "lib/**/*.test.ts", "prisma/**/*.test.ts"],
+    // and *.test.tsx in the repo: a file matched by one and not the other
+    // silently miscounts. Component tests live beside their component and opt
+    // into jsdom with a `@vitest-environment` docblock, so the default stays the
+    // cheap node environment for the service/pricing suites.
+    include: [
+      "modules/**/*.test.ts",
+      "lib/**/*.test.ts",
+      "prisma/**/*.test.ts",
+      "components/**/*.test.tsx",
+    ],
   },
 });

@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-201%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-237%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -214,7 +214,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 201 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 237 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -615,7 +615,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **201 Vitest tests** across 13 files, with **no database required**:
+`npm test` runs **237 Vitest tests** across 16 files, with **no database required**:
 
 - **Pricing engine** (48) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -671,6 +671,25 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   letters and non-ASCII symbols must **not** tick a rule, or the checklist would green-light a
   password Supabase rejects), that the checklist and the submit gate can never disagree, and
   that every rule is labelled in both locales.
+- **Component rendering** (16 + 13) — the two islands that move money, rendered for real in
+  jsdom with the actual locale file as messages (so a missing key fails here rather than showing
+  a raw key to a registrant). The public form: which tier selector each of the four offer-variants
+  renders, meal labels priced from the **meal** tier and repainted by it and by age but never by
+  the stay tier, and — the trap the whole matrix was built to find — **both** tiers sent
+  explicitly even when only one selector exists, because an omitted meal tier would fall back to
+  the stay tier, miss the price list and bill the meal at 0. Plus the success panel: the
+  registration number, the confirmation actually going to the address shown, the honest "it did
+  not send" when it did not, and nothing extra for the honeypot's numberless fake success. The
+  admin tier editor: the same four variants, each half listing only its own set, an empty set
+  reading as all three, a save that sends choices and never amounts, and a refusal that states
+  its reason instead of "try again". One test pins a KNOWN GAP rather than a rule — a participant
+  stranded on a tier a single-tier event no longer offers gets a block with their name and no
+  control at all.
+- **Event edit lock** (7) — that an event stops accepting relation edits the moment anything
+  references it (a DRAFT with a registration is as locked as a published one — the lock is not
+  about publishing), and that neither tier set is ever written by the scalar path. This is what
+  makes a stranded tier unreachable through the product, and it used to be argued only in a
+  comment; adding either set to that whitelist "for completeness" now fails a test.
 - **RLS guard** (3) — that every model's table has `ENABLE ROW LEVEL SECURITY` in a migration,
   and that no migration defines a policy or forces RLS on the owner. It reads the schema and
   the migration SQL, not the database. It exists because RLS used to be a dashboard setting:

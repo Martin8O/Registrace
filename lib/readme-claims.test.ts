@@ -31,6 +31,10 @@ import ts from "typescript";
 // (the loop may range over anything), so the only honest answers are "throw" or
 // "be wrong" — write it.each, which is countable, and this models it.
 //
+// It walks *.test.ts AND *.test.tsx: since M42 the component suites (rendered
+// with jsdom, beside their component) are part of the same run and the same
+// totals, so a .tsx suite left out here would understate every number above.
+//
 // This file counts ITSELF — it is a test file that `npm test` runs, so the
 // README's totals include it. Adding a case here means updating the README, which
 // is the point rather than a snag.
@@ -42,7 +46,9 @@ function findTestFiles(dir: string, found: string[] = []): string[] {
     if (["node_modules", ".next", "generated", ".git", "local"].includes(entry)) continue;
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) findTestFiles(full, found);
-    else if (entry.endsWith(".test.ts")) found.push(full);
+    // Both extensions: component suites are .test.tsx (JSX), and the TypeScript
+    // parser below picks TSX mode from the filename, so they count the same way.
+    else if (entry.endsWith(".test.ts") || entry.endsWith(".test.tsx")) found.push(full);
   }
   return found;
 }
