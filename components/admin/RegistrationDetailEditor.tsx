@@ -174,16 +174,20 @@ export default function RegistrationDetailEditor({
           {pricingButton}
         </div>
         <div className="flex flex-col items-center text-center">
-          {/* Label centers over the number only; the badge is taken out of flow
-              (absolute, to the number's right) so it doesn't shift that centering. */}
+          {/* Label centers over the number only; from `sm` up the badge is taken
+              out of flow (absolute, to the number's right) so it doesn't shift
+              that centering. On a phone it stays IN flow, under the number:
+              out of flow it sat past the viewport's right edge (number + badge
+              are wider than 375px), clipping the badge and scrolling the page
+              sideways. Same breakpoint the pricing button above already uses. */}
           <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
             {numberLabel}
           </p>
-          <div className="relative mt-1 inline-flex">
+          <div className="relative mt-1 inline-flex flex-col items-center sm:flex-row">
             <p className="font-mono text-3xl font-semibold tabular-nums text-neutral-900">
               {registrationNumber}
             </p>
-            <span className="absolute left-full top-1/2 ml-3 -translate-y-1/2 whitespace-nowrap">
+            <span className="mt-2 whitespace-nowrap sm:absolute sm:left-full sm:top-1/2 sm:mt-0 sm:ml-3 sm:-translate-y-1/2">
               <RegStatusBadge status={status} />
             </span>
           </div>
