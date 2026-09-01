@@ -37,6 +37,16 @@ function optionsFor(offered: readonly PricingType[], current: PricingType): read
   return offered.includes(current) ? offered : [current, ...offered]
 }
 
+// Whether one half gets a select: when there is something to choose — OR when
+// THIS person sits on a tier the event no longer offers. The second half of that
+// condition is what `tiersEditable` below already opens the block for. Without
+// it the two disagreed: on a single-tier event the block opened showing a name
+// and no control at all, hiding the very tier it exists to reveal, and making
+// optionsFor unreachable in exactly the case it was written for (M41 finding N5).
+function showTier(offered: readonly PricingType[], current: PricingType): boolean {
+  return offered.length > 1 || !offered.includes(current)
+}
+
 // Editable card of the registration detail. Owns the status state so the badge
 // shown next to the registration number (top band) updates live as the admin
 // changes the dropdown — that's why the number band + pricing-info button live
@@ -50,7 +60,9 @@ function optionsFor(offered: readonly PricingType[], current: PricingType): read
 // SERVER re-prices through the real engine before writing (invariants 3–4) — this
 // island sends choices, never amounts, exactly like the public form. A half the
 // event offers on one tier only renders no selector for it: there is nothing to
-// choose, and a narrowed set would otherwise invite an edit the server refuses.
+// choose, and a narrowed set would otherwise invite an edit the server refuses —
+// unless this participant is stranded on a tier that half no longer offers, in
+// which case it renders anyway so the tier is at least visible (see showTier).
 export default function RegistrationDetailEditor({
   registrationId,
   centerId,
@@ -270,7 +282,7 @@ export default function RegistrationDetailEditor({
                 >
                   <p className="text-sm font-medium text-neutral-900">{p.fullName}</p>
                   <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {participationTiers.length > 1 && (
+                    {showTier(participationTiers, p.pricingType) && (
                       <TierSelect
                         id={`tier-participation-${p.id}`}
                         label={t('registrationDetail.participationPriceType')}
@@ -280,7 +292,7 @@ export default function RegistrationDetailEditor({
                         onChange={(v) => setTier(p.id, 'pricingType', v)}
                       />
                     )}
-                    {mealTiers.length > 1 && (
+                    {showTier(mealTiers, p.mealPricingType) && (
                       <TierSelect
                         id={`tier-meal-${p.id}`}
                         label={t('registrationDetail.mealPriceType')}

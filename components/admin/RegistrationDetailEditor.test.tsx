@@ -162,25 +162,50 @@ describe("a participant stranded on a tier the event no longer offers", () => {
     expect(optionsOf(meal("p1")!)).toEqual(ALL);
   });
 
-  // KNOWN GAP, pinned deliberately rather than fixed (M42 finding N5, awaiting a
-  // decision). `tiersEditable` opens the block for a stranded participant — its
-  // comment says the admin "must at least be able to SEE" the tier — but each
-  // select is gated on its half offering >1 tier, with no stranded exception. So
-  // on a single-tier event the block opens showing the participant's NAME and no
-  // control at all, and the stored tier stays invisible. Unreachable through the
-  // product (a published event's tier sets are frozen and not in updateEvent's
-  // writable whitelist, so this needs a direct DB write), which is exactly why it
-  // needs a test: nobody will click it into being. Change this test WITH the fix.
-  it("but on a single-tier event the block opens with no control at all (known gap)", () => {
+  // The case that used to fall between two conditions (M41 finding N5, fixed).
+  // `tiersEditable` opened the block for a stranded participant — its comment
+  // says the admin "must at least be able to SEE" the tier — while each select
+  // was gated purely on its half offering >1 tier. On a single-tier event the two
+  // disagreed and the block opened showing a NAME and no control, hiding exactly
+  // the tier it exists to reveal. `showTier` now carries the stranded exception.
+  it("on a SINGLE-tier event the stranded half still renders, showing the stored tier", () => {
     renderEditor({
       participants: [{ ...ADULT, pricingType: "SURPLUS", mealPricingType: "STANDARD" }],
       participationPricingTypes: ["STANDARD"],
       mealPricingTypes: ["STANDARD"],
     });
     expect(screen.getByText(cs.admin.registrationDetail.pricingTiers)).toBeTruthy();
-    expect(screen.getByText("Jan Novák")).toBeTruthy();
-    expect(stay("p1")).toBeNull();
+    const el = stay("p1")!;
+    expect(el).not.toBeNull();
+    expect(el.value).toBe("SURPLUS");
+    expect(optionsOf(el)).toEqual(["SURPLUS", "STANDARD"]);
+  });
+
+  // …and only the stranded half. The other one has nothing to choose and nothing
+  // to reveal, so it stays hidden exactly as on any single-tier event.
+  it("the un-stranded half of the same participant stays hidden", () => {
+    renderEditor({
+      participants: [{ ...ADULT, pricingType: "SURPLUS", mealPricingType: "STANDARD" }],
+      participationPricingTypes: ["STANDARD"],
+      mealPricingTypes: ["STANDARD"],
+    });
     expect(meal("p1")).toBeNull();
+  });
+
+  // A stranded person must not drag everybody else's controls into view: the
+  // block is shared, the selects are per participant.
+  it("does not render selects for the participants who are not stranded", () => {
+    renderEditor({
+      participants: [
+        { ...ADULT, pricingType: "SURPLUS", mealPricingType: "STANDARD" },
+        { ...CHILD, pricingType: "STANDARD", mealPricingType: "STANDARD" },
+      ],
+      participationPricingTypes: ["STANDARD"],
+      mealPricingTypes: ["STANDARD"],
+    });
+    expect(stay("p1")).not.toBeNull();
+    expect(stay("p2")).toBeNull();
+    expect(meal("p2")).toBeNull();
   });
 });
 
