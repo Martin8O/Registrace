@@ -140,7 +140,14 @@ describe("submitRegistration", () => {
   it("valid payload → persists with real price and returns registrationId", async () => {
     const res = await submitRegistration(validInput, meta);
 
-    expect(res).toEqual({ registrationId: "reg1", confirmationSent: true });
+    // The HUMAN-readable number rides back out too: it is what the success
+    // screen shows and what the registrant is asked to quote — the cuid says
+    // nothing to them, and until M42 the screen had neither.
+    expect(res).toEqual({
+      registrationId: "reg1",
+      registrationNumber: "260020001",
+      confirmationSent: true,
+    });
     // Real engine: STANDARD, 3 days (sortOrder 0→2), morning (disc 0), + meal 80 = 380.
     expect(h.prisma.registration.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ totalPrice: 380 }) }),
@@ -182,7 +189,13 @@ describe("submitRegistration", () => {
   it("honeypot filled → bot sentinel, nothing touches the DB", async () => {
     const res = await submitRegistration({ ...validInput, honeypot: "spam" }, meta);
 
-    expect(res).toEqual({ registrationId: "bot-detected", confirmationSent: false });
+    // No row exists, so there is no number to hand back — and the success panel
+    // renders nothing extra without one, keeping the bot's view unchanged.
+    expect(res).toEqual({
+      registrationId: "bot-detected",
+      registrationNumber: null,
+      confirmationSent: false,
+    });
     expect(h.prisma.registration.findUnique).not.toHaveBeenCalled();
   });
 
@@ -211,7 +224,13 @@ describe("submitRegistration", () => {
 
     const res = await submitRegistration(validInput, meta);
 
-    expect(res).toEqual({ registrationId: "reg1", confirmationSent: false });
+    // The number still comes back: invariant 6 keeps the registration, so the
+    // screen must be able to show what to quote AND that no email went out.
+    expect(res).toEqual({
+      registrationId: "reg1",
+      registrationNumber: "260020001",
+      confirmationSent: false,
+    });
     // confirmationSentAt is only written on success → no update call here.
     expect(h.prisma.registration.update).not.toHaveBeenCalled();
   });

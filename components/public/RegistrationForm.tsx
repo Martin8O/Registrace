@@ -218,7 +218,14 @@ export default function RegistrationForm({
 
   const [price, setPrice] = useState<PriceResponse | null>(null)
   const [priceLoading, setPriceLoading] = useState(false)
-  const [submitted, setSubmitted] = useState(false)
+  // What the success panel needs from the accepted submit: the human-readable
+  // number to quote, whether the confirmation actually went out, and the address
+  // it went to. Email failure never rolls the registration back (invariant 6),
+  // so the panel has to be able to say so — otherwise a Resend outage leaves the
+  // registrant with no number, no email and no idea either happened.
+  const [submitted, setSubmitted] = useState<
+    { registrationNumber: string | null; confirmationSent: boolean; email: string } | null
+  >(null)
   const [submitError, setSubmitError] = useState<'submit' | 'capacity' | null>(null)
   const [gdprOpen, setGdprOpen] = useState(false)
   // Which participant's participation-price breakdown popup is open (index | null).
@@ -368,7 +375,16 @@ export default function RegistrationForm({
         body: JSON.stringify(data),
       })
       if (res.ok) {
-        setSubmitted(true)
+        // The number and the send result come from the server; a body we cannot
+        // read still counts as accepted — it just shows the plain confirmation.
+        const outcome = (await res.json().catch(() => null)) as
+          | { registrationNumber?: string | null; confirmationSent?: boolean }
+          | null
+        setSubmitted({
+          registrationNumber: outcome?.registrationNumber ?? null,
+          confirmationSent: outcome?.confirmationSent ?? false,
+          email: data.email,
+        })
         // The success panel is much shorter than the form — bring it into view.
         window.scrollTo({ top: 0, behavior: 'smooth' })
         return
@@ -390,6 +406,33 @@ export default function RegistrationForm({
         <p className="mt-4 font-serif text-xl font-semibold text-neutral-900">
           {t('registration_success')}
         </p>
+
+        {/* Everything below needs a real registration to name. The honeypot's
+            fake success has no number, so a bot sees exactly the panel it saw
+            before this block existed — which is the whole point of the trap. */}
+        {submitted.registrationNumber && (
+          <>
+            <div className="mx-auto mt-5 max-w-xs rounded-lg border border-primary-600 bg-primary-50 px-5 py-4">
+              <div className="text-xs font-bold uppercase tracking-widest text-primary-700">
+                {t('success_number_label')}
+              </div>
+              <div className="mt-1 font-mono text-3xl font-bold tracking-wider tabular-nums text-neutral-900">
+                {submitted.registrationNumber}
+              </div>
+            </div>
+            {submitted.confirmationSent ? (
+              <p className="mx-auto mt-4 max-w-md text-sm text-neutral-600">
+                {t('success_email_sent', { email: submitted.email })}
+              </p>
+            ) : (
+              // Invariant 6: a failed send never rolls the registration back, so
+              // this is the one place the registrant can learn it happened.
+              <p className="mx-auto mt-4 max-w-md rounded-lg border border-gold-300 bg-gold-50 p-3 text-sm text-gold-800">
+                {t('success_email_failed')}
+              </p>
+            )}
+          </>
+        )}
       </div>
     )
   }

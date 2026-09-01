@@ -95,6 +95,10 @@ export type SubmitMeta = {
 
 export type SubmitResult = {
   registrationId: string;
+  // The human-readable number ("260090009") the registrant is told to quote —
+  // the internal cuid means nothing to them. Null only where there is no row to
+  // name: the honeypot's fake success, and legacy rows predating the numbering.
+  registrationNumber: string | null;
   confirmationSent: boolean;
 };
 
@@ -109,7 +113,7 @@ export async function submitRegistration(
   // safe regardless of caller.)
   if (input.honeypot !== undefined && input.honeypot !== "") {
     console.warn(`[registrations] honeypot triggered (ip: ${meta.ipAddress ?? "unknown"})`);
-    return { registrationId: HONEYPOT_SENTINEL, confirmationSent: false };
+    return { registrationId: HONEYPOT_SENTINEL, registrationNumber: null, confirmationSent: false };
   }
 
   // Idempotency (invariant 14): a replayed key returns the existing row, no
@@ -120,6 +124,7 @@ export async function submitRegistration(
   if (existing) {
     return {
       registrationId: existing.id,
+      registrationNumber: existing.registrationNumber,
       confirmationSent: existing.confirmationSentAt !== null,
     };
   }
@@ -362,7 +367,11 @@ export async function submitRegistration(
         where: { idempotencyKey: input.idempotencyKey },
       });
       if (winner) {
-        return { registrationId: winner.id, confirmationSent: winner.confirmationSentAt !== null };
+        return {
+          registrationId: winner.id,
+          registrationNumber: winner.registrationNumber,
+          confirmationSent: winner.confirmationSentAt !== null,
+        };
       }
     }
     throw err;
@@ -414,7 +423,7 @@ export async function submitRegistration(
     console.error(`[registrations] confirmation email failed for ${registrationId}: ${email.error}`);
   }
 
-  return { registrationId, confirmationSent: email.sent };
+  return { registrationId, registrationNumber, confirmationSent: email.sent };
 }
 
 // Duck-typed P2002 check — avoids importing generated-client error classes.
