@@ -287,5 +287,13 @@ describe("the label for this number", () => {
     const onTheForm = messages.form.participation_price;
     expect(messages.form.participationModal.total).toBe(onTheForm);
     expect(messages.event.pricingModal.stayTitle).toBe(onTheForm);
+    // The admin registration detail names the same half, lower-cased because it
+    // is written inline ("· cena za účast a noc: standardní"). Same words, so an
+    // admin reconciling an amount against what the registrant was shown is
+    // reading one name, not two. (The XLSX header is pinned in export.test.ts,
+    // where a spreadsheet-visible column name belongs.)
+    expect(messages.admin.registrationDetail.participationPriceType.toLowerCase()).toBe(
+      onTheForm.toLowerCase(),
+    );
   });
 });

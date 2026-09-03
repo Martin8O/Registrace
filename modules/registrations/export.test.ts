@@ -132,7 +132,7 @@ describe("buildRegistrationExport", () => {
     h.findMany.mockResolvedValue(fakeRows());
     const { headers, rows } = await buildRegistrationExport({}, ctx, "cs");
 
-    expect(headers[24]).toBe("Účastník 2 — typ ceny za účast");
+    expect(headers[24]).toBe("Účastník 2 — typ ceny za účast a noc");
     expect(headers[25]).toBe("Účastník 2 — typ ceny za stravu");
     expect(rows[0]![24]).toBe("Podporovaná"); // child's participation tier
     expect(rows[0]![25]).toBe("Podporovaná"); // child's meal tier

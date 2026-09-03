@@ -496,7 +496,7 @@
       "participants": "Participants",
       "meals": "Meals",
       "priceWord": "price",
-      "participationPriceType": "participation price",
+      "participationPriceType": "participation and night price",
       "mealPriceType": "meal price",
       "pricingTiers": "Participant pricing tiers",
       "pricingTiersHint": "Changing a tier re-prices the registration and the stored price of every ordered meal.",

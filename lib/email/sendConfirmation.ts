@@ -84,7 +84,14 @@ const TEXT: Record<Lang, Record<string, string>> = {
     STANDARD: "standardní cena",
     SUPPORTED: "podporovaná cena",
     SURPLUS: "cena nadbytek",
-    tier_participation: "účast",
+    // Names BOTH halves the stay tier prices — a daily rate and a rate per
+    // night, either of which can be 0 alone. Must stay in step with
+    // `form.participation_price` in the locales and with the XLSX column:
+    // a registrant reconciling the mail against the site is reading one
+    // name for one amount. Unlike those two, this string has no test on it
+    // (the HTML builder is module-private and the suites assert the DATA
+    // reaching the mail, not its wording) — so change it by hand, with them.
+    tier_participation: "účast a noc",
     tier_meals: "strava",
     MEAT: "masitá",
     VEGETARIAN: "vegetariánská",
@@ -128,7 +135,7 @@ const TEXT: Record<Lang, Record<string, string>> = {
     STANDARD: "standard price",
     SUPPORTED: "supported price",
     SURPLUS: "surplus price",
-    tier_participation: "stay",
+    tier_participation: "participation and night",
     tier_meals: "meals",
     MEAT: "meat",
     VEGETARIAN: "vegetarian",
