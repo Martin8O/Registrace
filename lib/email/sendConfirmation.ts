@@ -237,8 +237,9 @@ function formatDateRange(start: Date, end: Date, lang: Lang): string {
 // ── Email design tokens — the BDC palette (visual-identity.md): deep crimson
 // primary + warm gold accent on warm stone/neutral. Inline only; email clients
 // (notably Gmail) strip <style>/<head> rules, so every visual property lives on
-// the element. Layout is table-based with width:100% + max-width:600px for
-// resilient rendering down to phone widths. Web fonts can't load in email, so
+// the element. Layout is table-based with width:100% + max-width:760px — 600 was
+// the original cap, when this mail was mostly label/value rows; it now carries a
+// five-column participant table that cannot fit one without breaking a phrase. Web fonts can't load in email, so
 // headings fall back to the documented Georgia serif and the number to a mono stack.
 const C = {
   page: "#FAF8F4", // stone-100 (warm off-white body)

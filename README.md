@@ -168,7 +168,9 @@ single source of orientation for anyone joining the project.
 - **Arrival time, early departure and accommodation** all feed into the price via the event's
   own discount and night-rate rules.
 - **Human-readable registration number** (`YYEEENNNN`) and a polished, BDC-branded
-  confirmation email.
+  confirmation email whose meal summary is grouped **by day** and collapsed twice — meals of one
+  day with the same eaters share a line, and a meal nobody missed reads "everyone (N)" rather
+  than ten repeated names, so a ten-person booking of 132 meals fits in seven lines.
 - **Privacy-first** — in-app GDPR consent, server-validated honeypot, idempotent submit. No
   cookie banner, because nothing here needs consent: the only cookies are the strictly
   necessary ones (the admin session and the chosen locale), there is no ad tech or cross-site
