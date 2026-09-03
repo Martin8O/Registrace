@@ -18,6 +18,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { render, cleanup } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import cs from "@/locales/cs.json";
+import en from "@/locales/en.json";
 import { calculatePricing } from "@/modules/pricing";
 import ParticipationPriceModal from "./ParticipationPriceModal";
 
@@ -264,5 +265,27 @@ describe("the breakdown agrees with the real engine", () => {
     // A total of 0 is rendered as the note, not as a row — that IS the agreement.
     if (total === 0) expect(shows(M.childNote)).toBe(true);
     else expect(amountOf(M.total)).toBe(`${total} CZK`);
+  });
+});
+
+// ─── One number, one name ────────────────────────────────────────────────────
+// The stay half of the price is TWO fields of one rule — a daily rate and a rate
+// per night — and on a real event either can be 0 on its own. Calling the sum
+// "participation price" named one of them, which is how an event with no paid
+// programme ended up showing 400 CZK under a heading that did not mention nights.
+// The label now names both halves, and it has to say the same thing in all three
+// places the same number appears: the price overview's first table, the row on
+// the registration form, and the total inside the breakdown that explains it.
+// Two of the three drifting apart would put two names for one amount on one
+// screen — the exact confusion the wording was widened to remove.
+
+describe("the label for this number", () => {
+  it.each([
+    ["cs", cs],
+    ["en", en],
+  ])("says the same thing in every place it appears (%s)", (_locale, messages) => {
+    const onTheForm = messages.form.participation_price;
+    expect(messages.form.participationModal.total).toBe(onTheForm);
+    expect(messages.event.pricingModal.stayTitle).toBe(onTheForm);
   });
 });

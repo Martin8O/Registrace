@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-285%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-287%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -214,7 +214,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 285 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 287 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -615,7 +615,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **285 Vitest tests** across 19 files, with **no database required**:
+`npm test` runs **287 Vitest tests** across 19 files, with **no database required**:
 
 - **Pricing engine** (48) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -695,7 +695,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   public is saved without being asked for permission to publish it, is reported as saved rather
   than as newly published, and offers one button instead of two — while a draft, a closed event
   going public again, and a brand-new event all still confirm before they become visible.
-- **Price popups** (10 + 19) — the two informational panels a registrant opens to see how a
+- **Price popups** (10 + 21) — the two informational panels a registrant opens to see how a
   number was reached. The price overview: an all-zero column and an all-zero category are
   dropped whole (a Těnovice weekend charges no daily rate, nothing under 15 and nothing to feed
   a toddler, which used to print as eight cells of “0 CZK” around the two numbers that matter),
@@ -707,7 +707,11 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   participation price of 400 CZK, because it read `dailyRate === 0` as “free” while the nights
   were priced by the other half of the same rule. Nine of its cases re-price the same scenario
   through the **real engine** and compare totals, so the informational panel and the
-  authoritative arithmetic cannot drift apart in silence.
+  authoritative arithmetic cannot drift apart in silence. Two more pin that the label for that
+  number says the same thing in all three places it appears — the overview's first table, the
+  form row and the breakdown's total — because the stay half is a daily rate AND a rate per
+  night, and naming only one of them is how 400 CZK ended up under a heading that never
+  mentioned nights.
 - **Event edit lock** (7) — that an event stops accepting relation edits the moment anything
   references it (a DRAFT with a registration is as locked as a published one — the lock is not
   about publishing), and that neither tier set is ever written by the scalar path. This is what

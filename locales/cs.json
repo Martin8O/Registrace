@@ -9,9 +9,9 @@
     "accommodation": "Ubytování",
     "full_name": "Jméno a příjmení",
     "age_category": "Věková kategorie",
-    "price_type_participation": "Typ ceny za účast",
+    "price_type_participation": "Typ ceny za účast a noc",
     "price_type_meals": "Typ ceny za stravu",
-    "participation_price": "Cena za účast",
+    "participation_price": "Cena za účast a noc",
     "meal_price": "Cena za stravu",
     "center": "Centrum",
     "email": "E-mail",
@@ -63,15 +63,15 @@
       "capacity": "Kapacita akce je již naplněna."
     },
     "participationModal": {
-      "title": "Výpočet ceny za účast – účastník {number}",
-      "openLabel": "Zobrazit výpočet ceny za účast",
+      "title": "Výpočet ceny za účast a noc – účastník {number}",
+      "openLabel": "Zobrazit výpočet ceny za účast a noc",
       "base": "Účast: {days, plural, one {# den} few {# dny} other {# dní}} × {rate} Kč",
       "arrivalDiscount": "Sleva za příjezd ({time})",
       "earlyDepartureDiscount": "Sleva za dřívější odjezd (po snídani)",
       "accommodation": "Ubytování: {nights, plural, one {# noc} few {# noci} other {# nocí}} × {rate} Kč",
-      "total": "Cena za účast",
-      "childNote": "V této kategorii se za účast neplatí – účtuje se pouze vybraná strava.",
-      "selectStay": "Pro výpočet ceny za účast nejdříve zvolte datum příjezdu a odjezdu.",
+      "total": "Cena za účast a noc",
+      "childNote": "V této kategorii se za účast ani noc neplatí – účtuje se pouze vybraná strava.",
+      "selectStay": "Pro výpočet ceny za účast a noc nejdříve zvolte datum příjezdu a odjezdu.",
       "close": "Zavřít"
     },
     "gdprModal": {
@@ -110,7 +110,7 @@
     "pricingModal": {
       "close": "Zavřít",
       "title": "Přehled cen",
-      "stayTitle": "Cena za účast",
+      "stayTitle": "Cena za účast a noc",
       "mealsTitle": "Cena za stravu",
       "discountsTitle": "Slevy",
       "discountsNote": "Slevy se vztahují na kategorii 15 let a více.",

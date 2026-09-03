@@ -9,9 +9,9 @@
     "accommodation": "Accommodation",
     "full_name": "Full name",
     "age_category": "Age category",
-    "price_type_participation": "Participation price type",
+    "price_type_participation": "Participation and night price type",
     "price_type_meals": "Meal price type",
-    "participation_price": "Participation price",
+    "participation_price": "Participation and night price",
     "meal_price": "Meal price",
     "center": "Center",
     "email": "Email",
@@ -63,15 +63,15 @@
       "capacity": "The event is already at full capacity."
     },
     "participationModal": {
-      "title": "Participation price — participant {number}",
-      "openLabel": "Show participation price breakdown",
+      "title": "Participation and night price — participant {number}",
+      "openLabel": "Show the participation and night price breakdown",
       "base": "Participation: {days, plural, one {# day} other {# days}} × {rate} CZK",
       "arrivalDiscount": "Arrival discount ({time})",
       "earlyDepartureDiscount": "Early departure discount (after breakfast)",
       "accommodation": "Accommodation: {nights, plural, one {# night} other {# nights}} × {rate} CZK",
-      "total": "Participation price",
-      "childNote": "This category has no participation charge — only the selected meals are charged.",
-      "selectStay": "Select the arrival and departure dates first to see the participation price breakdown.",
+      "total": "Participation and night price",
+      "childNote": "This category has no participation or night charge — only the selected meals are charged.",
+      "selectStay": "Select the arrival and departure dates first to see the participation and night price breakdown.",
       "close": "Close"
     },
     "gdprModal": {
@@ -110,7 +110,7 @@
     "pricingModal": {
       "close": "Close",
       "title": "Price overview",
-      "stayTitle": "Participation price",
+      "stayTitle": "Participation and night price",
       "mealsTitle": "Meal price",
       "discountsTitle": "Discounts",
       "discountsNote": "Discounts apply to the 15 and over category.",
