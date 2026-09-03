@@ -685,11 +685,14 @@ export default function EventStepper({
             <TextField label={t('eventForm.fields.title_en')} error={fieldError('title_en')}>
               <input className="bdc-input" {...register('title_en')} />
             </TextField>
+            {/* Multi-line: the public detail page renders these with the line
+                breaks intact, so the box has to be tall enough to show that the
+                breaks are being kept. */}
             <TextField label={t('eventForm.fields.description_cs')}>
-              <textarea rows={2} className="bdc-input" {...register('description_cs')} />
+              <textarea rows={5} className="bdc-input" {...register('description_cs')} />
             </TextField>
             <TextField label={t('eventForm.fields.description_en')}>
-              <textarea rows={2} className="bdc-input" {...register('description_en')} />
+              <textarea rows={5} className="bdc-input" {...register('description_en')} />
             </TextField>
             <TextField label={t('eventForm.fields.contactName')}>
               <input className="bdc-input" {...register('contactName')} />
@@ -1423,7 +1426,10 @@ function PreviewRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-wrap justify-between gap-2 text-sm">
       <span className="text-neutral-500">{label}</span>
-      <span className="text-neutral-900">{value || '—'}</span>
+      {/* The description is multi-line and the public page keeps its breaks, so
+          the review step has to show them too — otherwise the last screen before
+          publishing is the one place the text looks different from the result. */}
+      <span className="whitespace-pre-line text-right text-neutral-900">{value || '—'}</span>
     </div>
   )
 }

@@ -33,8 +33,15 @@ export default async function EventPage({
       </h1>
       <div className="h-0.5 w-12 bg-primary-500 mt-3 rounded" />
 
+      {/* The admin types the description into a textarea, so it can hold line
+          breaks and blank lines. HTML collapses those by default, which turned a
+          three-paragraph description into one run-on line — `whitespace-pre-line`
+          keeps the breaks the admin typed while still wrapping long lines. It is
+          NOT `pre-wrap`: leading indentation stays collapsed, so a pasted text
+          does not inherit stray alignment. Still plain text — no markup is
+          interpreted, so nothing here can inject HTML. */}
       {description !== null && (
-        <p className="mt-4 text-neutral-600 leading-relaxed">{description}</p>
+        <p className="mt-4 whitespace-pre-line text-neutral-600 leading-relaxed">{description}</p>
       )}
 
       <div className="mt-4 flex items-center justify-end">
