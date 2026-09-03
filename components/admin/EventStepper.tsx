@@ -293,6 +293,16 @@ export default function EventStepper({
   const locale = useLocale()
   const router = useRouter()
   const isEdit = mode === 'edit'
+  // Was this event already public before the admin opened this form? Everything
+  // about publishing is a TRANSITION, not a state: the confirmation warns that
+  // the event is about to become visible, and the success panel announces that it
+  // now is. Both were keyed on the final status instead, so editing a published
+  // event's description — which changes neither its visibility nor who can see
+  // it — asked "publish this event? it will become visible to the public" and
+  // then reported "event published". Neither was true; it had been public for
+  // days. `initial` is the STORED status at page load, so this stays right even
+  // if the admin moves the status dropdown around during the session.
+  const alreadyPublished = isEdit && initial?.status === 'PUBLISHED'
   // Centre/dates/pricing/meals are immutable only when editing a published event
   // (or a draft that already has registrations) — see canEditRelations.
   const relationsLocked = isEdit && !canEditRelations
@@ -555,8 +565,11 @@ export default function EventStepper({
       })
       if (isEdit ? res.ok : res.status === 201) {
         // Confirm what happened (published vs. saved) instead of silently
-        // bouncing to the list — the admin gets feedback first.
-        setSuccessKind(data.status === 'PUBLISHED' ? 'published' : 'saved')
+        // bouncing to the list — the admin gets feedback first. "Published" is
+        // reserved for an event that has just BECOME public; one that already was
+        // has only been saved, and saying otherwise made a description edit read
+        // like it had done something to the event's visibility.
+        setSuccessKind(data.status === 'PUBLISHED' && !alreadyPublished ? 'published' : 'saved')
         return
       }
       if (res.status === 403) {
@@ -580,8 +593,9 @@ export default function EventStepper({
     if (steps.length > 0) setStep(Math.min(...steps))
   }
 
-  // Save flow. "Save and Publish" forces status=PUBLISHED. Publishing (either
-  // way) asks for confirmation first.
+  // Save flow. "Save and Publish" forces status=PUBLISHED. Going public — and
+  // only going public — asks for confirmation first: on an event that is already
+  // published there is nothing to warn about, so the save just happens.
   function attemptSave(forcePublish: boolean) {
     if (forcePublish) setValue('status', 'PUBLISHED')
     // The start-date-in-the-past guard applies whenever the dates are editable
@@ -591,7 +605,7 @@ export default function EventStepper({
       return
     }
     const willPublish = forcePublish || getValues('status') === 'PUBLISHED'
-    if (willPublish) {
+    if (willPublish && !alreadyPublished) {
       setPublishModal(true)
     } else {
       void handleSubmit(onValid, onInvalid)()
@@ -1232,23 +1246,32 @@ export default function EventStepper({
               <p className="text-sm font-semibold text-danger-700">{submitError}</p>
             </div>
           )}
+          {/* An already-published event gets ONE button. The two differ only in
+              that "save and publish" FORCES status=PUBLISHED — which on a public
+              event is either a no-op or, worse, silently undoes a status the
+              admin just moved to closed on the previous step. "Save changes"
+              respects whatever they chose, which covers every case here. */}
           <div className="flex flex-col gap-3 sm:flex-row">
             <button
               type="button"
               onClick={() => attemptSave(false)}
               disabled={submitting}
-              className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
+              className={`disabled:cursor-not-allowed disabled:opacity-50 ${
+                alreadyPublished ? 'btn-primary' : 'btn-secondary'
+              }`}
             >
-              {t('eventForm.save')}
+              {alreadyPublished ? t('eventForm.saveChanges') : t('eventForm.save')}
             </button>
-            <button
-              type="button"
-              onClick={() => attemptSave(true)}
-              disabled={submitting}
-              className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {t('eventForm.saveAndPublish')}
-            </button>
+            {!alreadyPublished && (
+              <button
+                type="button"
+                onClick={() => attemptSave(true)}
+                disabled={submitting}
+                className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {t('eventForm.saveAndPublish')}
+              </button>
+            )}
           </div>
         </section>
       )}

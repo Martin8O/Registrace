@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-278%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-285%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -214,7 +214,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 278 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 285 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -615,7 +615,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **278 Vitest tests** across 19 files, with **no database required**:
+`npm test` runs **285 Vitest tests** across 19 files, with **no database required**:
 
 - **Pricing engine** (48) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -671,7 +671,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   letters and non-ASCII symbols must **not** tick a rule, or the checklist would green-light a
   password Supabase rejects), that the checklist and the submit gate can never disagree, and
   that every rule is labelled in both locales.
-- **Component rendering** (21 + 15 + 5) — the two islands that move money, rendered for real in
+- **Component rendering** (21 + 15 + 12) — the two islands that move money, rendered for real in
   jsdom with the actual locale file as messages (so a missing key fails here rather than showing
   a raw key to a registrant). The public form: which tier selector each of the four offer-variants
   renders, meal labels priced from the **meal** tier and repainted by it and by age but never by
@@ -691,6 +691,10 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   rather than collapsed, and its box is tall enough to look like somewhere paragraphs belong.
   That suite exists because opening the wizard means signing in, which means typing a password
   into a form, so it is the one screen no click-through covers.
+  The same suite pins that **publishing is a transition, not a state**: an event that is already
+  public is saved without being asked for permission to publish it, is reported as saved rather
+  than as newly published, and offers one button instead of two — while a draft, a closed event
+  going public again, and a brand-new event all still confirm before they become visible.
 - **Price popups** (10 + 19) — the two informational panels a registrant opens to see how a
   number was reached. The price overview: an all-zero column and an all-zero category are
   dropped whole (a Těnovice weekend charges no daily rate, nothing under 15 and nothing to feed

@@ -335,6 +335,7 @@
       "next": "Další",
       "prev": "Zpět",
       "save": "Uložit akci",
+      "saveChanges": "Uložit změny",
       "saveAndPublish": "Uložit a publikovat",
       "editLockedNote": "V režimu úprav lze měnit jen základní údaje, kontakty, kapacitu a stav. Centrum, termín, ceník a strava jsou po vytvoření uzamčené (jsou navázané na stávající registrace).",
       "validationError": "Opravte prosím označená pole.",

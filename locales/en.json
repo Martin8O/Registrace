@@ -335,6 +335,7 @@
       "next": "Next",
       "prev": "Back",
       "save": "Save event",
+      "saveChanges": "Save changes",
       "saveAndPublish": "Save and publish",
       "editLockedNote": "In edit mode you can change only the basic info, contacts, capacity and status. Center, schedule, pricing and meals are locked after creation (existing registrations depend on them).",
       "validationError": "Please fix the highlighted fields.",
