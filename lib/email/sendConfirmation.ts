@@ -1,6 +1,6 @@
 // lib/email — registration-confirmation email via Resend (invariant 6:
 // email-only, never throws, a failure must never block or roll back the DB
-// write). P6: production bilingual template — a responsive (≤600px, table-based,
+// write). P6: production bilingual template — a responsive (≤760px, table-based,
 // fully inline CSS, no external resources) HTML mail rendered in ONE language
 // chosen by `lang`. The text lives in a small inline cs/en map because email
 // rendering happens outside the next-intl request scope. Both call sites (submit
@@ -297,7 +297,12 @@ export function buildHtml(data: ConfirmationEmailData, lang: Lang): string {
       // in this cell it was a comma-separated run that wrapped to four lines on a
       // two-person registration and repeated itself for every person after that.
       const diet = t(p.mealType);
-      // Both tiers, at every age. They are named separately only when they
+      // Both tiers, at every age. Deliberately NOT nowrap, unlike the short
+      // labels beside them: these are the widest cell in the table, and forcing
+      // them whole pushed the table to 687px, which a phone can then only show
+      // by shrinking the entire email. On the wide card they fit on one line
+      // anyway; on a narrow one they wrap, which is the right way to lose.
+      // They are named separately only when they
       // DIFFER — the case the two-tier feature exists for (surplus room, supported
       // food), which one label cannot express. When they agree, that one label is
       // already true of both halves, and repeating it under two headings would be
@@ -310,9 +315,9 @@ export function buildHtml(data: ConfirmationEmailData, lang: Lang): string {
           : stayTier;
       return `<tr>
         <td style="${cell}">${esc(p.fullName)}</td>
-        <td style="${cell}">${t(p.ageCategory)}</td>
+        <td style="${cell}white-space:nowrap;">${t(p.ageCategory)}</td>
         <td style="${cell}">${type}</td>
-        <td style="${cell}">${diet}</td>
+        <td style="${cell}white-space:nowrap;">${diet}</td>
         <td align="right" style="${cell}white-space:nowrap;">${money(p.subtotal)}</td>
       </tr>`;
     })
@@ -391,10 +396,10 @@ export function buildHtml(data: ConfirmationEmailData, lang: Lang): string {
     const rows = lines
       .map(
         (line) => `<tr>
-          <td style="padding:5px 12px 5px 0;font-size:14px;color:${C.text};vertical-align:top;white-space:nowrap;">${line.meals
+          <td style="padding:5px 14px 5px 0;font-size:14px;color:${C.text};vertical-align:top;white-space:nowrap;width:190px;">${line.meals
             .map((type) => t(type))
             .join(" · ")}</td>
-          <td align="right" style="padding:5px 0;font-size:14px;color:${C.muted};vertical-align:top;">${eatersLabel(line.eaters)}</td>
+          <td style="padding:5px 0;font-size:14px;color:${C.muted};vertical-align:top;line-height:1.5;">${eatersLabel(line.eaters)}</td>
         </tr>`,
       )
       .join("");
@@ -443,7 +448,7 @@ export function buildHtml(data: ConfirmationEmailData, lang: Lang): string {
 <body style="margin:0;padding:0;background:${C.page};">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.page};">
     <tr><td align="center" style="padding:24px 12px;">
-      <table role="presentation" width="680" cellpadding="0" cellspacing="0" style="width:100%;max-width:680px;background:${C.card};border-radius:10px;overflow:hidden;font-family:${C.font};color:${C.text};">
+      <table role="presentation" width="760" cellpadding="0" cellspacing="0" style="width:100%;max-width:760px;background:${C.card};border-radius:10px;overflow:hidden;font-family:${C.font};color:${C.text};">
         <tr><td align="center" style="background:${C.crimson};padding:22px 28px;text-align:center;">
           <span style="font-family:${C.serif};font-size:22px;font-weight:700;color:#ffffff;">${t("heading")}</span>
         </td></tr>
