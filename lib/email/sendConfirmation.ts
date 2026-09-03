@@ -8,6 +8,14 @@
 
 import { Resend } from "resend";
 
+// One ordered meal slot. `order` is the event day's sortOrder — the days are
+// grouped and sorted by it, never by the label, which is human text.
+export type ConfirmationMeal = {
+  day: string; // localized event-day label, e.g. "Pátek 18. 9."
+  order: number;
+  mealType: string; // BREAKFAST | LUNCH | DINNER
+};
+
 export type ConfirmationParticipant = {
   fullName: string;
   ageCategory: string;
@@ -17,7 +25,12 @@ export type ConfirmationParticipant = {
   pricingType?: string;
   mealPricingType?: string;
   mealType: string; // MEAT | VEGETARIAN — diet for the ordered meals
-  meals: string[]; // localized meal labels
+  // The ordered slots, structured rather than pre-composed. They used to arrive
+  // as ready-made strings ("Pátek 18.9. – večeře") and were printed as one
+  // comma-separated run in a narrow cell, which on a two-person registration
+  // already wrapped to four lines of near-identical text. The template groups
+  // them by day instead, and it cannot do that from a sentence.
+  meals: ConfirmationMeal[];
   subtotal: number; // whole CZK (invariant 10)
 };
 
@@ -66,6 +79,15 @@ export const TEXT: Record<Lang, Record<string, string>> = {
     center: "Centrum",
     participants: "Účastníci",
     meals: "Strava",
+    meals_by_day: "Strava po dnech",
+    diet: "Typ stravy",
+    meals_count: "Objednaná jídla",
+    meals_none: "K této registraci není objednané žádné jídlo.",
+    BREAKFAST: "Snídaně",
+    LUNCH: "Oběd",
+    DINNER: "Večeře",
+    meals_total: "Celkem jídel",
+    everyone: "všichni",
     name: "Jméno",
     age: "Věk",
     type: "Typ",
@@ -115,6 +137,15 @@ export const TEXT: Record<Lang, Record<string, string>> = {
     center: "Centre",
     participants: "Participants",
     meals: "Meals",
+    meals_by_day: "Meals by day",
+    diet: "Diet",
+    meals_count: "Meals ordered",
+    meals_none: "No meals are ordered for this registration.",
+    BREAKFAST: "Breakfast",
+    LUNCH: "Lunch",
+    DINNER: "Dinner",
+    meals_total: "Meals in total",
+    everyone: "everyone",
     name: "Name",
     age: "Age",
     type: "Type",
@@ -227,7 +258,11 @@ const C = {
   mono: "'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace",
 };
 
-function buildHtml(data: ConfirmationEmailData, lang: Lang): string {
+// Exported alongside TEXT so the template itself can be asserted and previewed
+// without sending anything. The meal summary is built here, not by a caller,
+// so its grouping is only observable through the rendered HTML — and an email
+// is the one surface nobody can go back and look at after the fact.
+export function buildHtml(data: ConfirmationEmailData, lang: Lang): string {
   const t = (key: string): string => TEXT[lang][key] ?? key;
   const money = (n: number) => `${n.toLocaleString(lang === "cs" ? "cs-CZ" : "en-US")} ${t("currency")}`;
 
@@ -258,10 +293,10 @@ function buildHtml(data: ConfirmationEmailData, lang: Lang): string {
     .map((p, i) => {
       const bg = i % 2 === 1 ? `background:${C.zebra};` : "";
       const cell = `padding:8px 10px;border-bottom:1px solid ${C.line};font-size:14px;color:${C.text};vertical-align:top;${bg}`;
-      // Diet first (always chosen), then the specific ordered meals (or just the
-      // diet if none were ordered). Keeps the table at five columns.
+      // Only the DIET. What each person ordered is in the by-day summary above —
+      // in this cell it was a comma-separated run that wrapped to four lines on a
+      // two-person registration and repeated itself for every person after that.
       const diet = t(p.mealType);
-      const meals = p.meals.length > 0 ? `${diet} · ${p.meals.map(esc).join(", ")}` : diet;
       // Both tiers, at every age. They are named separately only when they
       // DIFFER — the case the two-tier feature exists for (surplus room, supported
       // food), which one label cannot express. When they agree, that one label is
@@ -277,7 +312,7 @@ function buildHtml(data: ConfirmationEmailData, lang: Lang): string {
         <td style="${cell}">${esc(p.fullName)}</td>
         <td style="${cell}">${t(p.ageCategory)}</td>
         <td style="${cell}">${type}</td>
-        <td style="${cell}">${meals}</td>
+        <td style="${cell}">${diet}</td>
         <td align="right" style="${cell}white-space:nowrap;">${money(p.subtotal)}</td>
       </tr>`;
     })
@@ -294,10 +329,101 @@ function buildHtml(data: ConfirmationEmailData, lang: Lang): string {
       </table>`
     : "";
 
+  // ── Meals by day ─────────────────────────────────────────────────────────
+  // The old cell listed one person's slots as a comma-separated run, repeated
+  // per person — on two people it was already four wrapped lines of nearly the
+  // same text. Grouping by day alone does not fix that: on a ten-person booking
+  // where everyone eats everything, it becomes fourteen lines of the same ten
+  // names. So this collapses twice, and both collapses are what make it short:
+  //
+  //   • meals of one day sharing the SAME set of eaters go on ONE line
+  //     ("Snídaně · Oběd · Večeře — všichni"), because listing them apart says
+  //     the same thing three times;
+  //   • a set that is every participant is named "všichni (N)" rather than
+  //     spelled out — the exception is the information, not the rule.
+  //
+  // A single-participant registration names nobody at all: there is one person
+  // the whole email is about, and repeating their name on every line is exactly
+  // the noise this section exists to remove.
+  const solo = data.participants.length === 1;
+  const MEAL_ORDER = ["BREAKFAST", "LUNCH", "DINNER"];
+
+  // day order → { label, meal → the participants who ordered it, by index }
+  const days = new Map<number, { day: string; byMeal: Map<string, number[]> }>();
+  let mealTotal = 0;
+  data.participants.forEach((p, pi) => {
+    for (const m of p.meals) {
+      mealTotal += 1;
+      let group = days.get(m.order);
+      if (!group) {
+        group = { day: m.day, byMeal: new Map() };
+        days.set(m.order, group);
+      }
+      const eaters = group.byMeal.get(m.mealType) ?? [];
+      eaters.push(pi);
+      group.byMeal.set(m.mealType, eaters);
+    }
+  });
+
+  // Eaters are indices, not names: two participants may share a name, and a
+  // shared name would merge two different sets into one wrong line.
+  const eatersLabel = (indices: number[]): string => {
+    if (solo) return "";
+    if (indices.length === data.participants.length) {
+      return `${t("everyone")} <span style="color:${C.muted};font-size:12px;">(${indices.length})</span>`;
+    }
+    return indices.map((i) => esc(data.participants[i]!.fullName)).join(" · ");
+  };
+
+  const dayBlock = (order: number, group: { day: string; byMeal: Map<string, number[]> }): string => {
+    // Meals sharing one set of eaters collapse onto a single line, in the
+    // canonical breakfast → lunch → dinner order.
+    const served = MEAL_ORDER.filter((type) => group.byMeal.has(type));
+    const lines: { meals: string[]; eaters: number[] }[] = [];
+    for (const type of served) {
+      const eaters = group.byMeal.get(type) ?? [];
+      const key = eaters.join(",");
+      const existing = lines.find((l) => l.eaters.join(",") === key);
+      if (existing) existing.meals.push(type);
+      else lines.push({ meals: [type], eaters });
+    }
+
+    const rows = lines
+      .map(
+        (line) => `<tr>
+          <td style="padding:5px 12px 5px 0;font-size:14px;color:${C.text};vertical-align:top;white-space:nowrap;">${line.meals
+            .map((type) => t(type))
+            .join(" · ")}</td>
+          <td align="right" style="padding:5px 0;font-size:14px;color:${C.muted};vertical-align:top;">${eatersLabel(line.eaters)}</td>
+        </tr>`,
+      )
+      .join("");
+
+    return `<tr><td style="padding:12px 0 4px;">
+        <span style="font-size:13px;font-weight:700;color:${C.heading};">${esc(group.day)}</span>
+      </td></tr>
+      <tr><td style="padding:0 0 10px;border-bottom:1px solid ${C.line};">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table>
+      </td></tr>`;
+  };
+
+  const mealsByDay =
+    mealTotal === 0
+      ? `<p style="margin:10px 0 0;font-size:14px;color:${C.muted};">${t("meals_none")}</p>`
+      : `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:4px;">
+      ${[...days.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([order, group]) => dayBlock(order, group))
+        .join("")}
+      <tr><td align="right" style="padding:10px 0 0;font-size:13px;color:${C.muted};">
+        ${t("meals_total")}: <strong style="color:${C.heading};">${mealTotal}</strong>
+      </td></tr>
+    </table>`;
+
   const participantsTable = `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin-top:10px;">
       <thead><tr>
-        ${th(t("name"))}${th(t("age"))}${th(t("type"))}${th(t("meals"))}${th(t("price"), "right")}
+        ${th(t("name"))}${th(t("age"))}${th(t("type"))}${th(t("diet"))}${th(t("price"), "right")}
       </tr></thead>
       <tbody>${participantRows}</tbody>
       <tfoot><tr>
@@ -317,7 +443,7 @@ function buildHtml(data: ConfirmationEmailData, lang: Lang): string {
 <body style="margin:0;padding:0;background:${C.page};">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.page};">
     <tr><td align="center" style="padding:24px 12px;">
-      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;background:${C.card};border-radius:10px;overflow:hidden;font-family:${C.font};color:${C.text};">
+      <table role="presentation" width="680" cellpadding="0" cellspacing="0" style="width:100%;max-width:680px;background:${C.card};border-radius:10px;overflow:hidden;font-family:${C.font};color:${C.text};">
         <tr><td align="center" style="background:${C.crimson};padding:22px 28px;text-align:center;">
           <span style="font-family:${C.serif};font-size:22px;font-weight:700;color:#ffffff;">${t("heading")}</span>
         </td></tr>
@@ -342,6 +468,11 @@ function buildHtml(data: ConfirmationEmailData, lang: Lang): string {
               ${infoRow(t("center"), esc(data.centerName))}
             </table></td></tr>
 
+            ${sectionTitle(t("meals_by_day"))}
+          </table>
+          ${mealsByDay}
+
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
             ${sectionTitle(t("participants"))}
           </table>
           ${participantsTable}

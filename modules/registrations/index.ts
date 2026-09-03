@@ -405,7 +405,20 @@ export async function submitRegistration(
         meals: [...new Set(p.mealIds)]
           .map((id) => mealById.get(id))
           .filter((m): m is NonNullable<typeof m> => m !== undefined && !m.isClosed)
-          .map((m) => ({ label_cs: m.label_cs, label_en: m.label_en })),
+          .flatMap((m) => {
+            // A slot always belongs to a day of this event (the FK guarantees it,
+            // and mealById is built from this event's own meals) — but the email
+            // groups by day, so a slot without one would silently vanish from the
+            // summary rather than be printed under a wrong heading.
+            const day = dateById.get(m.eventDateId);
+            if (!day) return [];
+            return [{
+              dayLabel_cs: day.label_cs,
+              dayLabel_en: day.label_en,
+              order: day.sortOrder,
+              mealType: m.mealType,
+            }];
+          }),
       })),
     },
     lang,
@@ -471,7 +484,11 @@ type ConfirmationSource = {
     mealPricingType: string;
     mealType: string; // MEAT | VEGETARIAN
     subtotal: number;
-    meals: { label_cs: string; label_en: string }[];
+    // The ordered slots, structured: the email groups them by day, which it
+    // cannot do from the pre-composed `EventMeal.label_*` ("Pátek 18.9. – večeře").
+    // `order` is the event day's sortOrder — grouping keys on it, never on the
+    // label, which is human text and not sortable.
+    meals: { dayLabel_cs: string; dayLabel_en: string; order: number; mealType: string }[];
   }>;
 };
 
@@ -501,7 +518,11 @@ function buildConfirmationEmailData(
       pricingType: p.pricingType,
       mealPricingType: p.mealPricingType,
       mealType: p.mealType,
-      meals: p.meals.map((m) => pick(m.label_cs, m.label_en)),
+      meals: p.meals.map((m) => ({
+        day: pick(m.dayLabel_cs, m.dayLabel_en),
+        order: m.order,
+        mealType: m.mealType,
+      })),
       subtotal: p.subtotal,
     })),
     totalPrice: src.totalPrice,
@@ -1148,7 +1169,10 @@ export async function resendConfirmation(
       participants: {
         where: { deletedAt: null },
         orderBy: { sortOrder: "asc" },
-        include: { meals: { include: { eventMeal: true } } },
+        // The slot's DAY as well as the slot: the confirmation groups meals by
+        // day, so a resend that loaded only the meal would have to fall back to
+        // the composed label and lose the grouping the first mail had.
+        include: { meals: { include: { eventMeal: { include: { eventDate: true } } } } },
       },
     },
   });
@@ -1180,8 +1204,10 @@ export async function resendConfirmation(
         mealType: p.mealType,
         subtotal: p.totalPrice,
         meals: p.meals.map((pm) => ({
-          label_cs: pm.eventMeal.label_cs,
-          label_en: pm.eventMeal.label_en,
+          dayLabel_cs: pm.eventMeal.eventDate.label_cs,
+          dayLabel_en: pm.eventMeal.eventDate.label_en,
+          order: pm.eventMeal.eventDate.sortOrder,
+          mealType: pm.eventMeal.mealType,
         })),
       })),
     },

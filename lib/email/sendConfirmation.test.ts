@@ -13,7 +13,7 @@
 // arrive under two different names.
 
 import { describe, it, expect } from "vitest";
-import { TEXT } from "./sendConfirmation";
+import { TEXT, buildHtml, type ConfirmationEmailData } from "./sendConfirmation";
 import cs from "@/locales/cs.json";
 import en from "@/locales/en.json";
 
@@ -56,5 +56,160 @@ describe("the email speaks the same language as the site", () => {
   // is the kind of thing only a foreign-language reader would ever report.
   it("defines the same keys in both languages", () => {
     expect(Object.keys(TEXT.en).sort()).toEqual(Object.keys(TEXT.cs).sort());
+  });
+});
+
+// ─── The meals-by-day summary ────────────────────────────────────────────────
+// The summary is built inside the template, so its collapsing is observable
+// ONLY in the rendered HTML — and this is an email: nobody can go back and look
+// at what was sent. The shape it replaced listed one person's slots as a
+// comma-separated run and repeated it per person, which on ten people eating
+// everything is fourteen lines of the same ten names.
+
+const CS = TEXT.cs;
+
+function mail(over: Partial<ConfirmationEmailData>): ConfirmationEmailData {
+  return {
+    registrationNumber: "26018001",
+    to: "nobody@example.cz",
+    eventTitle: "Kolíňáci",
+    eventStart: new Date("2026-09-18"),
+    eventEnd: new Date("2026-09-20"),
+    contactName: null,
+    contactPhone: null,
+    contactEmail: null,
+    arrivalLabel: "Pátek",
+    arrivalTime: "MORNING",
+    departureLabel: "Neděle",
+    earlyDeparture: "NONE",
+    hasAccommodation: true,
+    centerName: "Kolín",
+    participants: [],
+    totalPrice: 0,
+    ...over,
+  };
+}
+
+const person = (fullName: string, meals: { day: string; order: number; mealType: string }[]) => ({
+  fullName,
+  ageCategory: "AGE_15_PLUS",
+  pricingType: "STANDARD",
+  mealPricingType: "STANDARD",
+  mealType: "MEAT",
+  meals,
+  subtotal: 100,
+});
+
+/** The rendered mail as plain text, whitespace-collapsed — what a reader sees. */
+const textOf = (data: ConfirmationEmailData) =>
+  buildHtml(data, "cs")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+/** Just the meals section, so an assertion cannot accidentally match elsewhere. */
+const mealsSection = (data: ConfirmationEmailData) => {
+  const all = textOf(data);
+  const from = all.indexOf(CS.meals_by_day!);
+  const to = all.indexOf(CS.participants!, from);
+  return all.slice(from, to === -1 ? undefined : to);
+};
+
+const FRI = { day: "Pátek 18. 9.", order: 0 };
+const SAT = { day: "Sobota 19. 9.", order: 1 };
+const fullDay = (d: { day: string; order: number }) =>
+  ["BREAKFAST", "LUNCH", "DINNER"].map((mealType) => ({ ...d, mealType }));
+
+describe("the meals summary collapses what would otherwise repeat", () => {
+  it("puts one day's meals on ONE line when the same people ordered them all", () => {
+    const out = mealsSection(mail({ participants: [person("Jan", fullDay(SAT)), person("Eva", fullDay(SAT))] }));
+    expect(out).toContain(`${CS.BREAKFAST} · ${CS.LUNCH} · ${CS.DINNER}`);
+  });
+
+  it("names the group rather than everyone in it when nobody is missing", () => {
+    const out = mealsSection(mail({ participants: [person("Jan", fullDay(SAT)), person("Eva", fullDay(SAT))] }));
+    expect(out).toContain(CS.everyone!);
+    expect(out).not.toContain("Jan");
+    expect(out).not.toContain("Eva");
+  });
+
+  // The exception is the information — that is the whole point of naming the
+  // rule "everyone" and spelling out only who departs from it.
+  it("spells out the names when only some of them ordered it", () => {
+    const out = mealsSection(
+      mail({
+        participants: [
+          person("Jan", [{ ...FRI, mealType: "DINNER" }]),
+          person("Eva", []),
+        ],
+      }),
+    );
+    expect(out).toContain("Jan");
+    expect(out).not.toContain(CS.everyone!);
+  });
+
+  it("splits a day into two lines when its meals have different eaters", () => {
+    const out = mealsSection(
+      mail({
+        participants: [
+          person("Jan", [{ ...SAT, mealType: "BREAKFAST" }, { ...SAT, mealType: "LUNCH" }]),
+          person("Eva", [{ ...SAT, mealType: "LUNCH" }]),
+        ],
+      }),
+    );
+    // Lunch is the shared one, breakfast is Jan's alone.
+    expect(out).toContain(`${CS.LUNCH} ${CS.everyone}`);
+    expect(out).toContain(CS.BREAKFAST!);
+    expect(out).toContain("Jan");
+  });
+
+  // Two people can share a name, and grouping on names would merge their two
+  // different sets into one wrong line — so the grouping keys on the index.
+  it("does not merge two namesakes who ordered different meals", () => {
+    const out = mealsSection(
+      mail({
+        participants: [
+          person("Jan Novák", [{ ...SAT, mealType: "BREAKFAST" }]),
+          person("Jan Novák", [{ ...SAT, mealType: "LUNCH" }]),
+        ],
+      }),
+    );
+    expect(out).toContain(CS.BREAKFAST!);
+    expect(out).toContain(CS.LUNCH!);
+    expect(out).not.toContain(CS.everyone!);
+  });
+
+  it("names nobody at all when the registration is for one person", () => {
+    const out = mealsSection(mail({ participants: [person("Jan", fullDay(SAT))] }));
+    expect(out).toContain(`${CS.BREAKFAST} · ${CS.LUNCH} · ${CS.DINNER}`);
+    expect(out).not.toContain("Jan");
+    expect(out).not.toContain(CS.everyone!);
+  });
+
+  // Days are ordered by the event day's sortOrder, never by the label — a label
+  // is human text ("Pátek", "Sobota") and does not sort into calendar order.
+  it("orders the days by the event's own order, not by their labels", () => {
+    const out = mealsSection(
+      mail({
+        participants: [
+          person("Jan", [
+            { day: "Zítra", order: 1, mealType: "LUNCH" },
+            { day: "Dnes", order: 0, mealType: "LUNCH" },
+          ]),
+        ],
+      }),
+    );
+    expect(out.indexOf("Dnes")).toBeLessThan(out.indexOf("Zítra"));
+  });
+
+  it("counts every ordered slot at the foot of the section", () => {
+    const out = mealsSection(mail({ participants: [person("Jan", fullDay(SAT)), person("Eva", fullDay(FRI))] }));
+    expect(out).toContain(`${CS.meals_total}: 6`);
+  });
+
+  it("says so in words when nothing was ordered, instead of an empty grid", () => {
+    const out = mealsSection(mail({ participants: [person("Jan", [])] }));
+    expect(out).toContain(CS.meals_none!);
+    expect(out).not.toContain(CS.meals_total!);
   });
 });

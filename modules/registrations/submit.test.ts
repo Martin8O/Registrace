@@ -351,6 +351,38 @@ describe("submitRegistration — the two pricing tiers", () => {
     });
   });
 });
+// ─── The confirmation email's meals carry their DAY (M43) ────────────────
+// They used to arrive as ready-made sentences ("Pátek 18.9. – večeře") and were
+// printed as one comma-separated run. The template groups them by day now, which
+// it cannot do from a sentence — so each slot carries the day's label and that
+// day's sortOrder, and the grouping keys on the order, because a label is human
+// text and does not sort.
+
+describe("submitRegistration — the meals the confirmation is given", () => {
+  const mailedMeals = () =>
+    h.sendRegistrationConfirmation.mock.calls[0]?.[0]?.participants[0]?.meals;
+
+  const withMeals = (mealIds: string[]) => ({
+    ...validInput,
+    participants: [{ ...validInput.participants[0]!, mealIds }],
+  });
+
+  it("hands over each slot with its day, that day's order, and the meal", async () => {
+    await submitRegistration(withMeals(["m_b"]), meta);
+    expect(mailedMeals()).toEqual([{ day: "Pá", order: 0, mealType: "BREAKFAST" }]);
+  });
+
+  it("uses the day label of the caller's language, not the other one", async () => {
+    await submitRegistration(withMeals(["m_b"]), { ...meta, lang: "en" });
+    expect(mailedMeals()).toEqual([{ day: "Fri", order: 0, mealType: "BREAKFAST" }]);
+  });
+
+  it("hands over nothing for someone who ordered no meal", async () => {
+    await submitRegistration(withMeals([]), meta);
+    expect(mailedMeals()).toEqual([]);
+  });
+});
+
 // ─── The confirmation email carries both tiers, at every age (M40c) ───────────
 // The mail used to print ONE tier and blank it out under 15 — the pre-M37
 // invariant 15, from when tiers were a 15+ concept. The engine never had that age

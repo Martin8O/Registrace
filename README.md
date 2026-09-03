@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-292%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-304%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -214,7 +214,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 292 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 304 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -615,7 +615,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **292 Vitest tests** across 20 files, with **no database required**:
+`npm test` runs **304 Vitest tests** across 20 files, with **no database required**:
 
 - **Pricing engine** (48) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -633,11 +633,14 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 - **Event configuration** (8) — that an event's two tier sets must each be non-empty and contain
   the standard tier, and that neither price list may quote a tier the event does not offer —
   each list checked against its own set, never the other's.
-- **Submit service** (18) — control-flow with a **mocked Prisma** (`vi.mock('@/lib/db')`) while
+- **Submit service** (21) — control-flow with a **mocked Prisma** (`vi.mock('@/lib/db')`) while
   keeping the real engine, so `totalPrice` is asserted end-to-end; plus the two tiers pricing
   the two halves independently, both being persisted, each meal snapshotted at the meal tier's
   price, a tier the event does not offer being refused before anything is written, and both
-  tiers reaching the confirmation email — **for a child as well as an adult**.
+  tiers reaching the confirmation email — **for a child as well as an adult**. Three more pin
+  that each ordered meal reaches the mail with its day and that day's sort order, in the
+  caller's language: the confirmation groups meals by day, which it cannot do from the
+  pre-composed slot label it used to be handed.
 - **Admin re-pricing** (30) — that toggling a registration's accommodation re-prices it through
   the real engine (both directions, children included — no age is special-cased), that a centre
   or status edit writes no price and issues no extra query, that the registration and its
@@ -665,7 +668,8 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   picks its columns out of the full sheet **by name**, so its last column is provably participant
   1's name rather than whatever now sits at a fixed index; and an `eventId` this admin may not
   see is a **404** rather than a 200 carrying an empty file — refused before the row query runs.
-- **Email wording** (5) — the confirmation email's own labels, held against the locale files.
+- **Email wording and its meal summary** (14) — the confirmation email's own labels, held
+  against the locale files, and the by-day summary that only exists inside the template.
   It is the least observable surface in the app: a wrong label in the admin panel is seen the
   next time someone opens the page, but a wrong label in a confirmation is seen only by
   whoever receives one, and by then it has been sent. The rest of the mail is covered by the
@@ -674,6 +678,13 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   under two names — that the keys its table cell needs all exist, and that both languages
   define the same keys, since a key missing from one renders as raw text for half the
   recipients.
+  Nine more cover the meal summary, whose collapsing is observable only in the rendered HTML:
+  meals of one day sharing the same eaters go on one line, a meal nobody missed is named
+  "everyone" rather than spelled out (the exception is the information), a partial set IS
+  spelled out, two namesakes who ordered differently are not merged into one line (the
+  grouping keys on the participant's index, never their name), a one-person registration names
+  nobody at all, days sort by the event's own order rather than by their human labels, the
+  slot count is right, and an empty order says so in words instead of rendering an empty grid.
 - **Auth error wording** (8) — the Supabase-code → message mapping, plus a check that every key
   it can return is translated in **both** locales (an unmapped key would render as raw text).
 - **Password policy** (24) — that the rules mirror GoTrue's literal ASCII sets (Czech accented
