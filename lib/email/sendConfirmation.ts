@@ -44,7 +44,13 @@ export type SendResult = { sent: boolean; error?: string };
 
 type Lang = "cs" | "en";
 
-const TEXT: Record<Lang, Record<string, string>> = {
+// Exported for one reason: so a test can hold these strings against the locale
+// files. The email is the LEAST observable surface in the app — the admin panel
+// can be opened and looked at, but the wording of a confirmation is only ever
+// seen by someone who receives one, which is exactly why it should not be the
+// only user-facing text with nothing checking it. Nothing outside this module
+// renders from this table; treat it as private in every other sense.
+export const TEXT: Record<Lang, Record<string, string>> = {
   cs: {
     subject: "Potvrzení registrace — ",
     heading: "Potvrzení registrace",
@@ -85,12 +91,10 @@ const TEXT: Record<Lang, Record<string, string>> = {
     SUPPORTED: "podporovaná cena",
     SURPLUS: "cena nadbytek",
     // Names BOTH halves the stay tier prices — a daily rate and a rate per
-    // night, either of which can be 0 alone. Must stay in step with
-    // `form.participation_price` in the locales and with the XLSX column:
-    // a registrant reconciling the mail against the site is reading one
-    // name for one amount. Unlike those two, this string has no test on it
-    // (the HTML builder is module-private and the suites assert the DATA
-    // reaching the mail, not its wording) — so change it by hand, with them.
+    // night, either of which can be 0 alone. Held against
+    // `form.participation_price` in the locales by sendConfirmation.test.ts:
+    // a registrant reconciling the mail against the site must be reading one
+    // name for one amount, not two.
     tier_participation: "účast a noc",
     tier_meals: "strava",
     MEAT: "masitá",
