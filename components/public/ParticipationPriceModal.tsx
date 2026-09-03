@@ -23,9 +23,17 @@ type Row = { label: string; value: string; emphasis?: boolean }
 // pure engine in modules/pricing EXACTLY (dailyRate × days − arrival discount −
 // early-departure discount + nightRate × (days − 1), floored at 0) so the sum
 // shown here equals the server-authoritative price (invariant 3 — this is
-// display only; the backend price stays authoritative). Participation is
-// data-driven: a category whose rule rate is 0 (young children, and 8–14 in
-// events that don't charge them) shows a "no participation charge" note.
+// display only; the backend price stays authoritative).
+//
+// "Participation price" is the whole left-hand half of the price: the daily rate
+// AND the nights. The two are priced by separate fields of the same rule, so
+// either can be 0 on its own — a weekend with no paid programme charges 0/day and
+// 200/night, which is the commonest Těnovice event. This used to read the daily
+// rate alone as the test for "is anything charged": with dailyRate 0 it showed
+// "no participation charge in this category" beside a row reading 400 CZK, and it
+// said so to a 15+ adult, which is neither true nor about a category. The note now
+// appears only when the breakdown itself is empty — i.e. when nothing at all is
+// charged — so a 0-rate row is explained by the lines that ARE charged.
 export default function ParticipationPriceModal({
   isOpen,
   onClose,
@@ -52,55 +60,67 @@ export default function ParticipationPriceModal({
 
   if (days <= 0) {
     note = t('selectStay')
-  } else if (!rule || rule.dailyRate === 0) {
-    // No participation charge in this category (young children, or 8–14 where the
-    // event sets no rate). Meals are still charged separately.
+  } else if (!rule) {
+    // No rule for this age × tier at all — the engine prices that as 0.
     note = t('childNote')
   } else {
     const base = rule.dailyRate * days
-    rows.push({
-      label: t('base', { rate: rule.dailyRate, days }),
-      value: `${base} CZK`,
-    })
-
-    const arrivalDiscount =
-      arrivalTime === 'MORNING'
-        ? rule.morningArrivalDiscount
-        : arrivalTime === 'AFTERNOON'
-          ? rule.afternoonArrivalDiscount
-          : arrivalTime === 'EVENING'
-            ? rule.eveningArrivalDiscount
-            : 0
-    if (arrivalTime && arrivalDiscount > 0) {
-      rows.push({
-        label: t('arrivalDiscount', { time: arrivalTimeLabel }),
-        value: `−${arrivalDiscount} CZK`,
-      })
-    }
-
-    if (earlyDeparture === 'AFTER_BREAKFAST' && rule.earlyDepartureDiscount > 0) {
-      rows.push({
-        label: t('earlyDepartureDiscount'),
-        value: `−${rule.earlyDepartureDiscount} CZK`,
-      })
-    }
-
     const nights = days - 1
-    if (hasAccommodation && nights > 0 && rule.nightRate > 0) {
-      rows.push({
-        label: t('accommodation', { nights, rate: rule.nightRate }),
-        value: `+${rule.nightRate * nights} CZK`,
-      })
-    }
+    const accommodation = hasAccommodation && nights > 0 ? rule.nightRate * nights : 0
 
-    const total = Math.max(
-      0,
-      base -
-        arrivalDiscount -
-        (earlyDeparture === 'AFTER_BREAKFAST' ? rule.earlyDepartureDiscount : 0) +
-        (hasAccommodation && nights > 0 ? rule.nightRate * nights : 0),
-    )
-    rows.push({ label: t('total'), value: `${total} CZK`, emphasis: true })
+    // Nothing positive on either field of the rule — young children, or a category
+    // this event does not charge for and no night to add. That, and only that, is
+    // what the "no participation charge" note means. Discounts are deliberately not
+    // consulted here: a discount against nothing is not a charge, and the engine
+    // floors the total at 0 anyway, so listing one under a total of 0 would explain
+    // a deduction that never happened.
+    if (base === 0 && accommodation === 0) {
+      note = t('childNote')
+    } else {
+      // A rate of 0 is a real configuration (no paid programme); "3 days × 0 Kč" is
+      // a line carrying no information, so it is skipped rather than shown as a zero.
+      if (base > 0) {
+        rows.push({
+          label: t('base', { rate: rule.dailyRate, days }),
+          value: `${base} CZK`,
+        })
+      }
+
+      const arrivalDiscount =
+        arrivalTime === 'MORNING'
+          ? rule.morningArrivalDiscount
+          : arrivalTime === 'AFTERNOON'
+            ? rule.afternoonArrivalDiscount
+            : arrivalTime === 'EVENING'
+              ? rule.eveningArrivalDiscount
+              : 0
+      if (arrivalTime && arrivalDiscount > 0) {
+        rows.push({
+          label: t('arrivalDiscount', { time: arrivalTimeLabel }),
+          value: `−${arrivalDiscount} CZK`,
+        })
+      }
+
+      const earlyDiscount =
+        earlyDeparture === 'AFTER_BREAKFAST' ? rule.earlyDepartureDiscount : 0
+      if (earlyDiscount > 0) {
+        rows.push({
+          label: t('earlyDepartureDiscount'),
+          value: `−${earlyDiscount} CZK`,
+        })
+      }
+
+      if (accommodation > 0) {
+        rows.push({
+          label: t('accommodation', { nights, rate: rule.nightRate }),
+          value: `+${accommodation} CZK`,
+        })
+      }
+
+      // Same arithmetic as the engine, floored at 0 the same way.
+      const total = Math.max(0, base - arrivalDiscount - earlyDiscount + accommodation)
+      rows.push({ label: t('total'), value: `${total} CZK`, emphasis: true })
+    }
   }
 
   return (

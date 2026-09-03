@@ -186,11 +186,58 @@ describe("meal labels are priced by the meal tier", () => {
     expect(labelOf("m_l2")).toContain("130 CZK");
   });
 
-  it("a closed meal is disabled and says so", () => {
+  // A closed slot is one the event does not serve at all. It used to render as a
+  // priced pill that could not be clicked, which is an option nobody has — the
+  // engine and the submit service both refuse a closed meal id anyway.
+  it("a closed meal is not rendered at all", () => {
     renderForm();
     openStay();
-    expect((document.getElementById("meal-0-m_d2") as HTMLInputElement).disabled).toBe(true);
-    expect(labelOf("m_d2")).toContain(cs.form.meal_closed);
+    expect(document.getElementById("meal-0-m_d2")).toBeNull();
+    expect(document.getElementById("meal-0-m_b2")).toBeTruthy();
+    expect(document.getElementById("meal-0-m_l2")).toBeTruthy();
+  });
+});
+
+// ─── What an untouched form already says (the stay defaults) ────────────────
+// The two dates cannot be guessed and the resolver refuses a submit without them.
+// Everything else about the stay is pre-set to the ordinary BDC weekend, because
+// those fields are ones a registrant skips: an untouched form used to submit "no
+// accommodation", which is a real choice nobody made.
+
+describe("the stay a form arrives with", () => {
+  const checked = (name: string) =>
+    document.querySelector<HTMLInputElement>(`input[name="${name}"]:checked`)?.value ?? null;
+
+  it("pre-selects a morning arrival, an evening departure and a bed", () => {
+    renderForm();
+    expect(checked("arrivalTime")).toBe("MORNING");
+    expect(checked("earlyDeparture")).toBe("NONE");
+    expect((document.getElementById("accommodation-yes") as HTMLInputElement).checked).toBe(true);
+    expect((document.getElementById("accommodation-no") as HTMLInputElement).checked).toBe(false);
+  });
+
+  it("leaves both dates for the registrant — nothing can guess them", () => {
+    renderForm();
+    expect(checked("arrivalDateId")).toBeNull();
+    expect(checked("departureDateId")).toBeNull();
+  });
+
+  // The morning default is also what leaves the arrival day's meals on offer:
+  // with no arrival time at all, breakfast and lunch of day one were hidden until
+  // the registrant happened to pick one.
+  it("offers the arrival day's full meal list without a single extra click", () => {
+    renderForm();
+    click("arrivalDateId-d2");
+    click("departureDateId-d3");
+    expect(document.getElementById("meal-0-m_b2")).toBeTruthy();
+    expect(document.getElementById("meal-0-m_l2")).toBeTruthy();
+  });
+
+  it("still lets the registrant say they are not sleeping there", () => {
+    renderForm();
+    click("accommodation-no");
+    expect((document.getElementById("accommodation-no") as HTMLInputElement).checked).toBe(true);
+    expect((document.getElementById("accommodation-yes") as HTMLInputElement).checked).toBe(false);
   });
 });
 
@@ -220,6 +267,21 @@ describe("the outgoing payload", () => {
       pricingType: "SURPLUS",
       mealPricingType: "STANDARD",
     }));
+  });
+
+  // The defaults are only worth anything if they are what actually gets sent.
+  it("carries the pre-selected stay even when the registrant only picks dates", async () => {
+    renderForm();
+    click("arrivalDateId-d1");
+    click("departureDateId-d3");
+
+    await waitFor(() =>
+      expect(lastCalcBody()).toMatchObject({
+        arrivalTime: "MORNING",
+        earlyDeparture: "NONE",
+        hasAccommodation: true,
+      }),
+    );
   });
 
   it("does the same in the mirror variant (no participation selector)", async () => {

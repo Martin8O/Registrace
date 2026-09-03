@@ -39,6 +39,9 @@ const mealKey: Record<string, string> = {
 }
 
 type Row = { key: string; label: string; values: number[] }
+// A table after the all-zero rows and columns have been dropped: the columns that
+// survived, and the rows built over exactly those columns.
+type Table = { columns: string[]; rows: Row[] }
 
 // The tiers one half of the price is actually offered on. An EMPTY set means "all
 // three" — the same reading the submit service and the registration form use, so
@@ -54,12 +57,25 @@ function offeredTiers(set: string[]): readonly string[] {
 // list this used to be could not represent them: it showed one price per meal and
 // only the 15+ daily rates, which since M37 is a single column of a 12-row table.
 //
-// EVERY age category is listed, including ones that cost nothing. Dropping all-zero
-// rows to avoid a wall of zeros read as "0–3 is missing" rather than "0–3 is free" —
-// for a price list, a 0 is an answer, not noise. What is actually noise is repeating
-// an identical price under three tier headings, so a category whose tiers are all
-// equal collapses to a single row labelled by age alone (which is every category on
-// an event that does not differentiate, e.g. any event predating the price list).
+// Only what the event actually charges is listed. A price of 0 IS an answer — but a
+// whole row of them is not an answer worth a line: a Těnovice weekend charges no
+// participation below 15 and feeds the 0–3s for free, and printing those as four
+// columns of "0 CZK" buried the two numbers that matter. So:
+//   • a COLUMN priced 0 for every category and every tier is dropped whole — an
+//     event with no paid programme has no daily rate to show, only a rate per night;
+//   • a CATEGORY free on every tier the event offers is dropped whole — free is
+//     then said by the category's absence from the price list, exactly as it is for
+//     a meal the event does not serve at all.
+// Both are all-or-nothing on purpose. A category priced on one tier and free on
+// another keeps ALL its rows, including the free one: dropping just that row would
+// read as "standard is missing" rather than "standard is free", which is the older
+// failure this replaces, one level down. If everything is free the table empties and
+// says so in words ("Bez poplatku.") rather than as a grid of zeros.
+//
+// What is also noise is repeating an identical price under three tier headings, so a
+// category whose tiers are all equal collapses to a single row labelled by age alone
+// (which is every category on an event that does not differentiate, e.g. any event
+// predating the price list).
 //
 // Each table lists only the tiers ITS half is offered on (invariant 22), so a stay
 // tiered three ways alongside a single meal price reads as three rows per age in
@@ -92,15 +108,30 @@ export default function PricingModal({
   const mealPrice = (type: string, age: string, tier: string): number =>
     resolveMealPrice(type, { ageCategory: age, mealPricingType: tier }, mealPricingRules, flatPriceFor(type))
 
-  // Every age category, every time. A category whose three tiers carry identical
-  // values collapses to one row labelled by age alone — the tier heading would be
-  // telling the reader something that isn't true of the price.
-  const buildRows = (
+  // The whole price matrix for one half, trimmed to what the event charges (see the
+  // header) and then collapsed by tier where the tiers agree.
+  const buildTable = (
+    columns: string[],
     tiers: readonly string[],
     valuesFor: (age: string, tier: string) => number[],
-  ): Row[] =>
-    AGES.flatMap((age) => {
-      const perTier = tiers.map((tier) => ({ tier, values: valuesFor(age, tier) }))
+  ): Table => {
+    const matrix = AGES.map((age) => tiers.map((tier) => ({ tier, values: valuesFor(age, tier) })))
+
+    // Column kept only if SOMETHING in it is priced. Dropping a column can never
+    // turn a paid category into a free one — the column it removes was 0 in every
+    // row — so the two filters are independent and their order does not matter.
+    const columnKept = columns.map((_, ci) =>
+      matrix.some((perTier) => perTier.some((x) => (x.values[ci] ?? 0) !== 0)),
+    )
+    const keep = (values: number[]) => values.filter((_, ci) => columnKept[ci])
+
+    const rows = AGES.flatMap((age, ai) => {
+      const perTier = matrix[ai]!.map((x) => ({ tier: x.tier, values: keep(x.values) }))
+      // Free on every offered tier — the category is simply not part of this
+      // event's price list. (With every column dropped this is true of all of
+      // them, so the table empties and the "no charge" line takes over.)
+      if (perTier.every((x) => x.values.every((v) => v === 0))) return []
+
       const allSame = perTier.every(
         (x) => JSON.stringify(x.values) === JSON.stringify(perTier[0]!.values),
       )
@@ -114,14 +145,22 @@ export default function PricingModal({
       }))
     })
 
-  const stayColumns = [t('dailyRateShort'), t('pricePerNightShort')]
-  const stayRows = buildRows(offeredTiers(participationPricingTypes), (age, tier) => {
-    const r = rule(age, tier)
-    return [r?.dailyRate ?? 0, r?.nightRate ?? 0]
-  })
+    return { columns: columns.filter((_, ci) => columnKept[ci]), rows }
+  }
 
-  const mealRows = buildRows(offeredTiers(mealPricingTypes), (age, tier) =>
-    servedMeals.map((type) => mealPrice(type, age, tier)),
+  const stayTable = buildTable(
+    [t('dailyRateShort'), t('pricePerNightShort')],
+    offeredTiers(participationPricingTypes),
+    (age, tier) => {
+      const r = rule(age, tier)
+      return [r?.dailyRate ?? 0, r?.nightRate ?? 0]
+    },
+  )
+
+  const mealTable = buildTable(
+    servedMeals.map((type) => t(mealKey[type] ?? type)),
+    offeredTiers(mealPricingTypes),
+    (age, tier) => servedMeals.map((type) => mealPrice(type, age, tier)),
   )
 
   // Discounts stay a 15+ concept (child rules carry 0) — but they are NOT the same
@@ -182,13 +221,13 @@ export default function PricingModal({
         </div>
         <div className="h-0.5 w-10 bg-primary-500 mt-2 mb-6 rounded" />
 
-        <PriceTable title={t('stayTitle')} columns={stayColumns} rows={stayRows} />
+        <PriceTable title={t('stayTitle')} columns={stayTable.columns} rows={stayTable.rows} />
 
         {servedMeals.length > 0 && (
           <PriceTable
             title={t('mealsTitle')}
-            columns={servedMeals.map((type) => t(mealKey[type] ?? type))}
-            rows={mealRows}
+            columns={mealTable.columns}
+            rows={mealTable.rows}
             className="mt-6"
           />
         )}

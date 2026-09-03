@@ -7,7 +7,10 @@
 //  - Arrival-day gate (arrivalTime): MORNING → all · AFTERNOON → no breakfast · EVENING → dinner only.
 //  - Departure-day gate (earlyDeparture): NONE → all · AFTER_BREAKFAST → breakfast only.
 //  - Single-day stay (arrival === departure): both gates apply (intersection).
-//  - `isClosed` is handled separately in the UI (shown but disabled) — not here.
+//  - `isClosed` is handled separately by the caller — not here. This answers
+//    "is the person present for this slot", which is a property of the STAY;
+//    whether the event serves that slot at all is a property of the EVENT, and
+//    the form filters on it beside this set (it now hides such slots entirely).
 
 // Domain shapes come from the shared types module (P1 audit M2 — production code
 // no longer depends on lib/mock for its types).

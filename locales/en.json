@@ -49,7 +49,6 @@
     "meal_breakfast": "Breakfast",
     "meal_lunch": "Lunch",
     "meal_dinner": "Dinner",
-    "meal_closed": "closed",
     "participant_number": "Participant {number}",
     "participant_subtotal": "Participant subtotal",
     "amount_due": "Total to pay",

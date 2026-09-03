@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-239%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-273%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -214,7 +214,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 239 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 273 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -615,7 +615,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **239 Vitest tests** across 16 files, with **no database required**:
+`npm test` runs **273 Vitest tests** across 18 files, with **no database required**:
 
 - **Pricing engine** (48) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -671,7 +671,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   letters and non-ASCII symbols must **not** tick a rule, or the checklist would green-light a
   password Supabase rejects), that the checklist and the submit gate can never disagree, and
   that every rule is labelled in both locales.
-- **Component rendering** (16 + 15) — the two islands that move money, rendered for real in
+- **Component rendering** (21 + 15) — the two islands that move money, rendered for real in
   jsdom with the actual locale file as messages (so a missing key fails here rather than showing
   a raw key to a registrant). The public form: which tier selector each of the four offer-variants
   renders, meal labels priced from the **meal** tier and repainted by it and by age but never by
@@ -686,6 +686,19 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   stored tier stays in the options so the select cannot show a different one, a single-tier half
   still renders when somebody is stranded on it (otherwise the block opened with a name and no
   control, hiding the tier it exists to reveal), and nobody else's controls are dragged into view.
+- **Price popups** (10 + 19) — the two informational panels a registrant opens to see how a
+  number was reached. The price overview: an all-zero column and an all-zero category are
+  dropped whole (a Těnovice weekend charges no daily rate, nothing under 15 and nothing to feed
+  a toddler, which used to print as eight cells of “0 CZK” around the two numbers that matter),
+  while a category priced on one tier and free on another keeps **every** row — dropping just
+  the free one would read as “standard is missing” rather than “standard is free”. A fully
+  priced event is provably untouched, tier collapsing still works, and an event that charges
+  nothing at all says so in words instead of rendering an empty grid. The participation
+  breakdown: the fix for a popup that answered “this category is not charged” beside a
+  participation price of 400 CZK, because it read `dailyRate === 0` as “free” while the nights
+  were priced by the other half of the same rule. Nine of its cases re-price the same scenario
+  through the **real engine** and compare totals, so the informational panel and the
+  authoritative arithmetic cannot drift apart in silence.
 - **Event edit lock** (7) — that an event stops accepting relation edits the moment anything
   references it (a DRAFT with a registration is as locked as a published one — the lock is not
   about publishing), and that neither tier set is ever written by the scalar path. This is what

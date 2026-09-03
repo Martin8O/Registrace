@@ -197,14 +197,27 @@ export default function RegistrationForm({
       RegistrationSubmitInput
     >,
     defaultValues: {
-      // Stay fields start unselected — the user must actively choose them
-      // (earlyDeparture keeps NONE: "no early departure" is a true default).
+      // The two DATE fields start unselected — nothing can guess them, and the
+      // resolver refuses a submit without both. The rest of the stay is pre-set to
+      // the ordinary BDC weekend, because those are the fields a registrant skips.
+      // `hasAccommodation` is the reason: it is a boolean, so an untouched form
+      // submitted perfectly happily and arrived meaning "no bed" — a real answer
+      // nobody had given. Pre-selecting the common case makes an untouched form
+      // mean what it looks like it means, and anyone whose stay differs clicks
+      // exactly as they did before.
+      //   • arrivalTime MORNING — arrive in the morning of the arrival date;
+      //     it is also the only value that leaves every meal of that day on offer,
+      //     so the meal grid starts complete instead of missing its first day.
+      //   • earlyDeparture NONE — leave in the evening, i.e. no early departure.
+      //   • hasAccommodation true — people register for a residential weekend.
+      // The server re-prices all of it regardless (invariants 3–4); a default here
+      // changes what is submitted, never what it costs.
       eventId,
       arrivalDateId: '',
-      arrivalTime: undefined,
+      arrivalTime: 'MORNING',
       departureDateId: '',
       earlyDeparture: 'NONE',
-      hasAccommodation: false,
+      hasAccommodation: true,
       honeypot: '',
       idempotencyKey: '',
       centerId: centers[0]?.id ?? '',
@@ -643,8 +656,13 @@ export default function RegistrationForm({
                   ) : (
                   <div className="space-y-5">
                     {sortedDates.map((d) => {
+                      // A closed slot is one the event does not serve at all, so it
+                      // is left out rather than shown disabled: an unclickable pill
+                      // priced in CZK only invites the question of how to click it.
+                      // The engine and the submit service already refuse a closed
+                      // meal id, so hiding it removes an option nobody had.
                       const slots = meals.filter(
-                        (m) => m.eventDateId === d.id && availableMealIds.has(m.id),
+                        (m) => m.eventDateId === d.id && availableMealIds.has(m.id) && !m.isClosed,
                       )
                       if (slots.length === 0) return null
                       return (
@@ -670,21 +688,12 @@ export default function RegistrationForm({
                                     type="checkbox"
                                     id={domId}
                                     value={slot.id}
-                                    disabled={slot.isClosed}
                                     className="peer sr-only"
                                     {...register(`participants.${i}.mealIds`)}
                                   />
-                                  <label
-                                    htmlFor={domId}
-                                    className={`pill-label ${
-                                      slot.isClosed
-                                        ? 'cursor-not-allowed opacity-50'
-                                        : 'cursor-pointer'
-                                    }`}
-                                  >
+                                  <label htmlFor={domId} className="pill-label cursor-pointer">
                                     {t(mealLabelKey[slot.mealType] ?? slot.mealType)} ·{' '}
                                     {formatCzk(slotPrice)}
-                                    {slot.isClosed && ` (${t('meal_closed')})`}
                                   </label>
                                 </div>
                               )
