@@ -106,6 +106,7 @@
     "archived": "archivováno"
   },
   "event": {
+    "contact": "Kontakt na pořadatele",
     "pricingInfo": "Informace o cenách",
     "pricingModal": {
       "close": "Zavřít",
