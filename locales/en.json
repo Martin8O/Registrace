@@ -514,7 +514,11 @@
       },
       "resend": "Resend confirmation",
       "resent": "Confirmation resent.",
-      "resendFailed": "Confirmation could not be sent — in email test mode it only reaches the account owner's address."
+      "resendFailed": "Confirmation could not be sent — in email test mode it only reaches the account owner's address.",
+      "resendCancelled": "A cancelled registration cannot be confirmed.",
+      "resendRefused": {
+        "registration_cancelled": "This registration is cancelled — the confirmation, which confirms it and states an amount, cannot be sent for it."
+      }
     },
     "centers": {
       "title": "Centers",

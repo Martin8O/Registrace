@@ -40,6 +40,7 @@ function renderEditor(over: {
   participants?: EditableParticipantTiers[];
   participationPricingTypes?: string[];
   mealPricingTypes?: string[];
+  status?: "REGISTERED" | "PAID" | "CANCELLED";
 } = {}) {
   return render(
     <NextIntlClientProvider locale="cs" messages={cs}>
@@ -50,7 +51,7 @@ function renderEditor(over: {
         numberLabel="Číslo registrace"
         pricingButton={null}
         initialHasAccommodation
-        initialStatus="REGISTERED"
+        initialStatus={over.status ?? "REGISTERED"}
         initialParticipants={over.participants ?? [ADULT, CHILD]}
         participationPricingTypes={over.participationPricingTypes ?? ALL}
         mealPricingTypes={over.mealPricingTypes ?? ALL}
@@ -268,5 +269,47 @@ describe("saving", () => {
     save();
 
     await waitFor(() => expect(screen.getByText(cs.admin.registrationDetail.saveFailed)).toBeTruthy());
+  });
+});
+
+
+// ─── The confirmation a cancelled registration must never receive ────────────
+//
+// The mail is headed "Potvrzení registrace" and prints an amount to pay. Sent
+// for a cancelled booking it states the opposite of the truth, on the one
+// surface the guest keeps and re-reads. The server refuses it (resend.test.ts);
+// these pin that the admin is stopped before making the request at all, and —
+// just as important — that a live registration is NOT caught by the same gate.
+
+describe("resending the confirmation", () => {
+  const resendButton = () =>
+    screen.getByText(cs.admin.registrationDetail.resend).closest("button")!;
+
+  it("is disabled for a cancelled registration, and says why", () => {
+    renderEditor({ status: "CANCELLED" });
+
+    expect(resendButton().disabled).toBe(true);
+    // A disabled control with no reason beside it reads as a broken page; the
+    // reason is not guessable from the button itself.
+    expect(screen.getByText(cs.admin.registrationDetail.resendCancelled)).toBeTruthy();
+  });
+
+  it("stays available for a registered one, with no notice", () => {
+    renderEditor();
+
+    expect(resendButton().disabled).toBe(false);
+    expect(
+      screen.queryByText(cs.admin.registrationDetail.resendCancelled),
+    ).not.toBeTruthy();
+  });
+
+  it("follows the status select rather than the stored status", () => {
+    renderEditor();
+    const select = screen.getByLabelText(cs.admin.registrationDetail.status) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "CANCELLED" } });
+
+    // Confirming a booking the admin is in the middle of cancelling is the same
+    // contradiction one save later.
+    expect(resendButton().disabled).toBe(true);
   });
 });

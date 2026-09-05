@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-306%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-311%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -216,7 +216,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 306 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 311 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -617,7 +617,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **306 Vitest tests** across 20 files, with **no database required**:
+`npm test` runs **311 Vitest tests** across 21 files, with **no database required**:
 
 - **Pricing engine** (48) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -660,6 +660,12 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   round trips inside a single transaction. Three more check the audit entry: a tier edit records
   the before/after tiers of exactly the people who moved, beside the old and new total, and adds
   nothing at all when no tier moved.
+- **Resend gate** (2) — that re-sending the confirmation for a **cancelled** registration is
+  refused before anything leaves, and that a registered or paid one still sends. The template is
+  headed "Potvrzení registrace" and prints an amount to pay, so for a cancelled booking it states
+  the opposite of the truth — on the one surface the guest keeps. The test asserts the *absence*
+  of a send rather than a thrown error, because reporting the send as failed afterwards would
+  look the same from the outside and would still have delivered the mail.
 - **CSRF origin gate** (13) — that the admin origin check accepts the canonical origin and a
   Vercel preview's own url, and rejects everything else: foreign origins, a missing
   Origin + Referer, localhost in production, and — the regression that matters — a `vercel.app`
@@ -693,7 +699,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   letters and non-ASCII symbols must **not** tick a rule, or the checklist would green-light a
   password Supabase rejects), that the checklist and the submit gate can never disagree, and
   that every rule is labelled in both locales.
-- **Component rendering** (21 + 15 + 12) — the two islands that move money, rendered for real in
+- **Component rendering** (21 + 18 + 12) — the two islands that move money, rendered for real in
   jsdom with the actual locale file as messages (so a missing key fails here rather than showing
   a raw key to a registrant). The public form: which tier selector each of the four offer-variants
   renders, meal labels priced from the **meal** tier and repainted by it and by age but never by
@@ -704,7 +710,10 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   not send" when it did not, and nothing extra for the honeypot's numberless fake success. The
   admin tier editor: the same four variants, each half listing only its own set, an empty set
   reading as all three, a save that sends choices and never amounts, and a refusal that states
-  its reason instead of "try again". Three cover the stranded case the click-through could not reach at all: the
+  its reason instead of "try again". Three more guard the resend button: it is disabled for a
+  **cancelled** registration and says why, it stays available for a live one, and it follows the
+  status the admin has SELECTED rather than the stored one — confirming a booking somebody is in
+  the middle of cancelling is the same contradiction one save later. Three cover the stranded case the click-through could not reach at all: the
   stored tier stays in the options so the select cannot show a different one, a single-tier half
   still renders when somebody is stranded on it (otherwise the block opened with a name and no
   control, hiding the tier it exists to reveal), and nobody else's controls are dragged into view.

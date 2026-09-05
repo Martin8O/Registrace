@@ -514,7 +514,11 @@
       },
       "resend": "Znovu odeslat potvrzení",
       "resent": "Potvrzení znovu odesláno.",
-      "resendFailed": "Potvrzení se nepodařilo odeslat — v zkušebním režimu e-mailu dorazí jen na adresu vlastníka účtu."
+      "resendFailed": "Potvrzení se nepodařilo odeslat — v zkušebním režimu e-mailu dorazí jen na adresu vlastníka účtu.",
+      "resendCancelled": "Zrušené registraci nelze poslat potvrzení.",
+      "resendRefused": {
+        "registration_cancelled": "Tato registrace je zrušená — potvrzení, které ji potvrzuje a účtuje částku, jí poslat nelze."
+      }
     },
     "centers": {
       "title": "Centra",

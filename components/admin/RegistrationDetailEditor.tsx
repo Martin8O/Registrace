@@ -109,6 +109,13 @@ export default function RegistrationDetailEditor({
     participants.length > 0 &&
     (participationTiers.length > 1 || mealTiers.length > 1 || strandedTier)
 
+  // A cancelled registration is never re-confirmed: the mail is headed
+  // "Potvrzení registrace" and prints an amount to pay, so sending it for a
+  // cancelled booking states the opposite of the truth — on the one surface the
+  // guest keeps. Telling somebody their registration was cancelled is a
+  // different message, which this app does not send yet.
+  const cancelled = status === 'CANCELLED'
+
   const setTier = (id: string, field: 'pricingType' | 'mealPricingType', value: PricingType) =>
     setParticipants((prev) => prev.map((p) => (p.id === id ? { ...p, [field]: value } : p)))
 
@@ -157,7 +164,7 @@ export default function RegistrationDetailEditor({
         { method: 'POST' },
       )
       const json = (await res.json().catch(() => null)) as
-        | { data?: { confirmationSent?: boolean } }
+        | { data?: { confirmationSent?: boolean }; code?: string }
         | null
       if (res.ok && json?.data?.confirmationSent) {
         setToast(t('registrationDetail.resent'))
@@ -166,6 +173,11 @@ export default function RegistrationDetailEditor({
         // Sent path returned but the provider rejected the recipient (Resend
         // test-mode delivers only to the account owner) — surface it honestly.
         setError(t('registrationDetail.resendFailed'))
+      } else if (json?.code === 'registration_cancelled') {
+        // The button below is already disabled for a cancelled registration, so
+        // this is the stale-page case: cancelled in another window since load.
+        // Says WHY rather than "try again", which would be the wrong advice.
+        setError(t('registrationDetail.resendRefused.registration_cancelled'))
       } else {
         setError(t('registrationDetail.saveFailed'))
       }
@@ -322,12 +334,24 @@ export default function RegistrationDetailEditor({
           <button
             type="button"
             onClick={handleResend}
-            disabled={busy}
+            disabled={busy || cancelled}
+            title={cancelled ? t('registrationDetail.resendCancelled') : undefined}
             className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t('registrationDetail.resend')}
           </button>
         </div>
+        {/* A disabled button with no reason beside it reads as a broken page, and
+            the reason is not guessable from the button — the status select is
+            further up the form. Keyed off the SELECTED status, not the stored
+            one: confirming a booking the admin is in the middle of cancelling is
+            the same contradiction one save later, and the server refuses on the
+            stored value regardless. */}
+        {cancelled && (
+          <p className="pt-2 text-center text-sm text-neutral-500">
+            {t('registrationDetail.resendCancelled')}
+          </p>
+        )}
       </section>
     </div>
   )

@@ -62,6 +62,19 @@ export class RegistrationPricingTypeUnavailableError extends Error {
   }
 }
 
+// Resending the CONFIRMATION for a CANCELLED registration → 409. The template is
+// headed "Potvrzení registrace" and prints an amount to pay, so sending it for a
+// cancelled booking tells the guest the opposite of what is true — and it is the
+// one mail they would believe over anything said on the phone. A cancellation is
+// its own message, which this app does not send yet; until it does, the honest
+// answer is to refuse rather than to confirm something that is off.
+export class RegistrationCancelledError extends Error {
+  constructor(message = "Registration is cancelled") {
+    super(message);
+    this.name = "RegistrationCancelledError";
+  }
+}
+
 // Admin edit/resend targets a missing (or soft-deleted) registration → 404.
 export class RegistrationNotFoundError extends Error {
   constructor(message = "Registration not found") {
@@ -1151,8 +1164,9 @@ export async function updateRegistration(
 }
 
 // Re-send the confirmation email (production bilingual template — P6).
-// Ownership-checked. Language = the registration's STORED `locale` (P6 — the
-// visitor's original language), not a cs default. Sets confirmationSentAt on
+// Ownership-checked, and refused outright for a CANCELLED registration. Language
+// = the registration's STORED `locale` (P6 — the visitor's original language),
+// not a cs default. Sets confirmationSentAt on
 // success; a failure (incl. Resend test-mode rejecting a non-owner recipient)
 // is surfaced honestly, never thrown.
 export async function resendConfirmation(
@@ -1180,6 +1194,12 @@ export async function resendConfirmation(
   if (ctx.role === "ADMIN" && !ctx.centerIds.includes(r.event.centerId)) {
     throw new RegistrationForbiddenError();
   }
+  // A cancelled registration is never re-confirmed. Refused BEFORE the send, so
+  // no mail leaves and confirmationSentAt keeps pointing at the last confirmation
+  // that was actually true. Deliberately not an "honest failure" like the Resend
+  // test-mode rejection below — that one reports a send that was attempted and
+  // failed, whereas this one must never be attempted at all.
+  if (r.status === "CANCELLED") throw new RegistrationCancelledError();
 
   // The visitor's original language, defended against any unexpected stored value.
   const lang: "cs" | "en" = r.locale === "en" ? "en" : "cs";
