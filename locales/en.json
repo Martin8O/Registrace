@@ -93,6 +93,10 @@
     },
     "add_another_participant": "Add another participant"
   },
+  "meta": {
+    "siteName": "DWB Event Registration",
+    "description": "Registration for Diamond Way Buddhism events"
+  },
   "home": {
     "heading": "DWB Event Registration",
     "subheading": "Click on the event name to open registration.",
@@ -107,6 +111,7 @@
   },
   "event": {
     "contact": "Organizer contact",
+    "mealDeadline": "Meal orders close",
     "pricingInfo": "Pricing Info",
     "pricingModal": {
       "close": "Close",

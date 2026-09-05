@@ -18,7 +18,7 @@ list of invariants before changing anything structural.
 ```bash
 npm run dev                 # dev server on :3000
 npm run build               # production build
-npm test                    # Vitest (311 tests, no database needed)
+npm test                    # Vitest (326 tests, no database needed)
 npm run lint                # ESLint
 npx prisma migrate deploy   # apply migrations (needs DIRECT_URL)
 ```
@@ -111,7 +111,14 @@ These are enforced across the codebase — do not violate them to make something
 ## Conventions
 
 - Translation keys are **nested**, never flat. Namespaces: `form`, `home`, `event`, `badge`,
-  `admin`. Keep `form.pricing_info` (in-form label) and `event.pricingInfo` (detail-page
-  button) distinct — different elements, never merge.
+  `admin`, `meta`. Keep `form.pricing_info` (in-form label) and `event.pricingInfo` (detail-page
+  button) distinct — different elements, never merge. `meta` is the link-preview card (site name
+  and description); it is site-wide, which is why it is not folded into `home`.
 - Validation lives in `lib/validation/*` and must stay **client-safe** (no Prisma imports).
+- **Nothing an event's admin typed goes into a meta tag.** A link preview is copied and
+  re-shared far more widely than the page is opened, so the card carries only centre, title,
+  dates and the meal cut-off — never `description_*` (operational instructions) or `subtitle_*`
+  (a field the wizard cannot fill). `generateMetadata` and the OG image are two separate reads
+  and BOTH go through `getPublicEventForDetail`: a card naming a draft leaks it exactly as the
+  page would, and a cached PNG cannot be retracted.
 - Change the schema only via a Prisma migration (driver-adapter pattern; `DIRECT_URL`).

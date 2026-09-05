@@ -26,9 +26,34 @@ const securityHeaders = [
   { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
 ];
 
+// The ONE exception to `Cross-Origin-Resource-Policy: same-origin` above. A link
+// preview image exists to be displayed on somebody else's page: most chat clients
+// scrape and re-host it server-side (CORP is a browser rule and does not apply
+// there), but a web client that embeds our URL directly in an <img> would have
+// the browser drop it — a card with a blank image, and no error anywhere. The
+// card carries only what the public event page already shows, so opting exactly
+// this path out costs nothing. Declared after the blanket rule so it wins.
+const ogImageHeaders = [{ key: 'Cross-Origin-Resource-Policy', value: 'cross-origin' }];
+
 const nextConfig: NextConfig = {
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      // Next does NOT serve the route at a bare `/opengraph-image`: it appends a
+      // build-stable hash to the segment (`/cs/events/<id>/opengraph-image-ctd843`),
+      // so the pattern has to allow the suffix. Matching the bare name looked
+      // right, built cleanly and silently never fired.
+      { source: '/:path*/:og(opengraph-image.*)', headers: ogImageHeaders },
+    ];
+  },
+  // `assets/CrimsonPro-SemiBold.ttf` is read at runtime by the OG card (Satori
+  // cannot use the app's next/font faces). The build's tracer DOES pick it up on
+  // its own today — checked in the route's .nft.json, with and without this
+  // entry — but only because the path is two string literals it can fold. Naming
+  // the directory outright makes the deployed function carry the font regardless,
+  // so the card cannot lose its serif in production only.
+  outputFileTracingIncludes: {
+    '/**/opengraph-image*': ['./assets/**'],
   },
 };
 

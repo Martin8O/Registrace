@@ -1,10 +1,89 @@
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, cache, type ReactNode } from 'react'
+import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import PricingInfoButton from '@/components/public/PricingInfoButton'
 import RegistrationForm from '@/components/public/RegistrationForm'
 import { getCentersForSelect, getPublicEventForDetail } from '@/modules/events'
-import { formatDateRangeShort } from '@/lib/utils/formatDate'
+import { formatDateRangeShort, formatDeadlineDateTime } from '@/lib/utils/formatDate'
+import { ogLocales } from '@/lib/metadata/openGraph'
+
+// generateMetadata and the page both need the event. React's cache dedupes them
+// into ONE query per request — without it every event page would hit the database
+// twice for the same row.
+const loadEvent = cache((id: string) => getPublicEventForDetail(id))
+
+// Validation requires both halves of a title and of a centre name to be
+// non-empty, so this fallback should never fire — but a blank card title is a
+// silent, permanent embarrassment on somebody else's screen, and the same
+// columns hold rows that predate the current validation. Falling back to the
+// other language beats previewing an event with no name.
+function pickLocale(locale: string, cs: string, en: string): string {
+  const preferred = locale === 'en' ? en : cs
+  const fallback = locale === 'en' ? cs : en
+  return preferred.trim() ? preferred : fallback
+}
+
+// The line a shared link previews with: centre, event, dates — the same three
+// things the page's <h1> says, in the same order.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string; id: string }>
+}): Promise<Metadata> {
+  const { locale, id } = await params
+
+  // Read through the PUBLIC service, exactly as the page does. A DRAFT or
+  // finished event resolves to null here and the card falls back to the neutral
+  // site-level one — naming an unpublished event in a link preview leaks it just
+  // as surely as rendering the page would, and a preview is copied and re-shared
+  // far more widely than a page is opened (P1 audit H1).
+  const event = await loadEvent(id)
+  if (!event) return {}
+
+  const [tEvent, tMeta] = await Promise.all([
+    getTranslations({ locale, namespace: 'event' }),
+    getTranslations({ locale, namespace: 'meta' }),
+  ])
+
+  const title = pickLocale(locale, event.title_cs, event.title_en)
+  const centerName = pickLocale(locale, event.center.name_cs, event.center.name_en)
+  const heading = `${centerName} — ${title} · ${formatDateRangeShort(event.startDate, event.endDate)}`
+
+  // The ONLY event text that reaches a meta tag is the meal cut-off. The
+  // description_* columns are operational instructions — the live event's opens
+  // with a price table, whose first 160 characters are worse than no description
+  // at all — and subtitle_* is a field the admin wizard cannot fill, so a card
+  // line built on it would appear for seeded events and never for real ones.
+  // Everything a registrant needs is on the page, one click away.
+  const description = event.mealRegistrationDeadline
+    ? `${tEvent('mealDeadline')} ${formatDeadlineDateTime(event.mealRegistrationDeadline)}`
+    : tMeta('description')
+
+  const siteName = tMeta('siteName')
+  const path = `/${locale}/events/${id}`
+
+  return {
+    title: heading,
+    description,
+    alternates: {
+      canonical: path,
+      languages: { cs: `/cs/events/${id}`, en: `/en/events/${id}` },
+    },
+    openGraph: {
+      type: 'website',
+      siteName,
+      // `absolute` keeps the site name out of the card's one strong line — the
+      // layout's title template would otherwise append it, and og:site_name
+      // already carries it as its own field.
+      title: { absolute: heading },
+      description,
+      ...ogLocales(locale),
+      url: path,
+    },
+    twitter: { card: 'summary_large_image', title: { absolute: heading }, description },
+  }
+}
 
 export default async function EventPage({
   params,
@@ -16,7 +95,8 @@ export default async function EventPage({
 
   // PUBLIC read: only publicly-visible events resolve here (P1 audit H1).
   // DRAFT / past events 404 instead of leaking detail + contact PII.
-  const event = await getPublicEventForDetail(id)
+  // Same memoized read generateMetadata used — one query, not two.
+  const event = await loadEvent(id)
   if (!event) notFound()
 
   // The form's centre dropdown is the registrant's home centre — the full
@@ -101,6 +181,27 @@ export default async function EventPage({
                 {part}
               </Fragment>
             ))}
+          </p>
+        </div>
+      )}
+
+      {/* The meal-ordering cut-off. It is stored, it closes the meal pills in the
+          form, and until now it was shown NOWHERE on the public page — a
+          registrant found out it had passed only by the meals no longer being
+          offered. Same treatment as the contact block above (M45): small
+          uppercase label, value on the line below, `mt-6` from whatever
+          precedes it. The two blocks are independent — an event may have a
+          contact and no deadline, a deadline and no contact, both or neither —
+          so this hangs off nothing and the spacing holds in all four cases.
+          The string is the SAME one the link preview's description carries,
+          from the same formatter. */}
+      {event.mealRegistrationDeadline !== null && (
+        <div className="mt-6">
+          <p className="text-xs font-bold uppercase tracking-widest text-neutral-400">
+            {t('mealDeadline')}
+          </p>
+          <p className="mt-1.5 text-neutral-600">
+            {formatDeadlineDateTime(event.mealRegistrationDeadline)}
           </p>
         </div>
       )}

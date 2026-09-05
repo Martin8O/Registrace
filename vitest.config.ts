@@ -19,6 +19,10 @@ export default defineConfig({
       "lib/**/*.test.ts",
       "prisma/**/*.test.ts",
       "components/**/*.test.tsx",
+      // generateMetadata is a route export, so its suite has to live beside the
+      // route — the link-preview gate cannot be proved from a pure helper, since
+      // the whole guarantee is that the ROUTE reads through the public service.
+      "app/**/*.test.ts",
     ],
   },
 });

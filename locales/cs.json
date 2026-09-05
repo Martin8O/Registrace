@@ -93,6 +93,10 @@
     },
     "add_another_participant": "Přidat dalšího účastníka"
   },
+  "meta": {
+    "siteName": "Registrace na akce BDC",
+    "description": "Registrace na akce Buddhismu Diamantové cesty"
+  },
   "home": {
     "heading": "Registrace na akce BDC",
     "subheading": "Klikněte na název akce pro otevření registrace.",
@@ -107,6 +111,7 @@
   },
   "event": {
     "contact": "Kontakt na pořadatele",
+    "mealDeadline": "Přihlášení ke stravě do",
     "pricingInfo": "Informace o cenách",
     "pricingModal": {
       "close": "Zavřít",

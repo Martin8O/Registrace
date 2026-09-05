@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-311%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-326%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -216,7 +216,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 311 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 326 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -550,7 +550,7 @@ noted.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (browser auth client). |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service-role key for admin user management (server only). |
 | `RESEND_API_KEY` | Resend API key for confirmation emails. |
-| `NEXT_PUBLIC_APP_URL` | The app's own origin — used for invite/reset links **and** the admin CSRF check. A wrong value silently 403s every admin write. |
+| `NEXT_PUBLIC_APP_URL` | The app's own origin — used for invite/reset links, the admin CSRF check **and** `metadataBase` (every absolute URL in a link preview). A wrong value silently 403s every admin write. |
 | `EMAIL_FROM` | Verified sender, e.g. `BDC Registrace <noreply@send.registrace.online>`. |
 | `OWNER_USER_IDS` | Comma-separated Supabase Auth **user UUIDs** allowed to manage super-admins (preferred, immutable). Find them in Supabase → Authentication → Users. |
 | `OWNER_EMAILS` | Legacy fallback — verified emails allowed to manage super-admins. Both owner lists empty → nobody can manage super-admins. |
@@ -617,7 +617,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **311 Vitest tests** across 21 files, with **no database required**:
+`npm test` runs **326 Vitest tests** across 24 files, with **no database required**:
 
 - **Pricing engine** (48) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -666,6 +666,20 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   the opposite of the truth — on the one surface the guest keeps. The test asserts the *absence*
   of a send rather than a thrown error, because reporting the send as failed afterwards would
   look the same from the outside and would still have delivered the mail.
+- **Link previews** (8 + 2) — what a shared event link shows in a chat. The card carries the
+  centre, the event's name and its dates, and the meal cut-off as its description; a **draft or
+  finished** event gets the neutral site card instead, with its name absent from the whole
+  response. Both halves are checked, because the metadata and the card image are two separate
+  reads and the gate has to hold in each: the image is where a leak would be hardest to notice,
+  since the name would be baked into a PNG that chat clients cache for days. Four more pin what
+  must **not** reach a meta tag — the description (operational instructions whose first 160
+  characters are a price table) and the subtitle (a field the wizard cannot fill) — and that the
+  card falls back to the other language rather than previewing a nameless event.
+- **Public date formatting** (5) — the two strings the public side renders dates with. The meal
+  cut-off is stored in UTC and read in **Europe/Prague**: the live event's deadline is 21:59Z,
+  which is 23:59 there, so a UTC render would state the one number whose purpose is a cut-off two
+  hours early — and at 22:00Z it would name the wrong day entirely. One formatter, because the
+  same string is rendered on the event page and inside the link preview.
 - **CSRF origin gate** (13) — that the admin origin check accepts the canonical origin and a
   Vercel preview's own url, and rejects everything else: foreign origins, a missing
   Origin + Referer, localhost in production, and — the regression that matters — a `vercel.app`
@@ -806,6 +820,15 @@ its findings fixed.
   demands it.
 - Optional granular Supabase RLS policies, should any browser-direct data reads ever be added
   (none are currently planned).
+- **If the app ever moves to a domain under `bdc.cz`, the link previews need one pass.**
+  `NEXT_PUBLIC_APP_URL` is the single origin the whole card is built from — change it on Vercel
+  and every `og:url` / `og:image` follows — but the card also prints `registrace.online` as its
+  own watermark, and *that* string is hard-coded in the two `opengraph-image` routes rather than
+  derived from the origin. Deliberate: the watermark is a wordmark, not a link, and deriving it
+  would have printed `localhost:3000` on every card in development. It is written down here so
+  the move does not leave a beautifully rendered card advertising an address the site no longer
+  answers on. Chat clients cache scraped cards for days, so plan on re-sharing links after the
+  cutover rather than expecting the old previews to refresh themselves.
 
 ---
 

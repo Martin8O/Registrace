@@ -135,7 +135,8 @@ Full map with model relations: architecture.md.
 
 ## Translation key conventions
 All keys are nested — no flat root-level keys. Namespaces: `form` (registration form),
-`home` (homepage), `event` (event detail page), `badge` (status badges).
+`home` (homepage), `event` (event detail page), `badge` (status badges),
+`meta` (site name + description for the link-preview card — site-wide, hence not under `home`).
 Keep these distinct — different UI elements, never merge one into the other:
 - `form.pricing_info` — section label **inside** the registration form
 - `event.pricingInfo` — button label on the event **detail page**
