@@ -191,12 +191,17 @@ export default function PricingModal({
   const discounts = discountsIdentical
     ? shownKinds.map((k, i) => ({ label: k.label, value: perTierDiscounts[0]!.values[i]! }))
     : []
+  // Kinds down, tiers across — not the other way round. Four discount kinds beside
+  // a label column do not fit the 672px modal, so the last one ("evening arrival")
+  // sat outside a horizontal scrollbar: an amount the event really deducts, hidden
+  // behind a gesture nobody makes on a page they are reading. Three tiers do fit,
+  // and the long text is where there is room for it — in the label column.
   const discountRows: Row[] = discountsIdentical
     ? []
-    : perTierDiscounts.map((x) => ({
-        key: x.tier,
-        label: t(`tier.${tierKey[x.tier]}`),
-        values: x.values,
+    : shownKinds.map((k, ki) => ({
+        key: k.label,
+        label: k.label,
+        values: perTierDiscounts.map((x) => x.values[ki]!),
       }))
 
   return (
@@ -237,8 +242,8 @@ export default function PricingModal({
             <h3 className="text-sm font-semibold text-neutral-900">{t('discountsTitle')}</h3>
             <p className="mt-1 mb-2 text-xs text-neutral-500">{t('discountsNote')}</p>
             <PriceTable
-              categoryLabel={t('tierColumn')}
-              columns={shownKinds.map((k) => k.label)}
+              categoryLabel=""
+              columns={discountTiers.map((tier) => t(`tier.${tierKey[tier]}`))}
               rows={discountRows}
               negative
             />

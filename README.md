@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-304%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-306%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -102,17 +102,17 @@ single source of orientation for anyone joining the project.
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/public-event-detail.png" alt="Event detail with the stay section of the registration form" /></td>
-    <td width="50%"><img src="docs/screenshots/public-registration-form.png" alt="Participant card with age category, price tier and diet" /></td>
+    <td width="50%"><img src="docs/screenshots/public-registration-form.png" alt="Participant card with age category, both price tiers, diet and priced meals" /></td>
   </tr>
   <tr>
     <td align="center"><em>Event detail + stay (arrival, departure, accommodation)</em></td>
-    <td align="center"><em>Per-participant age, price tier, diet & live total</em></td>
+    <td align="center"><em>Per-participant age, two independent price tiers, diet &amp; live total</em></td>
   </tr>
 </table>
 
 <p align="center">
-  <img src="docs/screenshots/public-pricing-modal.png" width="70%" alt="Transparent price overview modal" /><br/>
-  <em>Transparent, data-driven price overview — meals, daily rates per age and tier, arrival/early-departure discounts.</em>
+  <img src="docs/screenshots/public-pricing-modal.png" width="70%" alt="Price overview modal with an age by tier table for the stay and one for the meals" /><br/>
+  <em>Transparent, data-driven price overview — one age &times; tier table for the stay, one for the meals, and the arrival / early-departure discounts per tier.</em>
 </p>
 
 ### Admin side
@@ -120,19 +120,19 @@ single source of orientation for anyone joining the project.
 <table>
   <tr>
     <td width="50%"><img src="docs/screenshots/admin-events.png" alt="Event management list with lifecycle badges" /></td>
-    <td width="50%"><img src="docs/screenshots/admin-event-form.png" alt="7-step event creation wizard" /></td>
+    <td width="50%"><img src="docs/screenshots/admin-event-form.png" alt="Event wizard on its pricing step, showing the age by tier price list" /></td>
   </tr>
   <tr>
     <td align="center"><em>Event management — draft / published / archived, per-event export</em></td>
-    <td align="center"><em>7-step bilingual event wizard</em></td>
+    <td align="center"><em>7-step bilingual event wizard — here its price list, per age &times; tier</em></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/admin-registrations.png" alt="Registrations list with filters, search and status badges" /></td>
-    <td width="50%"><img src="docs/screenshots/admin-registration-detail.png" alt="Registration detail with participants and meals" /></td>
+    <td width="50%"><img src="docs/screenshots/admin-registration-detail.png" alt="Registration detail with the per-participant tier editor, participants and meals" /></td>
   </tr>
   <tr>
     <td align="center"><em>Registrations — filter, search by number, status badges</em></td>
-    <td align="center"><em>Registration detail — status, accommodation, participants</em></td>
+    <td align="center"><em>Registration detail — status, accommodation, both tiers per participant</em></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/admin-users.png" alt="Admin management with roles and assigned centres" /></td>
@@ -216,7 +216,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 304 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 306 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -617,7 +617,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **304 Vitest tests** across 20 files, with **no database required**:
+`npm test` runs **306 Vitest tests** across 20 files, with **no database required**:
 
 - **Pricing engine** (48) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -717,14 +717,18 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   public is saved without being asked for permission to publish it, is reported as saved rather
   than as newly published, and offers one button instead of two — while a draft, a closed event
   going public again, and a brand-new event all still confirm before they become visible.
-- **Price popups** (10 + 21) — the two informational panels a registrant opens to see how a
+- **Price popups** (12 + 21) — the two informational panels a registrant opens to see how a
   number was reached. The price overview: an all-zero column and an all-zero category are
   dropped whole (a Těnovice weekend charges no daily rate, nothing under 15 and nothing to feed
   a toddler, which used to print as eight cells of “0 CZK” around the two numbers that matter),
   while a category priced on one tier and free on another keeps **every** row — dropping just
   the free one would read as “standard is missing” rather than “standard is free”. A fully
   priced event is provably untouched, tier collapsing still works, and an event that charges
-  nothing at all says so in words instead of rendering an empty grid. The participation
+  nothing at all says so in words instead of rendering an empty grid. Two more hold the
+  discounts table's orientation — kinds down, tiers across, and only the tiers the **stay** is
+  offered on: with the four kinds as columns the last two sat outside a horizontal scrollbar,
+  amounts the event really deducts hidden behind a gesture nobody makes while reading. The
+  participation
   breakdown: the fix for a popup that answered “this category is not charged” beside a
   participation price of 400 CZK, because it read `dailyRate === 0` as “free” while the nights
   were priced by the other half of the same rule. Nine of its cases re-price the same scenario

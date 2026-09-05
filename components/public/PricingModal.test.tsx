@@ -199,20 +199,22 @@ describe("a category nobody is charged for", () => {
   });
 });
 
-describe("an event that charges normally is untouched", () => {
-  const full = {
-    pricingRules: stayRules({
-      AGE_4_7: { STANDARD: [50, 40], SUPPORTED: [30, 20], SURPLUS: [70, 60] },
-      AGE_8_14: { STANDARD: [100, 80], SUPPORTED: [60, 50], SURPLUS: [150, 120] },
-      AGE_15_PLUS: { STANDARD: [200, 150], SUPPORTED: [100, 100], SURPLUS: [300, 200] },
-    }),
-    mealPricingRules: mealRules({
-      AGE_4_7: { STANDARD: [40, 60, 50], SUPPORTED: [40, 60, 50], SURPLUS: [40, 60, 50] },
-      AGE_8_14: { STANDARD: [60, 90, 90], SUPPORTED: [40, 60, 60], SURPLUS: [90, 130, 130] },
-      AGE_15_PLUS: { STANDARD: [80, 120, 120], SUPPORTED: [50, 80, 80], SURPLUS: [110, 160, 160] },
-    }),
-  };
+// An event that prices every age on every tier — the shape the discounts table is
+// also read against, so it lives at file scope.
+const full = {
+  pricingRules: stayRules({
+    AGE_4_7: { STANDARD: [50, 40], SUPPORTED: [30, 20], SURPLUS: [70, 60] },
+    AGE_8_14: { STANDARD: [100, 80], SUPPORTED: [60, 50], SURPLUS: [150, 120] },
+    AGE_15_PLUS: { STANDARD: [200, 150], SUPPORTED: [100, 100], SURPLUS: [300, 200] },
+  }),
+  mealPricingRules: mealRules({
+    AGE_4_7: { STANDARD: [40, 60, 50], SUPPORTED: [40, 60, 50], SURPLUS: [40, 60, 50] },
+    AGE_8_14: { STANDARD: [60, 90, 90], SUPPORTED: [40, 60, 60], SURPLUS: [90, 130, 130] },
+    AGE_15_PLUS: { STANDARD: [80, 120, 120], SUPPORTED: [50, 80, 80], SURPLUS: [110, 160, 160] },
+  }),
+};
 
+describe("an event that charges normally is untouched", () => {
   it("keeps every column and every paid category, split by tier", () => {
     open(full);
     const t0 = table(0)!;
@@ -236,6 +238,58 @@ describe("an event that charges normally is untouched", () => {
   it("still collapses a category whose tiers all agree", () => {
     open(full);
     expect(table(1)!.rows[M.age.age47]).toEqual(["40 CZK", "60 CZK", "50 CZK"]);
+  });
+});
+
+// The one table that does not fit the 672px modal the other way round. With the
+// four discount kinds as COLUMNS, "evening arrival" and "early departure" sat
+// outside a horizontal scrollbar — amounts the event really deducts, hidden behind
+// a gesture nobody makes on a page they are reading. Kinds go down, tiers across,
+// so the table grows in the direction the modal already scrolls. The column count
+// is the guard: it may not exceed the tiers the stay is offered on.
+describe("the discounts table", () => {
+  const DISCOUNTS: Record<string, [number, number, number, number]> = {
+    STANDARD: [30, 50, 80, 50],
+    SUPPORTED: [20, 30, 50, 30],
+    SURPLUS: [30, 50, 80, 60],
+  };
+  const discounted = (participationPricingTypes?: string[]) => ({
+    ...full,
+    pricingRules: full.pricingRules.map((r) =>
+      r.ageCategory === "AGE_15_PLUS"
+        ? {
+            ...r,
+            morningArrivalDiscount: DISCOUNTS[r.pricingType]![0],
+            afternoonArrivalDiscount: DISCOUNTS[r.pricingType]![1],
+            eveningArrivalDiscount: DISCOUNTS[r.pricingType]![2],
+            earlyDepartureDiscount: DISCOUNTS[r.pricingType]![3],
+          }
+        : r,
+    ),
+    ...(participationPricingTypes ? { participationPricingTypes } : {}),
+  });
+
+  it("puts the tiers across and every kind down, so nothing needs scrolling to", () => {
+    open(discounted());
+    const t = table(2)!;
+    expect(t.columns).toEqual([M.tier.standard, M.tier.supported, M.tier.surplus]);
+    expect(Object.keys(t.rows)).toEqual([
+      M.morningArrivalDiscount,
+      M.afternoonArrivalDiscount,
+      M.eveningArrivalDiscount,
+      M.earlyDepartureDiscount,
+    ]);
+    // The kind that used to fall off the right-hand edge, read across its tiers.
+    expect(t.rows[M.eveningArrivalDiscount]).toEqual(["−80 CZK", "−50 CZK", "−80 CZK"]);
+  });
+
+  // Invariant 22: each half is quoted only on the tiers IT is offered on — the
+  // discounts belong to the stay, so the stay's set decides the columns.
+  it("quotes only the tiers the stay is offered on", () => {
+    open(discounted(["STANDARD", "SURPLUS"]));
+    const t = table(2)!;
+    expect(t.columns).toEqual([M.tier.standard, M.tier.surplus]);
+    expect(t.rows[M.earlyDepartureDiscount]).toEqual(["−50 CZK", "−60 CZK"]);
   });
 });
 
