@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-326%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-350%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -186,8 +186,13 @@ single source of orientation for anyone joining the project.
   their own **independent** row of offered tiers, so an event can price the stay across three
   tiers while quoting a single meal price — only the ticked tiers are filled in and stored
   (the standard tier is always offered). Empty drafts stay fully editable.
-- **Event lifecycle** — draft → published → closed → archived, with a public visibility
-  window derived on read.
+- **Event lifecycle** — draft → published → closed → archived. Public visibility is derived
+  on read (an event leaves the public list at 20:00 Prague on its end day), and a **daily
+  Vercel Cron** (`GET /api/cron/event-lifecycle`) writes the stored status to match — closed
+  after that moment, archived three days later — so the admin list tells the truth too. Two
+  consequences an admin sees: a closed or archived event is **read-only** in the admin (its
+  registrations stay fully editable), and once archived its registrations move behind the
+  registrations list's "show archived" switch — the event's own view still lists them all.
 - **Registration workflow** — filter by centre / status / archived, search by number, edit
   status (registered / paid / cancelled), accommodation, and **each participant's two pricing
   tiers** — every one of which is re-priced server-side by the real engine, with a meal-tier
@@ -216,7 +221,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 326 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 350 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -257,7 +262,7 @@ flowchart LR
 
     subgraph Next["Next.js server"]
         Pages["Server Components<br/>app/[locale]/**"]
-        PubAPI["Public handlers<br/>/api/events · /api/registration/**<br/>rate-limit in handler"]
+        PubAPI["Public handlers<br/>/api/events · /api/registration/** · /api/cron/**<br/>rate-limit in handler"]
         AdmAPI["Admin handlers<br/>/api/admin/**<br/>role + ownership guard"]
         SVC["Services<br/>modules/**"]
         Price["Pricing engine<br/>modules/pricing (pure)"]
@@ -288,9 +293,11 @@ flowchart LR
   Supabase session refresh; on the admin API it adds rate-limiting (120/min/IP), a CSRF
   same-origin check on mutations, and a 401 for anonymous callers. It checks session
   **presence** only.
-- **The public API bypasses the edge entirely** — `/api/events`, `/api/registration/**` and
-  `/api/auth/me` are excluded by the matcher and reach their handlers directly, so each one
-  enforces its own rate limit (submit 10/h, price 60/min, public reads 60/min per IP).
+- **The public API bypasses the edge entirely** — `/api/events`, `/api/registration/**`,
+  `/api/auth/me` and the cron endpoint `/api/cron/**` are excluded by the matcher and reach
+  their handlers directly, so each one enforces its own rate limit (submit 10/h, price 60/min,
+  public reads 60/min per IP; the cron endpoint demands the bearer Vercel sends and throttles
+  only failed attempts, see Routes).
 - **Handlers/services** are the authoritative **role/ownership** gate (Prisma can't run at the
   edge). Business logic never lives in a route handler — it lives in `modules/*`, which Server
   Components call directly rather than fetching their own API.
@@ -385,6 +392,12 @@ included.
 
 **Auth** — `GET /api/auth/me` (60/min per IP; login/logout go through the Supabase browser
 client, not a route handler).
+
+**Scheduled** (Vercel Cron, not matched by `proxy.ts`) — `GET /api/cron/event-lifecycle`, daily
+(`vercel.json`). Requires `Authorization: Bearer $CRON_SECRET` — the header Vercel adds itself —
+and **fails closed** with 503 when the secret is unset. The bearer is checked first and only
+failed attempts are rate-limited (10/min per IP), so the real run can never be throttled;
+`?dryRun=1` reports what would change without writing.
 
 Validation errors return a canonical `400 { error, details }` (Zod issues) via the shared
 `validationError()` helper.
@@ -552,6 +565,7 @@ noted.
 | `RESEND_API_KEY` | Resend API key for confirmation emails. |
 | `NEXT_PUBLIC_APP_URL` | The app's own origin — used for invite/reset links, the admin CSRF check **and** `metadataBase` (every absolute URL in a link preview). A wrong value silently 403s every admin write. |
 | `EMAIL_FROM` | Verified sender, e.g. `BDC Registrace <noreply@send.registrace.online>`. |
+| `CRON_SECRET` | Bearer token Vercel sends with the daily `/api/cron/event-lifecycle` call (Vercel adds the header itself once the variable exists on the project). Any random string of 32+ chars. Unset → the endpoint refuses to run (503) and event statuses stay manual. |
 | `OWNER_USER_IDS` | Comma-separated Supabase Auth **user UUIDs** allowed to manage super-admins (preferred, immutable). Find them in Supabase → Authentication → Users. |
 | `OWNER_EMAILS` | Legacy fallback — verified emails allowed to manage super-admins. Both owner lists empty → nobody can manage super-admins. |
 | `SUPER_ADMIN_EMAIL` | *Optional, tooling only.* Fallback address for `prisma/promote-super-admin.ts` when no argument is passed. Not read by the app. |
@@ -617,7 +631,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **326 Vitest tests** across 24 files, with **no database required**:
+`npm test` runs **350 Vitest tests** across 26 files, with **no database required**:
 
 - **Pricing engine** (48) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -660,6 +674,19 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   round trips inside a single transaction. Three more check the audit entry: a tier edit records
   the before/after tiers of exactly the people who moved, beside the old and new total, and adds
   nothing at all when no tier moved.
+- **Event lifecycle** (15) — the one definition of when a published event closes (20:00 Prague
+  on its end day, in summer and winter time alike) and archives (20:00 three days later, pinned
+  across a DST switch and across a year end), that DRAFT and ARCHIVED are never touched, that a missed close goes
+  straight to ARCHIVED, and that the derivation agrees with `isPubliclyVisible` at every
+  instant. Plus the scheduled job's write: guarded by the status it read (a concurrent admin
+  edit wins and is skipped, audit entry included), audited as a system write, and a dry run
+  that reports the same plan and writes nothing.
+- **Cron endpoint** (9) — that nothing runs without the bearer Vercel sends, that a deployment
+  with no `CRON_SECRET` fails **closed** (503) rather than open, that an authorised call is never
+  throttled while failed attempts are, and that `?dryRun=1` reaches the service as a dry run. Two
+  more pin `vercel.json` to the route: it schedules exactly this path, with a once-a-day expression
+  (the Hobby plan rejects anything more frequent at deploy) — move the route and this fails instead
+  of the job silently stopping.
 - **Resend gate** (2) — that re-sending the confirmation for a **cancelled** registration is
   refused before anything leaves, and that a registered or paid one still sends. The template is
   headed "Potvrzení registrace" and prints an amount to pay, so for a cancelled booking it states
@@ -789,6 +816,13 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 - **Domain:** `registrace.online` — apex canonical, `www` → 308 → apex, DNS kept at Wedos.
 - **Email:** Resend sends from the verified subdomain `send.registrace.online`
   (DKIM/SPF/DMARC), isolating sending reputation.
+- **Scheduled job:** `vercel.json` registers a daily cron (`15 2 * * *`, UTC) that calls
+  `GET /api/cron/event-lifecycle`. It needs **`CRON_SECRET`** set on the Vercel project — Vercel
+  then sends it as the bearer itself; without it the endpoint answers 503 every night and event
+  statuses stay manual, with the only symptom in the cron log. On the Hobby plan the run lands
+  anywhere inside the scheduled hour and delivery is best-effort; the job reconciles rather than
+  steps, so a missed or doubled run is harmless. Check a fresh deploy with
+  `curl -H "Authorization: Bearer $CRON_SECRET" "https://registrace.online/api/cron/event-lifecycle?dryRun=1"`.
 - **Build note:** the Prisma client is gitignored and regenerated on Vercel via the
   `postinstall` hook; all `NEXT_PUBLIC_*` vars must be set at build time.
 

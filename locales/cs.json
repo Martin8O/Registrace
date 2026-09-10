@@ -241,6 +241,7 @@
     "logs": {
       "title": "Audit logy",
       "subtitle": "Záznam administrátorských změn — kdo, co, kdy a odkud. Jen pro super-admina.",
+      "systemActor": "systém",
       "empty": "Zatím žádné záznamy.",
       "table": {
         "time": "Čas",

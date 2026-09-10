@@ -10,7 +10,8 @@ import {
 } from "@/modules/events";
 
 // PATCH — change an event's lifecycle status, ownership-scoped. 400 invalid,
-// 403 not-owner, 404 missing. Manual transition only (cron = deploy concern).
+// 403 not-owner, 404 missing. The MANUAL transition — the scheduled close/archive
+// is GET /api/cron/event-lifecycle (runEventLifecycle).
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }

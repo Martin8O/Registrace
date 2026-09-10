@@ -241,6 +241,7 @@
     "logs": {
       "title": "Audit logs",
       "subtitle": "Record of admin changes — who, what, when and from where. Super-admin only.",
+      "systemActor": "system",
       "empty": "No entries yet.",
       "table": {
         "time": "Time",

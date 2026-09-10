@@ -124,8 +124,8 @@ function pragueOffsetMinutes(instant: Date): number {
 
 // The UTC instant for a Prague wall-clock time. A single offset-correction pass
 // is exact at 20:00 because DST switches happen at night (~03:00), never at 20:00.
-// TODO(deploy): swap the pragmatic Intl math for a tz library if edge DST cases
-// ever matter; a real scheduled job (Vercel Cron) will also flip status columns.
+// (Every lifecycle instant in this file goes through here; if an edge DST case
+// ever matters, swap the pragmatic Intl math for a tz library in one place.)
 function pragueWallClockToUtc(year: number, month: number, day: number, hour: number): Date {
   const naive = Date.UTC(year, month - 1, day, hour, 0, 0);
   const offset = pragueOffsetMinutes(new Date(naive));
@@ -163,22 +163,64 @@ export function formatPragueDateTimeLocal(date: Date): string {
   return `${get("year")}-${get("month")}-${get("day")}T${hour}:${get("minute")}`;
 }
 
-// Lifecycle derive-on-read (no scheduler needed for the public list): a PUBLISHED
-// event is publicly visible until 20:00 Europe/Prague on its endDate (then
-// effectively CLOSED), and effectively ARCHIVED +3 days after endDate.
-// TODO(deploy): the real cron writes the actual status; this only derives reads.
+// The two instants that bound a published event's life, both 20:00 Europe/Prague:
+// it closes at 20:00 on its end day and archives at 20:00 three days later. Both
+// are anchored to a Prague wall clock rather than "close + 72 hours", so a DST
+// switch inside those three days cannot move the archive moment by an hour.
+// isPubliclyVisible reads the first; deriveLifecycleTransition reads both — one
+// definition, two readers, never a third.
+function closeInstant(endDate: Date): Date {
+  return pragueWallClockToUtc(
+    endDate.getUTCFullYear(),
+    endDate.getUTCMonth() + 1,
+    endDate.getUTCDate(),
+    20,
+  );
+}
+
+function lifecycleInstants(endDate: Date): { closeAt: Date; archiveAt: Date } {
+  // Date.UTC normalises the day overflow (the 30th + 3 rolls into the next
+  // month, or the next year) — and it is UTC arithmetic, so the machine's own
+  // time zone never enters it.
+  const plus3 = new Date(
+    Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate() + 3),
+  );
+  return { closeAt: closeInstant(endDate), archiveAt: closeInstant(plus3) };
+}
+
+// Lifecycle derive-on-read for the PUBLIC side: a PUBLISHED event is visible
+// until 20:00 Europe/Prague on its endDate, whatever the status column says. The
+// column itself is brought into line by runEventLifecycle (a daily Vercel Cron),
+// so the public list never waits for the job and the admin list never lies for
+// more than a day.
 export function isPubliclyVisible(
   event: { status: EventStatusValue; endDate: Date },
   now: Date = new Date(),
 ): boolean {
   if (event.status !== "PUBLISHED") return false;
-  const closeAt = pragueWallClockToUtc(
-    event.endDate.getUTCFullYear(),
-    event.endDate.getUTCMonth() + 1,
-    event.endDate.getUTCDate(),
-    20,
-  );
-  return now.getTime() < closeAt.getTime();
+  // Only the close instant — the public list calls this per event, and the
+  // archive instant would be a second Intl pass thrown away.
+  return now.getTime() < closeInstant(event.endDate).getTime();
+}
+
+export type LifecycleTransition = "CLOSED" | "ARCHIVED";
+
+// What the scheduled job should write for one event at `now`, or null when the
+// stored status already says what the calendar says. This is reconciliation,
+// not a step: an event whose close was missed (the job runs once a day, and
+// Vercel's delivery is best-effort) goes straight to ARCHIVED once its archive
+// moment has passed, and deriving twice yields nothing the second time — which
+// is what lets the job be re-invoked, or invoked twice, without harm. DRAFT is
+// never touched (it was never live) and ARCHIVED is final.
+export function deriveLifecycleTransition(
+  event: { status: EventStatusValue; endDate: Date },
+  now: Date = new Date(),
+): LifecycleTransition | null {
+  if (event.status !== "PUBLISHED" && event.status !== "CLOSED") return null;
+  const { closeAt, archiveAt } = lifecycleInstants(event.endDate);
+  if (now.getTime() >= archiveAt.getTime()) return "ARCHIVED";
+  if (event.status === "PUBLISHED" && now.getTime() >= closeAt.getTime()) return "CLOSED";
+  return null;
 }
 
 // ─── Reads ──────────────────────────────────────────────────────────────────
@@ -823,7 +865,8 @@ async function replaceDraftEventRelations(
 }
 
 // Change only the event's lifecycle status (the PATCH endpoint). Same ownership
-// rules as updateEvent. Manual transition — the real cron is a deploy concern.
+// rules as updateEvent. The MANUAL transition; the automatic ones (close at 20:00
+// on the end day, archive three days later) are written by runEventLifecycle.
 export async function setEventStatus(
   id: string,
   status: EventStatusValue,
@@ -851,4 +894,65 @@ export async function setEventStatus(
   });
 
   return { id };
+}
+
+export type LifecycleRunResult = {
+  checked: number;
+  closed: { id: string; title: string }[];
+  archived: { id: string; title: string }[];
+  dryRun: boolean;
+};
+
+// The scheduled job behind /api/cron/event-lifecycle: write the status the
+// calendar already implies. Until this existed the column was only ever set by
+// hand, and the admin list showed "Publikováno" on events months past — the
+// public side was unaffected, because it derives visibility on read
+// (isPubliclyVisible) and still does; this only brings the STORED status into
+// line, so the admin list, its status filter and the registrations' archived
+// filter tell the truth too.
+//
+// Idempotent by construction: each write is guarded by the status it expects to
+// replace (an admin who archived the event a second earlier wins, and the row is
+// simply skipped — no write, no audit entry), and a second run finds nothing to
+// do. `dryRun` reports what would change without writing; the first production
+// run is checked with it before the schedule is trusted. Audit entries carry a
+// null actor — there is no admin behind a system write, and the Logs page shows
+// such a row as "systém" — with the same before/after shape as a manual change.
+export async function runEventLifecycle(
+  now: Date = new Date(),
+  opts: { dryRun?: boolean } = {},
+): Promise<LifecycleRunResult> {
+  const dryRun = opts.dryRun === true;
+  // Any live event whose end day has begun could be due; the derivation decides.
+  // endDate is UTC midnight of the calendar day and both instants fall later than
+  // that, so `endDate <= now` is a cheap superset of what can transition.
+  const candidates = await prisma.event.findMany({
+    where: { deletedAt: null, status: { in: ["PUBLISHED", "CLOSED"] }, endDate: { lte: now } },
+    select: { id: true, title_cs: true, status: true, endDate: true },
+    orderBy: { endDate: "asc" },
+  });
+
+  const result: LifecycleRunResult = { checked: candidates.length, closed: [], archived: [], dryRun };
+  for (const event of candidates) {
+    const target = deriveLifecycleTransition(event, now);
+    if (!target) continue;
+    if (!dryRun) {
+      const { count } = await prisma.event.updateMany({
+        where: { id: event.id, status: event.status, deletedAt: null },
+        data: { status: target },
+      });
+      if (count === 0) continue;
+      await logAuditEvent({
+        userId: null,
+        ip: null,
+        action: "event.status_change",
+        entityType: "Event",
+        entityId: event.id,
+        oldData: { status: event.status },
+        newData: { status: target },
+      });
+    }
+    (target === "CLOSED" ? result.closed : result.archived).push({ id: event.id, title: event.title_cs });
+  }
+  return result;
 }

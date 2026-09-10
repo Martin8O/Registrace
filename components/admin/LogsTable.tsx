@@ -67,6 +67,7 @@ export default function LogsTable({ rows }: { rows: AuditLogRow[] }) {
                   hide: t('table.hide'),
                   before: t('table.before'),
                   after: t('table.after'),
+                  systemActor: t('systemActor'),
                 }}
               />
             )
@@ -92,7 +93,7 @@ function FragmentRow({
   onToggle: () => void
   time: string
   actionLabel: string
-  labels: { details: string; hide: string; before: string; after: string }
+  labels: { details: string; hide: string; before: string; after: string; systemActor: string }
 }) {
   return (
     <>
@@ -100,7 +101,12 @@ function FragmentRow({
         <td className="whitespace-nowrap px-4 py-3 font-mono text-xs tabular-nums text-neutral-700">
           {time}
         </td>
-        <td className="px-4 py-3 text-neutral-700">{row.actorEmail ?? row.actorId ?? '—'}</td>
+        {/* A null actor is a system write (today: the daily event-lifecycle
+            cron) — lib/audit reserves null for exactly that, so it is labelled
+            rather than left looking like a missing person. */}
+        <td className="px-4 py-3 text-neutral-700">
+          {row.actorEmail ?? row.actorId ?? labels.systemActor}
+        </td>
         <td className="px-4 py-3">
           <span className="inline-block rounded bg-primary-50 px-2 py-0.5 font-medium text-primary-700">
             {actionLabel}
