@@ -126,6 +126,74 @@ export const registrationUpdateSchema = z.object({
   participants: z.array(registrationParticipantTierSchema).max(10).optional(),
 });
 
+// ─── Admin FULL registration edit (M50) ──────────────────────────────────────
+// Everything the registrant chose, editable by an admin: the stay, accommodation,
+// home centre, status, and the whole participant list — each person's name, age,
+// both tiers, diet and meal selection; people added (no `id`) and removed
+// (absent from the list). The registrant's e-mail is deliberately NOT here
+// (Martin, 2026-09-28: not editable), nor anything the public submit needs only
+// once (honeypot, idempotency key, GDPR consent).
+//
+// Event-specific checks (days and meals belong to the event, meals lie inside the
+// stay and are open, tiers are offered) live in the service, the only layer that
+// holds the event. The price is never sent — the server computes it.
+const fullUpdateParticipantSchema = submitParticipantSchema.extend({
+  // Absent = a person the admin is adding; present = an existing participant row.
+  id: z.string().min(1).max(64).optional(),
+  // Both tiers REQUIRED here (optional on the public schemas only for pre-M40
+  // clients): the editor always shows what is stored, so an absent tier could only
+  // mean a broken client, and silently defaulting it would re-price someone.
+  pricingType: z.enum(pricingTypeValues),
+  mealPricingType: z.enum(pricingTypeValues),
+});
+
+const fullUpdateFields = {
+  status: z.enum(registrationStatusValues),
+  centerId: z.string().min(1).max(64),
+  hasAccommodation: z.boolean(),
+  arrivalDateId: baseFields.arrivalDateId,
+  arrivalTime: baseFields.arrivalTime,
+  departureDateId: baseFields.departureDateId,
+  earlyDeparture: baseFields.earlyDeparture,
+  // At least one person (removing the last one is a cancellation, not an edit —
+  // Martin, 2026-09-28) and at most 10 (invariant 19).
+  participants: z.array(fullUpdateParticipantSchema).min(1).max(10),
+};
+
+type FullUpdateRefineable = {
+  participants: ReadonlyArray<{ id?: string; mealIds: ReadonlyArray<string> }>;
+};
+
+// The same participant twice would be written twice in one save; the same meal
+// twice would hit ParticipantMeal's @@unique mid-transaction. Both are refused
+// here with a path, rather than as a 500 from the database.
+function refineFullUpdate(data: FullUpdateRefineable, ctx: z.RefinementCtx): void {
+  const seen = new Set<string>();
+  data.participants.forEach((p, i) => {
+    if (p.id !== undefined) {
+      if (seen.has(p.id)) {
+        ctx.addIssue({ code: "custom", message: "Duplicate participant", path: ["participants", i, "id"] });
+      }
+      seen.add(p.id);
+    }
+    if (new Set(p.mealIds).size !== p.mealIds.length) {
+      ctx.addIssue({ code: "custom", message: "Duplicate meal", path: ["participants", i, "mealIds"] });
+    }
+  });
+}
+
+// The live price preview: the editor's whole current state, nothing written.
+export const registrationFullPreviewSchema = z
+  .object(fullUpdateFields)
+  .superRefine((data, ctx) => refineFullUpdate(data, ctx));
+
+// The save: the same state plus the `updatedAt` the editor loaded. The service
+// writes only if the row still carries it — a second admin who saved in between
+// gets a 409 instead of having their edit silently overwritten.
+export const registrationFullUpdateSchema = z
+  .object({ ...fullUpdateFields, expectedUpdatedAt: z.string().datetime() })
+  .superRefine((data, ctx) => refineFullUpdate(data, ctx));
+
 // ─── Admin registration export (P7) ───────────────────────────────────────────
 // Filters mirror the admin registrations list (event scope, hosting centre,
 // status, on-site search by reg number / email) plus an optional created-date
@@ -153,3 +221,5 @@ export type CalculatePriceInput = z.infer<typeof calculatePriceSchema>;
 export type RegistrationSubmitInput = z.infer<typeof registrationSubmitSchema>;
 export type RegistrationUpdateInput = z.infer<typeof registrationUpdateSchema>;
 export type RegistrationExportInput = z.infer<typeof registrationExportSchema>;
+export type RegistrationFullPreviewInput = z.infer<typeof registrationFullPreviewSchema>;
+export type RegistrationFullUpdateInput = z.infer<typeof registrationFullUpdateSchema>;

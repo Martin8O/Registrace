@@ -219,6 +219,32 @@ describe("submitRegistration", () => {
     expect(h.prisma.$transaction).not.toHaveBeenCalled();
   });
 
+  // The three stay-ORDER rules (M50 moved them into lib/utils/stayRules, shared
+  // with the admin full edit). Pinned here so the move provably changed nothing
+  // the public submit does: same error class, nothing written.
+  it.each([
+    // `as const` per row, not on the array — the README counter reads the literal.
+    ["departure before arrival", { arrivalDateId: "d_sun", departureDateId: "d_fri" }] as const,
+    ["same-day evening arrival", { departureDateId: "d_fri", arrivalTime: "EVENING" }] as const,
+    [
+      "same-day after-breakfast departure without a morning arrival",
+      { departureDateId: "d_fri", arrivalTime: "AFTERNOON", earlyDeparture: "AFTER_BREAKFAST" },
+    ] as const,
+  ])("%s → RegistrationStayMismatchError, nothing written", async (_label, stay) => {
+    await expect(submitRegistration({ ...validInput, ...stay }, meta)).rejects.toBeInstanceOf(
+      RegistrationStayMismatchError,
+    );
+    expect(h.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("a same-day morning visit leaving after breakfast is accepted", async () => {
+    const res = await submitRegistration(
+      { ...validInput, departureDateId: "d_fri", arrivalTime: "MORNING", earlyDeparture: "AFTER_BREAKFAST" },
+      meta,
+    );
+    expect(res.registrationId).toBe("reg1");
+  });
+
   it("a failed confirmation email does not block the registration", async () => {
     h.sendRegistrationConfirmation.mockResolvedValue({ sent: false, error: "test mode" });
 

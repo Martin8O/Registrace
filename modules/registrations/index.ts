@@ -8,6 +8,8 @@
 import { prisma } from "@/lib/db";
 import { calculatePricing } from "@/modules/pricing";
 import { resolveMealPrice, effectiveMealPricingType } from "@/lib/utils/mealPrice";
+import { getAvailableMealIds } from "@/lib/utils/mealAvailability";
+import { checkStayOrder, STAY_RULE_MESSAGES, type StayRuleViolation } from "@/lib/utils/stayRules";
 import {
   isPubliclyVisible,
   type EventMealDTO,
@@ -21,7 +23,10 @@ import type {
   RegistrationSubmitInput,
   RegistrationUpdateInput,
   RegistrationExportInput,
+  RegistrationFullPreviewInput,
+  RegistrationFullUpdateInput,
 } from "@/lib/validation";
+import type { Prisma } from "@/generated/prisma";
 import type { ExportTable } from "@/lib/export/xlsx";
 
 // ─── Typed errors (handlers map them to HTTP statuses) ────────────────────────
@@ -56,9 +61,18 @@ export class RegistrationStayMismatchError extends Error {
 // failure (P3 reserves 400 + Zod issues for those). Never reachable from the real
 // form, which only ever offers the event's own tiers.
 export class RegistrationPricingTypeUnavailableError extends Error {
-  constructor(message = "Pricing tier not offered by this event") {
+  // Set by the admin full edit (M50) only, so its editor can point at the person
+  // and the half; the submit and the narrow edit refuse without them, as before.
+  readonly participantIndex?: number;
+  readonly half?: "stay" | "meals";
+  constructor(
+    message = "Pricing tier not offered by this event",
+    detail?: { participantIndex: number; half: "stay" | "meals" },
+  ) {
     super(message);
     this.name = "RegistrationPricingTypeUnavailableError";
+    this.participantIndex = detail?.participantIndex;
+    this.half = detail?.half;
   }
 }
 
@@ -167,19 +181,16 @@ export async function submitRegistration(
 
   // Stay-order rules (mirrored client-side as disabled pills): departure never
   // precedes arrival; a same-day visit cannot arrive in the evening; same-day
-  // "after breakfast" departure requires a morning arrival.
-  if (departureDate.sortOrder < arrivalDate.sortOrder) {
-    throw new RegistrationStayMismatchError("Departure cannot precede arrival");
-  }
-  if (departureDate.sortOrder === arrivalDate.sortOrder) {
-    if (input.arrivalTime === "EVENING") {
-      throw new RegistrationStayMismatchError("Same-day stay cannot arrive in the evening");
-    }
-    if (input.earlyDeparture === "AFTER_BREAKFAST" && input.arrivalTime !== "MORNING") {
-      throw new RegistrationStayMismatchError(
-        "Same-day early departure requires a morning arrival",
-      );
-    }
+  // "after breakfast" departure requires a morning arrival. One shared definition
+  // since M50 — the admin full edit enforces exactly the same three.
+  const stayViolation = checkStayOrder({
+    arrivalSortOrder: arrivalDate.sortOrder,
+    departureSortOrder: departureDate.sortOrder,
+    arrivalTime: input.arrivalTime,
+    earlyDeparture: input.earlyDeparture,
+  });
+  if (stayViolation) {
+    throw new RegistrationStayMismatchError(STAY_RULE_MESSAGES[stayViolation]);
   }
   const center = await prisma.center.findFirst({
     where: { id: input.centerId, isActive: true },
@@ -638,7 +649,9 @@ export async function listRegistrations(
     where: { deletedAt: null, event: { deletedAt: null, ...ownEventFilter(ctx) } },
     include: {
       event: { include: { center: true } },
-      _count: { select: { participants: true } },
+      // Live people only: a participant removed by the full edit (M50) is soft-
+      // deleted, and must stop counting the moment they are removed.
+      _count: { select: { participants: { where: { deletedAt: null } } } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -762,7 +775,9 @@ async function assertRegistrationWritable(id: string, ctx: AdminContext) {
       // paying for a second round trip.
       event: {
         select: {
+          id: true,
           centerId: true,
+          maxRegistrations: true,
           participationPricingTypes: true,
           mealPricingTypes: true,
         },
@@ -1071,6 +1086,11 @@ export async function updateRegistration(
   // One transaction: the registration row and every participant's prices move
   // together, so a failure can never leave a total disagreeing with its parts.
   await prisma.$transaction(async (tx) => {
+    // Un-cancelling takes a slot again — the same capacity gate a new registration
+    // passes (M50; before, a re-activated registration could overfill an event).
+    if (before.status === "CANCELLED" && input.status !== "CANCELLED") {
+      await assertCapacityForReactivation(tx, before.event.id, before.event.maxRegistrations, id);
+    }
     await tx.registration.update({
       where: { id },
       data: {
@@ -1161,6 +1181,557 @@ export async function updateRegistration(
   });
 
   return { id };
+}
+
+// ─── Admin FULL registration edit (M50) ───────────────────────────────────────
+// The registration team fixes a booking on site — a family registered, one of them
+// did not come; someone leaves a day early; a child was booked as an adult — and
+// collects the price the changed booking actually costs. Everything the registrant
+// chose is editable except their e-mail (Martin, 2026-09-28). `updateRegistration`
+// above stays as it is: it is the narrower edit the current detail editor uses.
+//
+// ONE preparation function feeds both the live price preview and the save, so the
+// number the admin sees while clicking and the number written can never disagree.
+
+// The stay the admin chose breaks a stay rule, or names a day of another event
+// → 422 `stay_invalid`. (The public submit answers the same rules with 400,
+// because there only a tampered payload can reach them; here the admin's own
+// editor is the caller, and the reason is what it shows.)
+export class RegistrationStayInvalidError extends Error {
+  readonly reason: StayRuleViolation | "day_unknown";
+  constructor(reason: StayRuleViolation | "day_unknown") {
+    super(reason === "day_unknown" ? "Stay day does not belong to this event" : STAY_RULE_MESSAGES[reason]);
+    this.name = "RegistrationStayInvalidError";
+    this.reason = reason;
+  }
+}
+
+// A meal the admin ticked cannot be booked for this person → 422 with its code:
+// not a meal of this event; a slot the event closed for that day (never served —
+// Martin, 2026-09-28); or a slot outside the person's stay. The public submit
+// never checked the last one server-side — only its form hid those meals — and an
+// admin moving an arrival one day later is exactly the edit that would otherwise
+// keep charging the meals of a day the person is not there.
+//
+// It names the person (their index in the editor's list) and the meal, so the
+// editor can mark the exact box instead of answering every save with a refusal
+// nobody can act on.
+export type MealInvalidCode = "meal_unknown" | "meal_closed" | "meal_outside_stay";
+export class RegistrationMealInvalidError extends Error {
+  readonly code: MealInvalidCode;
+  readonly participantIndex: number;
+  readonly mealId: string;
+  constructor(code: MealInvalidCode, participantIndex: number, mealId: string) {
+    super(`Meal refused: ${code}`);
+    this.name = "RegistrationMealInvalidError";
+    this.code = code;
+    this.participantIndex = participantIndex;
+    this.mealId = mealId;
+  }
+}
+
+// Someone saved this registration after the editor loaded it → 409. Writing
+// anyway would silently overwrite their edit with a state built on the old one.
+export class RegistrationChangedError extends Error {
+  constructor(message = "Registration was changed by someone else") {
+    super(message);
+    this.name = "RegistrationChangedError";
+  }
+}
+
+// Re-activating a CANCELLED registration takes a slot again, so it must pass the
+// same capacity gate a new registration passes (submitRegistration). Locks the
+// Event row first — the lock submit takes by bumping its counter — so a re-
+// activation and a new registration racing for the last slot are serialized, and
+// registrationSeq (the registration numbers) is not touched. No-op for an event
+// without a limit (the common case: an empty maxRegistrations means unlimited).
+async function assertCapacityForReactivation(
+  tx: Prisma.TransactionClient,
+  eventId: string,
+  maxRegistrations: number | null | undefined,
+  registrationId: string,
+): Promise<void> {
+  if (maxRegistrations == null) return;
+  await tx.$queryRaw`SELECT id FROM "Event" WHERE id = ${eventId} FOR UPDATE`;
+  const taken = await tx.registration.count({
+    where: {
+      eventId,
+      deletedAt: null,
+      status: { in: ["REGISTERED", "PAID"] },
+      id: { not: registrationId },
+    },
+  });
+  if (taken >= maxRegistrations) throw new RegistrationCapacityError();
+}
+
+// Everything a full edit needs, in one read. The event is reached through the
+// registration — never through public visibility, because the registrations that
+// most need fixing belong to events that are running or already over. A soft-
+// deleted event reads as missing.
+async function loadRegistrationForFullEdit(id: string) {
+  return prisma.registration.findFirst({
+    where: { id, deletedAt: null, event: { deletedAt: null } },
+    select: {
+      id: true,
+      status: true,
+      centerId: true,
+      hasAccommodation: true,
+      arrivalDateId: true,
+      arrivalTime: true,
+      departureDateId: true,
+      earlyDeparture: true,
+      totalPrice: true,
+      event: {
+        select: {
+          id: true,
+          centerId: true,
+          maxRegistrations: true,
+          mealRegistrationDeadline: true,
+          participationPricingTypes: true,
+          mealPricingTypes: true,
+          dates: {
+            orderBy: { sortOrder: "asc" },
+            select: { id: true, date: true, sortOrder: true, label_cs: true, label_en: true },
+          },
+          meals: {
+            select: { id: true, eventDateId: true, mealType: true, price: true, isClosed: true },
+          },
+          pricingRules: true,
+          mealPricingRules: true,
+        },
+      },
+      participants: {
+        where: { deletedAt: null },
+        orderBy: { sortOrder: "asc" },
+        select: {
+          id: true,
+          fullName: true,
+          ageCategory: true,
+          pricingType: true,
+          mealPricingType: true,
+          mealType: true,
+          participationPrice: true,
+          mealPrice: true,
+          totalPrice: true,
+          sortOrder: true,
+          meals: { select: { id: true, eventMealId: true, price: true } },
+        },
+      },
+    },
+  });
+}
+
+type FullEditStored = NonNullable<Awaited<ReturnType<typeof loadRegistrationForFullEdit>>>;
+
+type FullEditParticipantPlan = {
+  input: RegistrationFullPreviewInput["participants"][number];
+  current: FullEditStored["participants"][number] | undefined;
+  participationPrice: number;
+  mealPrice: number;
+  totalPrice: number;
+  // Every meal this person keeps or gets, each priced for them at their MEAL tier.
+  meals: { eventMealId: string; price: number }[];
+};
+
+type FullEditPlan = {
+  stored: FullEditStored;
+  participants: FullEditParticipantPlan[];
+  removed: FullEditStored["participants"];
+  totalPrice: number;
+  mealDeadlinePassed: boolean;
+};
+
+async function prepareFullUpdate(
+  id: string,
+  input: RegistrationFullPreviewInput,
+  ctx: AdminContext,
+): Promise<FullEditPlan> {
+  const stored = await loadRegistrationForFullEdit(id);
+  if (!stored) throw new RegistrationNotFoundError();
+  if (ctx.role === "ADMIN" && !ctx.centerIds.includes(stored.event.centerId)) {
+    throw new RegistrationForbiddenError();
+  }
+  const ev = stored.event;
+
+  // Home centre: a CHANGED one must exist and be active. The stored one is a fact
+  // to keep, not a request to approve — re-checking it would make every save of a
+  // registration whose centre was later deactivated fail, however unrelated.
+  if (input.centerId !== stored.centerId) {
+    const center = await prisma.center.findFirst({
+      where: { id: input.centerId, isActive: true },
+      select: { id: true },
+    });
+    if (!center) throw new RegistrationCenterInvalidError();
+  }
+
+  // Stay: both days of THIS event, in an order the shared rules accept.
+  const dateById = new Map(ev.dates.map((d) => [d.id, d]));
+  const arrival = dateById.get(input.arrivalDateId);
+  const departure = dateById.get(input.departureDateId);
+  if (!arrival || !departure) throw new RegistrationStayInvalidError("day_unknown");
+  const violation = checkStayOrder({
+    arrivalSortOrder: arrival.sortOrder,
+    departureSortOrder: departure.sortOrder,
+    arrivalTime: input.arrivalTime,
+    earlyDeparture: input.earlyDeparture,
+  });
+  if (violation) throw new RegistrationStayInvalidError(violation);
+
+  // Participants: an id must be a live participant of THIS registration; one the
+  // list no longer carries is being removed.
+  const storedById = new Map(stored.participants.map((p) => [p.id, p]));
+  for (const p of input.participants) {
+    if (p.id !== undefined && !storedById.has(p.id)) throw new RegistrationParticipantMismatchError();
+  }
+  const keptIds = new Set(input.participants.flatMap((p) => (p.id ? [p.id] : [])));
+  const removed = stored.participants.filter((p) => !keptIds.has(p.id));
+
+  // Tiers: each checked against the event's OWN set for its half (invariant 22).
+  // A tier an existing participant already holds is kept even if the event has
+  // since stopped offering it — the same "stranded tier" rule updateRegistration
+  // applies, for the same reason: otherwise a name fix would fail on a tier nobody
+  // touched. A new person, or a tier that moved, must be one the event offers.
+  const allows = (set: string[], tier: string) => set.length === 0 || set.includes(tier);
+  for (const [participantIndex, p] of input.participants.entries()) {
+    const current = p.id ? storedById.get(p.id) : undefined;
+    if (current?.pricingType !== p.pricingType && !allows(ev.participationPricingTypes, p.pricingType)) {
+      throw new RegistrationPricingTypeUnavailableError(
+        `Participation tier ${p.pricingType} is not offered by this event`,
+        { participantIndex, half: "stay" },
+      );
+    }
+    if (current?.mealPricingType !== p.mealPricingType && !allows(ev.mealPricingTypes, p.mealPricingType)) {
+      throw new RegistrationPricingTypeUnavailableError(
+        `Meal tier ${p.mealPricingType} is not offered by this event`,
+        { participantIndex, half: "meals" },
+      );
+    }
+  }
+
+  // Meals: of this event, open, and inside the NEW stay. The meal deadline is
+  // deliberately not a gate here (Martin, 2026-09-28): it closes the public form,
+  // and the team adding a lunch on site after it is the point of this editor. The
+  // flag goes back to the editor, which says so.
+  const eventDates = ev.dates.map((d) => ({
+    id: d.id,
+    date: d.date.toISOString().slice(0, 10),
+    sortOrder: d.sortOrder,
+    label_cs: d.label_cs,
+    label_en: d.label_en,
+  }));
+  const mealById = new Map(ev.meals.map((m) => [m.id, m]));
+  const presentFor = getAvailableMealIds(
+    {
+      arrivalDateId: input.arrivalDateId,
+      arrivalTime: input.arrivalTime,
+      departureDateId: input.departureDateId,
+      earlyDeparture: input.earlyDeparture,
+    },
+    eventDates,
+    ev.meals,
+  );
+  for (const [i, p] of input.participants.entries()) {
+    for (const mealId of p.mealIds) {
+      const slot = mealById.get(mealId);
+      if (!slot) throw new RegistrationMealInvalidError("meal_unknown", i, mealId);
+      if (slot.isClosed) throw new RegistrationMealInvalidError("meal_closed", i, mealId);
+      if (!presentFor.has(mealId)) throw new RegistrationMealInvalidError("meal_outside_stay", i, mealId);
+    }
+  }
+
+  // The price, from the same engine as the public submit (invariants 3–4). Input
+  // order = the editor's order; results are positional, so they are read back by
+  // the same index below.
+  const priced = calculatePricing({
+    participants: input.participants.map((p) => ({
+      ageCategory: p.ageCategory,
+      pricingType: p.pricingType,
+      mealPricingType: p.mealPricingType,
+      mealIds: p.mealIds,
+    })),
+    pricingRules: ev.pricingRules,
+    mealPricingRules: ev.mealPricingRules,
+    meals: ev.meals,
+    eventDates,
+    arrivalDateId: input.arrivalDateId,
+    arrivalTime: input.arrivalTime,
+    departureDateId: input.departureDateId,
+    earlyDeparture: input.earlyDeparture,
+    hasAccommodation: input.hasAccommodation,
+  });
+
+  const participants = input.participants.map((p, i) => ({
+    input: p,
+    current: p.id ? storedById.get(p.id) : undefined,
+    participationPrice: priced.participants[i]?.participationPrice ?? 0,
+    mealPrice: priced.participants[i]?.mealPrice ?? 0,
+    totalPrice: priced.participants[i]?.subtotal ?? 0,
+    meals: p.mealIds.map((mealId) => {
+      const slot = mealById.get(mealId)!; // every id was checked above
+      return {
+        eventMealId: mealId,
+        // Through the same lookup the engine used, at the MEAL tier (invariant 21),
+        // so each stored per-meal price agrees with the person's mealPrice.
+        price: resolveMealPrice(
+          slot.mealType,
+          { ageCategory: p.ageCategory, mealPricingType: p.mealPricingType },
+          ev.mealPricingRules,
+          slot.price,
+        ),
+      };
+    }),
+  }));
+
+  return {
+    stored,
+    participants,
+    removed,
+    totalPrice: priced.totalPrice,
+    mealDeadlinePassed:
+      ev.mealRegistrationDeadline !== null && Date.now() >= ev.mealRegistrationDeadline.getTime(),
+  };
+}
+
+export type FullEditPreview = {
+  totalPrice: number;
+  // In the order the editor sent them; `id` null for a person being added.
+  participants: { id: string | null; participationPrice: number; mealPrice: number; subtotal: number }[];
+  mealDeadlinePassed: boolean;
+};
+
+// The live price while the admin clicks. Writes nothing. Refuses every combination
+// the save would refuse, so the editor learns of a bad one before saving — all but
+// the two that depend on the moment of saving: someone else saving in between, and
+// a full event when un-cancelling. Those only the save can know.
+export async function previewFullUpdate(
+  id: string,
+  input: RegistrationFullPreviewInput,
+  ctx: AdminContext,
+): Promise<FullEditPreview> {
+  const plan = await prepareFullUpdate(id, input, ctx);
+  return {
+    totalPrice: plan.totalPrice,
+    participants: plan.participants.map((p) => ({
+      id: p.input.id ?? null,
+      participationPrice: p.participationPrice,
+      mealPrice: p.mealPrice,
+      subtotal: p.totalPrice,
+    })),
+    mealDeadlinePassed: plan.mealDeadlinePassed,
+  };
+}
+
+// The audit image of a registration: every field the full edit can move, and each
+// participant with what they were charged and what they eat — enough to answer,
+// months later, "why did this family's price change, and who changed it".
+function fullEditAuditImage(
+  reg: Pick<
+    FullEditStored,
+    "status" | "centerId" | "hasAccommodation" | "arrivalDateId" | "arrivalTime" | "departureDateId" | "earlyDeparture" | "totalPrice"
+  >,
+  participants: {
+    id: string | null;
+    fullName: string;
+    ageCategory: string;
+    pricingType: string;
+    mealPricingType: string;
+    mealType: string;
+    totalPrice: number;
+    mealIds: string[];
+  }[],
+) {
+  return {
+    status: reg.status,
+    centerId: reg.centerId,
+    hasAccommodation: reg.hasAccommodation,
+    arrivalDateId: reg.arrivalDateId,
+    arrivalTime: reg.arrivalTime,
+    departureDateId: reg.departureDateId,
+    earlyDeparture: reg.earlyDeparture,
+    totalPrice: reg.totalPrice,
+    participants,
+  };
+}
+
+// An existing participant's row needs a write only when something on it moved.
+function participantRowChanged(p: FullEditParticipantPlan): boolean {
+  const c = p.current!;
+  return (
+    c.fullName !== p.input.fullName ||
+    c.ageCategory !== p.input.ageCategory ||
+    c.pricingType !== p.input.pricingType ||
+    c.mealPricingType !== p.input.mealPricingType ||
+    c.mealType !== p.input.mealType ||
+    c.participationPrice !== p.participationPrice ||
+    c.mealPrice !== p.mealPrice ||
+    c.totalPrice !== p.totalPrice
+  );
+}
+
+// The save. The number, the idempotency key, the locale, the e-mail and the
+// confirmation timestamp are never written — they are not in the data below. No
+// e-mail is sent (Martin, 2026-09-28): the admin resends the confirmation by hand
+// when they want the registrant to have the new state.
+export async function applyFullUpdate(
+  id: string,
+  input: RegistrationFullUpdateInput,
+  ctx: AdminContext,
+): Promise<{ id: string; totalPrice: number; updatedAt: string }> {
+  const plan = await prepareFullUpdate(id, input, ctx);
+  const { stored } = plan;
+  const reactivating = stored.status === "CANCELLED" && input.status !== "CANCELLED";
+
+  // Meal-row work, planned before the transaction so the transaction only writes.
+  const mealRowsToDelete: string[] = [];
+  const mealRowsToCreate: { participantId: string | null; index: number; eventMealId: string; price: number }[] = [];
+  const mealRowsToReprice: { id: string; price: number }[] = [];
+  plan.participants.forEach((p, index) => {
+    const wanted = new Map(p.meals.map((m) => [m.eventMealId, m.price]));
+    const have = new Map((p.current?.meals ?? []).map((m) => [m.eventMealId, m]));
+    for (const [eventMealId, row] of have) {
+      const price = wanted.get(eventMealId);
+      if (price === undefined) mealRowsToDelete.push(row.id);
+      else if (price !== row.price) mealRowsToReprice.push({ id: row.id, price });
+    }
+    for (const [eventMealId, price] of wanted) {
+      if (!have.has(eventMealId)) {
+        mealRowsToCreate.push({ participantId: p.current?.id ?? null, index, eventMealId, price });
+      }
+    }
+  });
+
+  let nextSortOrder = Math.max(-1, ...stored.participants.map((p) => p.sortOrder)) + 1;
+  const createdIds = new Map<number, string>();
+  // Written explicitly and handed back, so the editor can save again without
+  // reloading: it holds the token the row now carries, not the one it opened with.
+  const savedAt = new Date();
+  const expected = new Date(input.expectedUpdatedAt);
+
+  // One transaction. Timeout set explicitly: the function region and the database
+  // are an ocean apart, so every statement is a long round trip; the plan above
+  // keeps the count low (unchanged rows are not written, meal rows go in batches).
+  await prisma.$transaction(
+    async (tx) => {
+      if (reactivating) {
+        // The Event row is locked before the registration (the order the public
+        // submit and the narrow edit take them in). Staleness is checked first all
+        // the same: a registration someone else re-activated meanwhile must answer
+        // "changed", not "event full" — the full event would be their doing.
+        const stillAsLoaded = await tx.registration.count({ where: { id, updatedAt: expected } });
+        if (stillAsLoaded === 0) throw new RegistrationChangedError();
+        await assertCapacityForReactivation(tx, stored.event.id, stored.event.maxRegistrations, id);
+      }
+
+      // The concurrency guard IS the registration write: it matches only while the
+      // row still carries the updatedAt the editor loaded. Nothing else is written
+      // if it misses, and the throw rolls back the capacity lock with it.
+      const guard = await tx.registration.updateMany({
+        where: { id, deletedAt: null, updatedAt: expected },
+        data: {
+          updatedAt: savedAt,
+          status: input.status,
+          centerId: input.centerId,
+          hasAccommodation: input.hasAccommodation,
+          arrivalDateId: input.arrivalDateId,
+          arrivalTime: input.arrivalTime,
+          departureDateId: input.departureDateId,
+          earlyDeparture: input.earlyDeparture,
+          totalPrice: plan.totalPrice,
+        },
+      });
+      if (guard.count === 0) throw new RegistrationChangedError();
+
+      // Removed people are soft-deleted (invariant 9): gone from every count, list,
+      // export and e-mail — all of which read `deletedAt: null` — but still there
+      // for the audit trail, with the meals they had.
+      if (plan.removed.length > 0) {
+        await tx.participant.updateMany({
+          where: { id: { in: plan.removed.map((p) => p.id) }, registrationId: id },
+          data: { deletedAt: new Date() },
+        });
+      }
+
+      for (const [index, p] of plan.participants.entries()) {
+        const data = {
+          fullName: p.input.fullName,
+          ageCategory: p.input.ageCategory,
+          // Both tiers in the same write as the prices they produced (invariant 22).
+          pricingType: p.input.pricingType,
+          mealPricingType: p.input.mealPricingType,
+          mealType: p.input.mealType,
+          participationPrice: p.participationPrice,
+          mealPrice: p.mealPrice,
+          totalPrice: p.totalPrice,
+        };
+        if (p.current) {
+          if (participantRowChanged(p)) {
+            await tx.participant.update({ where: { id: p.current.id }, data });
+          }
+        } else {
+          const created = await tx.participant.create({
+            data: { ...data, registrationId: id, sortOrder: nextSortOrder++ },
+            select: { id: true },
+          });
+          createdIds.set(index, created.id);
+        }
+      }
+
+      if (mealRowsToDelete.length > 0) {
+        await tx.participantMeal.deleteMany({ where: { id: { in: mealRowsToDelete } } });
+      }
+      if (mealRowsToCreate.length > 0) {
+        await tx.participantMeal.createMany({
+          data: mealRowsToCreate.map((m) => ({
+            participantId: m.participantId ?? createdIds.get(m.index)!,
+            eventMealId: m.eventMealId,
+            price: m.price,
+          })),
+        });
+      }
+      // A kept meal whose price moved (age or meal tier changed): one statement per
+      // distinct price, as updateRegistration does.
+      for (const [price, ids] of groupMealSnapshotsByPrice([{ mealSnapshots: mealRowsToReprice }])) {
+        await tx.participantMeal.updateMany({ where: { id: { in: ids } }, data: { price } });
+      }
+    },
+    { maxWait: 5_000, timeout: 15_000 },
+  );
+
+  await logAuditEvent({
+    userId: ctx.userId,
+    ip: ctx.ip,
+    action: "registration.full_update",
+    entityType: "Registration",
+    entityId: id,
+    oldData: fullEditAuditImage(
+      stored,
+      stored.participants.map((p) => ({
+        id: p.id,
+        fullName: p.fullName,
+        ageCategory: p.ageCategory,
+        pricingType: p.pricingType,
+        mealPricingType: p.mealPricingType,
+        mealType: p.mealType,
+        totalPrice: p.totalPrice,
+        mealIds: p.meals.map((m) => m.eventMealId),
+      })),
+    ),
+    newData: fullEditAuditImage(
+      { ...input, totalPrice: plan.totalPrice },
+      plan.participants.map((p, index) => ({
+        id: p.current?.id ?? createdIds.get(index) ?? null,
+        fullName: p.input.fullName,
+        ageCategory: p.input.ageCategory,
+        pricingType: p.input.pricingType,
+        mealPricingType: p.input.mealPricingType,
+        mealType: p.input.mealType,
+        totalPrice: p.totalPrice,
+        mealIds: p.meals.map((m) => m.eventMealId),
+      })),
+    ),
+  });
+
+  return { id, totalPrice: plan.totalPrice, updatedAt: savedAt.toISOString() };
 }
 
 // Re-send the confirmation email (production bilingual template — P6).
@@ -1353,7 +1924,8 @@ export async function getEventAccommodationStats(
       select: {
         arrivalDate: { select: { sortOrder: true } },
         departureDate: { select: { sortOrder: true } },
-        _count: { select: { participants: true } },
+        // Beds are for live people only — a removed participant (M50) frees theirs.
+        _count: { select: { participants: { where: { deletedAt: null } } } },
       },
     }),
   ]);

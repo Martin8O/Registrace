@@ -10,6 +10,7 @@ import {
   RegistrationCenterInvalidError,
   RegistrationPricingTypeUnavailableError,
   RegistrationParticipantMismatchError,
+  RegistrationCapacityError,
 } from "@/modules/registrations";
 
 // GET — one registration (full detail), ownership-scoped. Missing/not-owned → 404.
@@ -75,6 +76,13 @@ export async function PUT(
       return NextResponse.json(
         { error: "Unknown participant", code: "participant_unknown" },
         { status: 422 },
+      );
+    }
+    // Un-cancelling onto an event whose registration limit is already full (M50).
+    if (err instanceof RegistrationCapacityError) {
+      return NextResponse.json(
+        { error: "Event capacity reached", code: "capacity_reached" },
+        { status: 409 },
       );
     }
     throw err;

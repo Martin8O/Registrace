@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-350%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-442%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -221,7 +221,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 350 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 442 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -631,7 +631,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **350 Vitest tests** across 26 files, with **no database required**:
+`npm test` runs **442 Vitest tests** across 31 files, with **no database required**:
 
 - **Pricing engine** (48) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -644,19 +644,25 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   two fallback contracts: no price list at all → the event's flat price; a gap in a list that
   exists → `0`, never the flat price. Plus the rule that a payload arriving without a meal tier
   falls back to that person's own tier rather than to the standard one.
-- **Validation** (16) — the Zod submit/price schemas (honeypot, participant caps, the tier
-  accepted at every age but still bounded by its enum, the independent meal tier, diet).
+- **Validation** (25) — the Zod submit/price schemas (honeypot, participant caps, the tier
+  accepted at every age but still bounded by its enum, the independent meal tier, diet). Plus the
+  admin full-edit schemas: no e-mail field, both tiers required, one to ten people, the
+  `updatedAt` the save is guarded by, and a person or a meal listed twice refused with its path.
+- **Stay rules** (6) — the three stay-order rules (departure never before arrival; a same-day
+  stay never arrives in the evening; leaving after breakfast on the same day needs a morning
+  arrival), one shared definition for the public submit and the admin full edit.
 - **Event configuration** (8) — that an event's two tier sets must each be non-empty and contain
   the standard tier, and that neither price list may quote a tier the event does not offer —
   each list checked against its own set, never the other's.
-- **Submit service** (21) — control-flow with a **mocked Prisma** (`vi.mock('@/lib/db')`) while
+- **Submit service** (25) — control-flow with a **mocked Prisma** (`vi.mock('@/lib/db')`) while
   keeping the real engine, so `totalPrice` is asserted end-to-end; plus the two tiers pricing
   the two halves independently, both being persisted, each meal snapshotted at the meal tier's
   price, a tier the event does not offer being refused before anything is written, and both
   tiers reaching the confirmation email — **for a child as well as an adult**. Three more pin
   that each ordered meal reaches the mail with its day and that day's sort order, in the
   caller's language: the confirmation groups meals by day, which it cannot do from the
-  pre-composed slot label it used to be handed.
+  pre-composed slot label it used to be handed. Four more pin the three stay-order rules on the
+  submit path (and that a same-day morning visit leaving after breakfast is accepted).
 - **Admin re-pricing** (30) — that toggling a registration's accommodation re-prices it through
   the real engine (both directions, children included — no age is special-cased), that a centre
   or status edit writes no price and issues no extra query, that the registration and its
@@ -674,6 +680,26 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   round trips inside a single transaction. Three more check the audit entry: a tier edit records
   the before/after tiers of exactly the people who moved, beside the old and new total, and adds
   nothing at all when no tier moved.
+- **Admin full edit** (40) — the registration team's on-site fix of a stored booking: a family
+  member removed (soft-deleted, the total drops by exactly their price, their meal rows kept for
+  the audit), a person added, meals swapped, the stay moved, accommodation and early departure,
+  a child re-booked as an adult — each re-priced by the real engine. The meal tier prices the
+  meals and the stay tier the stay, whichever moves (the fixture stays standard and eats
+  supported). Refused before anything is written: a meal outside the new stay, a closed meal,
+  another event's meal or day, a broken stay rule, a tier the event does not offer (except one a
+  person already holds), a stranger's participant id, an inactive new centre, another centre's
+  admin — a refused meal or tier names the person (and the meal, or the half). A save guarded by
+  the `updatedAt` the editor loaded (someone saved in between → 409, no audit — also when the
+  stale save un-cancels), the new `updatedAt` written and handed back so a second save needs no
+  reload, un-cancelling onto a full event refused under an Event row lock that never touches the
+  registration numbers, the whole before/after image audited, and the live preview pricing the
+  same state without writing. Plus the two counts of people (list, beds per night) reading live
+  participants only.
+- **Full-edit endpoints** (17 + 8 + 8) — the refusal map both endpoints share (every service
+  error to its own status and `code`; a body that is not JSON is a 400, not a 500), then the save
+  and the preview each: guard first, validation, the service called with the id and context, a
+  refusal passed through, an unexpected error not swallowed; the save refuses a body without its
+  `updatedAt`.
 - **Event lifecycle** (15) — the one definition of when a published event closes (20:00 Prague
   on its end day, in summer and winter time alike) and archives (20:00 three days later, pinned
   across a DST switch and across a year end), that DRAFT and ARCHIVED are never touched, that a missed close goes

@@ -263,6 +263,7 @@
         "registration": {
           "update": "Úprava registrace",
           "status_change": "Změna stavu registrace",
+          "full_update": "Kompletní úprava registrace",
           "export": "Export registrací"
         },
         "email": {

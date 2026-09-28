@@ -263,6 +263,7 @@
         "registration": {
           "update": "Registration updated",
           "status_change": "Registration status changed",
+          "full_update": "Registration fully edited",
           "export": "Registrations export"
         },
         "email": {
