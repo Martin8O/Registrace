@@ -4,13 +4,13 @@ import { getLocale, getTranslations } from 'next-intl/server'
 import { getAdminContext } from '@/modules/auth'
 import { getRegistrationForDetail } from '@/modules/registrations'
 import { getCentersForSelect } from '@/modules/events'
-import RegistrationDetailEditor from '@/components/admin/RegistrationDetailEditor'
+import RegistrationFullEditor, { type FullEditorData } from '@/components/admin/RegistrationFullEditor'
 import PricingInfoButton from '@/components/public/PricingInfoButton'
 
 // Server component: loads one registration (ownership-scoped → notFound for a
-// missing / not-owned id), renders the read-only summary + participants, and
-// hands the editable fields (centre / accommodation / status + save / resend) to
-// a client island.
+// missing / not-owned id), renders the read-only facts (e-mail, event, home
+// centre), and hands everything the registrant chose — stay, people, meals — to
+// the full editor island (M50b), which re-prices through the server and saves.
 export default async function RegistrationDetailPage({
   params,
 }: {
@@ -31,15 +31,46 @@ export default async function RegistrationDetailPage({
   const base = `/${locale}/admin`
 
   const eventTitle = `${lang === 'cs' ? detail.event.centerName_cs : detail.event.centerName_en} — ${lang === 'cs' ? detail.event.title_cs : detail.event.title_en}`
-  const arrivalLabel = lang === 'cs' ? detail.arrivalLabel_cs : detail.arrivalLabel_en
-  const departureLabel = lang === 'cs' ? detail.departureLabel_cs : detail.departureLabel_en
-  // Registrant's home centre is display-only here (admins don't change it).
+  // The registrant's home centre and e-mail are shown, not edited: admins do not
+  // re-home a registrant, and the e-mail is not editable (Martin, 2026-09-28).
   const homeCenter = centers.find((c) => c.id === detail.centerId)
   const homeCenterName = homeCenter
     ? lang === 'cs'
       ? homeCenter.name_cs
       : homeCenter.name_en
     : detail.centerId
+
+  const data: FullEditorData = {
+    registrationId: detail.id,
+    registrationNumber: detail.registrationNumber ?? detail.id,
+    updatedAt: detail.updatedAt,
+    centerId: detail.centerId,
+    status: detail.status,
+    totalPrice: detail.totalPrice,
+    hasAccommodation: detail.hasAccommodation,
+    arrivalDateId: detail.arrivalDateId,
+    arrivalTime: detail.arrivalTime as FullEditorData['arrivalTime'],
+    departureDateId: detail.departureDateId,
+    earlyDeparture: detail.earlyDeparture as FullEditorData['earlyDeparture'],
+    participants: detail.participants.map((p) => ({
+      id: p.id,
+      fullName: p.fullName,
+      ageCategory: p.ageCategory as FullEditorData['participants'][number]['ageCategory'],
+      pricingType: p.pricingType as FullEditorData['participants'][number]['pricingType'],
+      mealPricingType: p.mealPricingType as FullEditorData['participants'][number]['mealPricingType'],
+      mealType: p.mealType as FullEditorData['participants'][number]['mealType'],
+      mealIds: p.mealIds,
+      totalPrice: p.totalPrice,
+    })),
+    event: {
+      dates: detail.eventDates,
+      meals: detail.eventMeals,
+      mealPricingRules: detail.eventMealPricingRules,
+      participationPricingTypes: detail.eventParticipationPricingTypes,
+      mealPricingTypes: detail.eventMealPricingTypes,
+      mealDeadline: detail.eventMealDeadline,
+    },
+  }
 
   return (
     <div className="space-y-6">
@@ -58,13 +89,8 @@ export default async function RegistrationDetailPage({
         </Link>
       </header>
 
-      {/* The number band (number + live status badge + pricing-info popup) and
-          the editable card both live inside RegistrationDetailEditor; the
-          read-only summary is passed as its children so it renders between them. */}
-      <RegistrationDetailEditor
-        registrationId={detail.id}
-        centerId={detail.centerId}
-        registrationNumber={detail.registrationNumber ?? detail.id}
+      <RegistrationFullEditor
+        data={data}
         numberLabel={t('registrationDetail.number')}
         pricingButton={
           <PricingInfoButton
@@ -75,21 +101,8 @@ export default async function RegistrationDetailPage({
             mealPricingTypes={detail.eventMealPricingTypes}
           />
         }
-        initialHasAccommodation={detail.hasAccommodation}
-        initialStatus={detail.status}
-        // Each participant's two tiers are editable here: they move money, and the
-        // server re-prices through the real engine before writing (invariants 3-4).
-        initialParticipants={detail.participants.map((p) => ({
-          id: p.id,
-          fullName: p.fullName,
-          pricingType: p.pricingType as 'STANDARD' | 'SUPPORTED' | 'SURPLUS',
-          mealPricingType: p.mealPricingType as 'STANDARD' | 'SUPPORTED' | 'SURPLUS',
-        }))}
-        participationPricingTypes={detail.eventParticipationPricingTypes}
-        mealPricingTypes={detail.eventMealPricingTypes}
       >
-        {/* Read-only summary — the event name links to that event's registrations
-            page (all info + every registration of the event). */}
+        {/* Read-only facts — the event name links to that event's registrations. */}
         <section className="section-card space-y-5">
           <ReadOnlyRow label={t('registrationDetail.email')} value={detail.email} />
           <ReadOnlyRow
@@ -98,74 +111,8 @@ export default async function RegistrationDetailPage({
             href={`${base}/registrations?event=${detail.event.id}`}
           />
           <ReadOnlyRow label={t('registrationDetail.homeCenter')} value={homeCenterName} />
-          <ReadOnlyRow
-            label={t('registrationDetail.arrival')}
-            value={`${arrivalLabel} - ${t(`arrivalTime.${detail.arrivalTime}`).toLowerCase()}`}
-          />
-          <ReadOnlyRow
-            label={t('registrationDetail.departure')}
-            value={`${departureLabel} - ${(detail.earlyDeparture === 'AFTER_BREAKFAST'
-              ? t('registrationDetail.afterBreakfast')
-              : t('registrationDetail.untilEnd')
-            ).toLowerCase()}`}
-          />
         </section>
-      </RegistrationDetailEditor>
-
-      {/* Participants (read-only) — incl. each person's booked meals */}
-      <section className="section-card">
-        <h2 className="mb-4 font-serif text-xl font-semibold text-neutral-900">
-          {t('registrationDetail.participants')}
-        </h2>
-        <div className="space-y-4">
-          {detail.participants.map((p, i) => {
-            const meals = p.meals.map((m) => (lang === 'cs' ? m.label_cs : m.label_en))
-            // Both tiers, at every age (invariants 15 + 22) — this used to print
-            // nothing under 15, which left an admin unable to reconcile a child's
-            // amount against the price list on a course that charges 8–14.
-            // They are named apart only when they DIFFER (surplus room, supported
-            // food); when they agree, the single label already describes both.
-            const tiersDiffer = p.mealPricingType !== p.pricingType
-            return (
-              <div key={i} className={`participant-card ${i % 2 === 1 ? 'bg-gold-50' : ''}`}>
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-medium text-neutral-900">{p.fullName}</p>
-                  <p className="font-mono text-sm tabular-nums text-neutral-900">
-                    {p.totalPrice} CZK
-                  </p>
-                </div>
-                <p className="mt-1 text-sm text-neutral-600">
-                  {t(`age.${p.ageCategory}`)}
-                  {tiersDiffer
-                    ? ` · ${t('registrationDetail.participationPriceType')}: ${t(`pricingType.${p.pricingType}`)}` +
-                      ` · ${t('registrationDetail.mealPriceType')}: ${t(`pricingType.${p.mealPricingType}`)}`
-                    : ` · ${t(`pricingType.${p.pricingType}`)} ${t('registrationDetail.priceWord')}`}
-                  {` · ${t(`mealCategory.${p.mealType}`)} ${t('registrationDetail.mealWord')}`}
-                </p>
-                <div className="mt-3">
-                  <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-                    {t('registrationDetail.meals')}
-                  </p>
-                  {meals.length > 0 ? (
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
-                      {meals.map((m, j) => (
-                        <span
-                          key={j}
-                          className="rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-700"
-                        >
-                          {m}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="mt-1 text-sm text-neutral-400">—</p>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </section>
+      </RegistrationFullEditor>
     </div>
   )
 }

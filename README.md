@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-442%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-462%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -221,7 +221,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 442 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 462 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -631,7 +631,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **442 Vitest tests** across 31 files, with **no database required**:
+`npm test` runs **462 Vitest tests** across 31 files, with **no database required**:
 
 - **Pricing engine** (48) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -766,7 +766,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   letters and non-ASCII symbols must **not** tick a rule, or the checklist would green-light a
   password Supabase rejects), that the checklist and the submit gate can never disagree, and
   that every rule is labelled in both locales.
-- **Component rendering** (21 + 18 + 12) — the two islands that move money, rendered for real in
+- **Component rendering** (21 + 38 + 12) — the two islands that move money, rendered for real in
   jsdom with the actual locale file as messages (so a missing key fails here rather than showing
   a raw key to a registrant). The public form: which tier selector each of the four offer-variants
   renders, meal labels priced from the **meal** tier and repainted by it and by age but never by
@@ -775,15 +775,27 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   the stay tier, miss the price list and bill the meal at 0. Plus the success panel: the
   registration number, the confirmation actually going to the address shown, the honest "it did
   not send" when it did not, and nothing extra for the honeypot's numberless fake success. The
-  admin tier editor: the same four variants, each half listing only its own set, an empty set
-  reading as all three, a save that sends choices and never amounts, and a refusal that states
-  its reason instead of "try again". Three more guard the resend button: it is disabled for a
-  **cancelled** registration and says why, it stays available for a live one, and it follows the
-  status the admin has SELECTED rather than the stored one — confirming a booking somebody is in
-  the middle of cancelling is the same contradiction one save later. Three cover the stranded case the click-through could not reach at all: the
-  stored tier stays in the options so the select cannot show a different one, a single-tier half
-  still renders when somebody is stranded on it (otherwise the block opened with a name and no
-  control, hiding the tier it exists to reveal), and nobody else's controls are dragged into view.
+  admin **full registration editor** (M50b): it opens exactly as the registrant submitted it (stay,
+  names, ages, diets, ticked meals), shows the stored prices greyed until the server has priced the
+  registration once on open — a stored total today's engine disagrees with shows the number the
+  save will write — and typing a name never costs a request; a failed price request can be sent
+  again. Meal pills are priced at the person's **meal** tier,
+  a closed meal never offered, a stored meal outside the stay shown ticked and **flagged** rather
+  than hidden and blocking the save until unticked, the meal-deadline notice with the meals still
+  editable. The stay pills are disabled by the same shared stay rules the server applies (arrival
+  days excepted, so both ends can be moved), a later arrival drops everyone's meals of the day they
+  now miss, an impossible stay is explained and neither priced nor saved.
+  The last person cannot be removed, ten is the ceiling. The live price comes from the server and
+  the request carries choices only. A **paid** registration drops to registered when its price
+  changes, stays paid on a name fix, and the admin's own pick wins — for the price it was made
+  against. The save sends the loaded `updatedAt`, ids for stored people and none for a new one, no
+  e-mail, no amounts; a refused meal names the person, a refused tier the person and the half, a
+  concurrent save offers a reload. Re-ticking a meal is not a change, and an in-app link asks
+  before leaving unsaved changes. The old tier editor's guarantees are kept:
+  the tier-select variants, each half listing only its own set, an empty set reading as all three,
+  a stranded tier kept visible and selected, and the resend button disabled for a **cancelled**
+  registration (following the SELECTED status) — and now also while there are unsaved changes,
+  because it always sends the stored version.
   The event wizard: the description survives the review step — the last screen before publishing —
   with every line break and the blank line intact, under the rule that makes those breaks visible
   rather than collapsed, and its box is tall enough to look like somewhere paragraphs belong.

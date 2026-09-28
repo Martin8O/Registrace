@@ -591,7 +591,11 @@ export type AdminRegistrationDetailParticipant = {
   pricingType: string;
   mealPricingType: string;
   mealType: string; // MEAT | VEGETARIAN
+  participationPrice: number;
+  mealPrice: number;
   totalPrice: number;
+  // The ordered meal slots by id — what the full editor (M50b) ticks.
+  mealIds: string[];
   meals: { label_cs: string; label_en: string; mealType: string }[];
 };
 
@@ -625,6 +629,16 @@ export type AdminRegistrationDetailDTO = {
   // event never offered.
   eventParticipationPricingTypes: string[];
   eventMealPricingTypes: string[];
+  // What the full editor (M50b) needs to show the stay and the meal grid exactly as
+  // the registrant chose them: the day ids, the event's days, the meal cut-off
+  // (UTC ISO; the admin may book past it, the editor says so), the stored total,
+  // and the row's updatedAt — the token the save is guarded by.
+  arrivalDateId: string;
+  departureDateId: string;
+  eventDates: { id: string; date: string; label_cs: string; label_en: string; sortOrder: number }[];
+  eventMealDeadline: string | null;
+  totalPrice: number;
+  updatedAt: string;
   participants: AdminRegistrationDetailParticipant[];
 };
 
@@ -682,7 +696,13 @@ export async function getRegistrationForDetail(
     where: { id, deletedAt: null, event: { ...ownEventFilter(ctx) } },
     include: {
       event: {
-        include: { center: true, meals: true, pricingRules: true, mealPricingRules: true },
+        include: {
+          center: true,
+          meals: true,
+          pricingRules: true,
+          mealPricingRules: true,
+          dates: { orderBy: { sortOrder: "asc" } },
+        },
       },
       arrivalDate: true,
       departureDate: true,
@@ -742,6 +762,18 @@ export async function getRegistrationForDetail(
     })),
     eventParticipationPricingTypes: r.event.participationPricingTypes,
     eventMealPricingTypes: r.event.mealPricingTypes,
+    arrivalDateId: r.arrivalDateId,
+    departureDateId: r.departureDateId,
+    eventDates: r.event.dates.map((d) => ({
+      id: d.id,
+      date: d.date.toISOString().slice(0, 10),
+      label_cs: d.label_cs,
+      label_en: d.label_en,
+      sortOrder: d.sortOrder,
+    })),
+    eventMealDeadline: r.event.mealRegistrationDeadline?.toISOString() ?? null,
+    totalPrice: r.totalPrice,
+    updatedAt: r.updatedAt.toISOString(),
     participants: r.participants.map((p) => ({
       id: p.id,
       fullName: p.fullName,
@@ -749,7 +781,10 @@ export async function getRegistrationForDetail(
       pricingType: p.pricingType,
       mealPricingType: p.mealPricingType,
       mealType: p.mealType,
+      participationPrice: p.participationPrice,
+      mealPrice: p.mealPrice,
       totalPrice: p.totalPrice,
+      mealIds: p.meals.map((pm) => pm.eventMealId),
       meals: p.meals.map((pm) => ({
         label_cs: pm.eventMeal.label_cs,
         label_en: pm.eventMeal.label_en,
