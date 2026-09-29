@@ -1091,7 +1091,9 @@ function TierSelect({
 }) {
   return (
     <div>
-      <label htmlFor={id} className="mb-1 block text-xs font-medium text-neutral-500">
+      {/* The two tier labels are lower-case phrases (they were written to sit inside a
+          sentence); capitalised here so they read like every other field label. */}
+      <label htmlFor={id} className="mb-1 block text-xs font-medium text-neutral-500 first-letter:uppercase">
         {label}
       </label>
       <select id={id} className="bdc-input w-full" value={value} onChange={(e) => onChange(e.target.value as Tier)}>

@@ -128,11 +128,11 @@ single source of orientation for anyone joining the project.
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/admin-registrations.png" alt="Registrations list with filters, search and status badges" /></td>
-    <td width="50%"><img src="docs/screenshots/admin-registration-detail.png" alt="Registration detail with the per-participant tier editor, participants and meals" /></td>
+    <td width="50%"><img src="docs/screenshots/admin-registration-detail.png" alt="Registration detail: the full editor — stay, every participant with age, both tiers, diet and meals per day, live price" /></td>
   </tr>
   <tr>
     <td align="center"><em>Registrations — filter, search by number, status badges</em></td>
-    <td align="center"><em>Registration detail — status, accommodation, both tiers per participant</em></td>
+    <td align="center"><em>Registration detail — a full editor: stay, people, both tiers, meals, live price</em></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/admin-users.png" alt="Admin management with roles and assigned centres" /></td>
