@@ -345,7 +345,7 @@
       "save": "Uložit akci",
       "saveChanges": "Uložit změny",
       "saveAndPublish": "Uložit a publikovat",
-      "editLockedNote": "V režimu úprav lze měnit jen základní údaje, kontakty, kapacitu a stav. Centrum, termín, ceník a strava jsou po vytvoření uzamčené (jsou navázané na stávající registrace).",
+      "editLockedNote": "Tato akce už je zveřejněná nebo má registrace, proto lze měnit jen základní údaje, kontakty, kapacitu, stav a uzávěrku přihlašování jídel. Centrum, termín, ceník a jídla jsou uzamčené (jsou na nich navázané registrace).",
       "validationError": "Opravte prosím označená pole.",
       "errorsTitle": "Formulář obsahuje chyby:",
       "publishConfirmTitle": "Publikovat akci?",

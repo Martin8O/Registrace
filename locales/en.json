@@ -345,7 +345,7 @@
       "save": "Save event",
       "saveChanges": "Save changes",
       "saveAndPublish": "Save and publish",
-      "editLockedNote": "In edit mode you can change only the basic info, contacts, capacity and status. Center, schedule, pricing and meals are locked after creation (existing registrations depend on them).",
+      "editLockedNote": "This event is already published or has registrations, so you can change only the basic info, contacts, capacity, status and the meal registration deadline. Center, schedule, pricing and meals are locked (registrations depend on them).",
       "validationError": "Please fix the highlighted fields.",
       "errorsTitle": "The form has errors:",
       "publishConfirmTitle": "Publish event?",

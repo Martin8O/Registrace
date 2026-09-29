@@ -16,6 +16,9 @@ const eslintConfig = defineConfig([
     // install). Linting it produced ~400 errors that no one can act on and that
     // drowned out real findings in `npm run lint`.
     "generated/**",
+    // Gitignored maintainer workspace (notes, throwaway scripts) — not part of
+    // the app; tsconfig excludes it for the same reason (M49).
+    "local/**",
   ]),
 ]);
 

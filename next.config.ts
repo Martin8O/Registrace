@@ -36,6 +36,9 @@ const securityHeaders = [
 const ogImageHeaders = [{ key: 'Cross-Origin-Resource-Policy', value: 'cross-origin' }];
 
 const nextConfig: NextConfig = {
+  // No `X-Powered-By: Next.js` on every response (audit H5) — it only tells a
+  // scanner which framework's advisories to try.
+  poweredByHeader: false,
   async headers() {
     return [
       { source: '/:path*', headers: securityHeaders },
