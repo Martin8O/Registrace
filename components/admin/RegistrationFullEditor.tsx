@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } f
 import { useRouter } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { RegStatusBadge } from '@/components/admin/StatusBadge'
+import HelpHint from '@/components/admin/HelpHint'
 import { getAvailableMealIds, type ArrivalTime, type EarlyDeparture } from '@/lib/utils/mealAvailability'
 import { resolveMealPrice } from '@/lib/utils/mealPrice'
 import { checkStayOrder } from '@/lib/utils/stayRules'
@@ -891,15 +892,18 @@ function EditorBody({
               {t('registrationDetail.discard')}
             </button>
           )}
-          <button
-            type="button"
-            onClick={handleResend}
-            disabled={working || cancelled || dirty}
-            title={cancelled ? t('registrationDetail.resendCancelled') : dirty ? t('registrationDetail.resendNeedsSave') : undefined}
-            className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {t('registrationDetail.resend')}
-          </button>
+          <span className="inline-flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={working || cancelled || dirty}
+              title={cancelled ? t('registrationDetail.resendCancelled') : dirty ? t('registrationDetail.resendNeedsSave') : undefined}
+              className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {t('registrationDetail.resend')}
+            </button>
+            <HelpHint topic="resend" align="end" />
+          </span>
         </div>
         {/* A disabled button needs its reason beside it. Keyed off the SELECTED
             status: confirming a booking being cancelled is the same contradiction

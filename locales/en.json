@@ -156,7 +156,8 @@
       "users": "Admins",
       "logs": "Audit logs",
       "profile": "Profile",
-      "logout": "Log out"
+      "logout": "Log out",
+      "help": "Help"
     },
     "common": {
       "all": "All",
@@ -325,6 +326,7 @@
       "empty": "No events match the filter.",
       "filterStatus": "Status",
       "edit": "Edit",
+      "editEnded": "The event has ended — it is read-only. Its registrations can still be edited.",
       "details": "Details",
       "export": "Export",
       "table": {
@@ -413,7 +415,8 @@
         "intro": "Pricing rules are saved with the event.",
         "ageCategory": "Age category",
         "pricingType": "Price type",
-        "childNote": "Child categories are usually 0, but you can set your own daily and night rate – the calculation always follows the price list exactly. Arrival/departure discounts do not apply to children."
+        "childNote": "Child categories are usually 0, but you can set your own daily and night rate – the calculation always follows the price list exactly. Arrival/departure discounts do not apply to children.",
+        "discountsLabel": "Discounts"
       },
       "settings": {
         "mealDeadlineNote": "After this time, meals can no longer be ordered for the event (participation and accommodation stay open). Optional — with no deadline (empty field) meal registration has no time limit. The time is Czech local time (SELČ/SEČ handled automatically).",
@@ -452,8 +455,12 @@
         "maxRegistrations": "Must be a positive whole number",
         "mealDeadline": "The deadline must be at most a week before the start and no later than the end day.",
         "forbidden": "You are not allowed to create events for this centre.",
-        "submitFailed": "Saving failed. Please try again."
-      }
+        "submitFailed": "Saving failed. Please try again.",
+        "eventEnded": "This event has ended and can no longer be edited. Its registrations can still be edited.",
+        "unpublishRefused": "An event people have already registered for cannot go back to draft — it would disappear for everyone holding its link."
+      },
+      "endedNote": "This event has ended (at 20:00 on its last day), so it is read-only. Its registrations can still be edited — for example to mark them paid.",
+      "endedRegistrations": "Event registrations"
     },
     "registrations": {
       "title": "Registrations",

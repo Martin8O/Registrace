@@ -7,6 +7,7 @@ import {
   EventNotFoundError,
   EventOwnershipError,
   EventStatusTransitionError,
+  EventEndedError,
 } from "@/modules/events";
 
 // PATCH — change an event's lifecycle status, ownership-scoped. 400 invalid,
@@ -36,7 +37,7 @@ export async function PATCH(
     if (err instanceof EventNotFoundError) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    if (err instanceof EventStatusTransitionError) {
+    if (err instanceof EventStatusTransitionError || err instanceof EventEndedError) {
       return NextResponse.json({ error: err.message }, { status: 409 });
     }
     throw err;

@@ -34,8 +34,12 @@ export default function AdminSidebar({ role }: { role: AdminRole | null }) {
           { key: 'logs', href: `${base}/logs` },
         ]
       : []),
+    { key: 'help', href: `${base}/help` },
   ]
   const profileItem: NavItem = { key: 'profile', href: `${base}/profile` }
+  // The help page is Czech only, so switching language there would change
+  // nothing but the menu — the switcher is left out rather than seem broken.
+  const onHelp = pathname === `${base}/help`
 
   function isActive(item: NavItem): boolean {
     if (item.exact) return pathname === item.href
@@ -97,7 +101,7 @@ export default function AdminSidebar({ role }: { role: AdminRole | null }) {
             {navLinks(() => setOpen(false))}
             <div className="mt-1">{profileLink(() => setOpen(false))}</div>
             <div className="mt-4 flex items-center justify-between gap-3 border-t border-neutral-200 pt-4">
-              <LanguageSwitcher />
+              {onHelp ? <span /> : <LanguageSwitcher />}
               <LogoutButton className="btn-secondary" />
             </div>
           </div>
@@ -114,7 +118,7 @@ export default function AdminSidebar({ role }: { role: AdminRole | null }) {
         <nav className="flex-1 overflow-y-auto px-3 py-4">{navLinks()}</nav>
         <div className="px-3 pb-2">{profileLink()}</div>
         <div className="space-y-3 border-t border-neutral-200 px-3 py-4">
-          <LanguageSwitcher />
+          {!onHelp && <LanguageSwitcher />}
           <LogoutButton className="btn-secondary w-full" />
         </div>
       </aside>

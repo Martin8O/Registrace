@@ -34,7 +34,7 @@ vi.mock("@/lib/db", () => ({
 }));
 vi.mock("@/lib/audit", () => ({ logAuditEvent: h.auditCreate }));
 
-import { updateEvent } from "./index";
+import { updateEvent, setEventStatus, EventEndedError, EventStatusTransitionError } from "./index";
 
 const ctx = { role: "SUPER_ADMIN", userId: "u1", ip: null, centerIds: [] } as unknown as AdminContext;
 
@@ -53,7 +53,11 @@ const fullPayload = {
   meals: [],
 } as unknown as Parameters<typeof updateEvent>[1];
 
-function existingEvent(status: string, registrations: number) {
+// Far enough ahead that "the event is over" never trips a test about something else.
+const FUTURE_END = new Date("2099-01-03T00:00:00.000Z");
+const PAST_END = new Date("2020-01-03T00:00:00.000Z");
+
+function existingEvent(status: string, registrations: number, endDate: Date = FUTURE_END) {
   return {
     centerId: "c1",
     title_cs: "Původní",
@@ -67,6 +71,7 @@ function existingEvent(status: string, registrations: number) {
     contactEmail: null,
     maxRegistrations: null,
     status,
+    endDate,
     _count: { registrations },
   };
 }
@@ -138,5 +143,60 @@ describe("a draft nobody has registered for", () => {
     expect(h.transaction).toHaveBeenCalledTimes(1);
     // …and it did NOT fall through to the scalar-only write.
     expect(h.eventUpdate).not.toHaveBeenCalled();
+  });
+});
+
+// Martin, 2026-09-29: once an event is over it is read-only — not just the list's
+// Edit link, the write itself — but a MANUAL close before the end must stay
+// undoable, or one mis-click would take a live event off the web for good.
+describe("an event that is over", () => {
+  it.each(["PUBLISHED", "CLOSED", "ARCHIVED"])(
+    "%s after 20:00 on its end day refuses the write, and nothing is written or audited",
+    async (status) => {
+      h.eventFindFirst.mockResolvedValue(existingEvent(status, 3, PAST_END));
+
+      await expect(updateEvent("e1", fullPayload, ctx)).rejects.toBeInstanceOf(EventEndedError);
+      expect(h.eventUpdate).not.toHaveBeenCalled();
+      expect(h.transaction).not.toHaveBeenCalled();
+      expect(h.auditCreate).not.toHaveBeenCalled();
+    },
+  );
+
+  it("a CLOSED event whose end has not come yet stays editable, so a mistaken close can be undone", async () => {
+    h.eventFindFirst.mockResolvedValue(existingEvent("CLOSED", 3));
+
+    await updateEvent("e1", { ...fullPayload, status: "PUBLISHED" } as Parameters<typeof updateEvent>[1], ctx);
+
+    expect(writtenData()).toMatchObject({ status: "PUBLISHED" });
+  });
+
+  it("the status endpoint refuses an event that is over too — the wizard is not the only door", async () => {
+    h.eventFindFirst.mockResolvedValue(existingEvent("CLOSED", 3, PAST_END));
+
+    await expect(setEventStatus("e1", "PUBLISHED", ctx)).rejects.toBeInstanceOf(EventEndedError);
+    expect(h.eventUpdate).not.toHaveBeenCalled();
+  });
+});
+
+// Un-publishing hides the event from everyone holding its link. The status
+// endpoint always refused it once anyone had registered; the wizard's save did
+// not, and the wizard is the only screen that changes a status.
+describe("going back to draft", () => {
+  it("is refused once anyone has registered", async () => {
+    h.eventFindFirst.mockResolvedValue(existingEvent("PUBLISHED", 1));
+
+    await expect(
+      updateEvent("e1", { ...fullPayload, status: "DRAFT" } as Parameters<typeof updateEvent>[1], ctx),
+    ).rejects.toBeInstanceOf(EventStatusTransitionError);
+    expect(h.eventUpdate).not.toHaveBeenCalled();
+    expect(h.auditCreate).not.toHaveBeenCalled();
+  });
+
+  it("is allowed for a published event nobody has registered for", async () => {
+    h.eventFindFirst.mockResolvedValue(existingEvent("PUBLISHED", 0));
+
+    await updateEvent("e1", { ...fullPayload, status: "DRAFT" } as Parameters<typeof updateEvent>[1], ctx);
+
+    expect(writtenData()).toMatchObject({ status: "DRAFT" });
   });
 });

@@ -121,9 +121,9 @@ export default function AdminEventsTable({ events }: { events: AdminEventListIte
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-3 whitespace-nowrap">
-                        {/* Edit only for DRAFT / PUBLISHED (validate-only until
-                            PUT is wired in a later phase). */}
-                        {event.status === 'DRAFT' || event.status === 'PUBLISHED' ? (
+                        {/* Edit until the event is over (isEventEditable, decided
+                            on the server); after that it is read-only. */}
+                        {event.editable ? (
                           <Link
                             href={`${base}/events/${event.id}/edit`}
                             className="text-sm font-medium text-primary-600 hover:text-primary-700"
@@ -131,7 +131,10 @@ export default function AdminEventsTable({ events }: { events: AdminEventListIte
                             {t('events.edit')}
                           </Link>
                         ) : (
-                          <span className="text-sm font-medium text-neutral-300">
+                          <span
+                            className="text-sm font-medium text-neutral-300"
+                            title={t('events.editEnded')}
+                          >
                             {t('events.edit')}
                           </span>
                         )}

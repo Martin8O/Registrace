@@ -7,6 +7,8 @@ import {
   updateEvent,
   EventNotFoundError,
   EventOwnershipError,
+  EventEndedError,
+  EventStatusTransitionError,
 } from "@/modules/events";
 
 // GET — load one event for editing, ownership-scoped (ADMIN: own only). Missing
@@ -25,7 +27,9 @@ export async function GET(
 }
 
 // PUT — persist scalar+status edits (relations/centre/dates immutable, §0
-// decision 1). 422 invalid, 403 not-owner, 404 missing.
+// decision 1). 422 invalid, 403 not-owner, 404 missing, 409 with a code the
+// wizard words: `event_ended` (the event is over, read-only) or
+// `unpublish_refused` (back to draft while it has registrations).
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -49,6 +53,12 @@ export async function PUT(
     }
     if (err instanceof EventNotFoundError) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    if (err instanceof EventEndedError) {
+      return NextResponse.json({ error: "event_ended" }, { status: 409 });
+    }
+    if (err instanceof EventStatusTransitionError) {
+      return NextResponse.json({ error: "unpublish_refused" }, { status: 409 });
     }
     throw err;
   }

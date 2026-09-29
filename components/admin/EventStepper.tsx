@@ -6,6 +6,7 @@ import { useForm, type FieldErrors, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useLocale, useTranslations } from 'next-intl'
 import { eventCreateSchema, type EventCreateInput } from '@/lib/validation'
+import HelpHint, { type HelpHintTopic } from '@/components/admin/HelpHint'
 import type {
   EventDateDTO,
   EventMealDTO,
@@ -276,6 +277,7 @@ export default function EventStepper({
   initial,
   editData,
   canEditRelations = false,
+  canUnpublish = true,
   initialStep = 0,
 }: {
   centers: CenterOption[]
@@ -285,6 +287,10 @@ export default function EventStepper({
   // A draft event with no registrations is fully editable: centre, dates,
   // pricing and meals (not just scalars). Create mode is always fully editable.
   canEditRelations?: boolean
+  // False for a live event that already has registrations: Draft is then not
+  // offered (the server refuses it — it would hide the event from everyone
+  // holding its link).
+  canUnpublish?: boolean
   // The step to open on (read from ?step= by the server page) so switching
   // language keeps the current step instead of jumping back to step 1.
   initialStep?: number
@@ -572,7 +578,16 @@ export default function EventStepper({
         setSuccessKind(data.status === 'PUBLISHED' && !alreadyPublished ? 'published' : 'saved')
         return
       }
-      if (res.status === 403) {
+      if (res.status === 409) {
+        const refusal = (await res.json().catch(() => null)) as { error?: string } | null
+        setSubmitError(
+          refusal?.error === 'event_ended'
+            ? t('eventForm.errors.eventEnded')
+            : refusal?.error === 'unpublish_refused'
+              ? t('eventForm.errors.unpublishRefused')
+              : t('eventForm.errors.submitFailed'),
+        )
+      } else if (res.status === 403) {
         setSubmitError(t('eventForm.errors.forbidden'))
         setStep(0)
       } else if (res.status === 422) {
@@ -702,13 +717,13 @@ export default function EventStepper({
             {/* Multi-line: the public detail page renders these with the line
                 breaks intact, so the box has to be tall enough to show that the
                 breaks are being kept. */}
-            <TextField label={t('eventForm.fields.description_cs')}>
+            <TextField label={t('eventForm.fields.description_cs')} hint="description">
               <textarea rows={5} className="bdc-input" {...register('description_cs')} />
             </TextField>
             <TextField label={t('eventForm.fields.description_en')}>
               <textarea rows={5} className="bdc-input" {...register('description_en')} />
             </TextField>
-            <TextField label={t('eventForm.fields.contactName')}>
+            <TextField label={t('eventForm.fields.contactName')} hint="contact">
               <input className="bdc-input" {...register('contactName')} />
             </TextField>
             <TextField label={t('eventForm.fields.contactPhone')}>
@@ -801,6 +816,7 @@ export default function EventStepper({
               independent of the meal row in step 4 — nothing propagates either way. */}
           <TierChecklist
             title={t('eventForm.tiers.participationTitle')}
+            hint="tiers"
             note={t('eventForm.tiers.participationNote')}
             standardNote={t('eventForm.tiers.standardNote')}
             tiers={participationTiers}
@@ -808,6 +824,16 @@ export default function EventStepper({
             disabled={relationsLocked}
             onToggle={toggleParticipationTier}
           />
+
+          {/* The two concepts the price blocks below are made of. */}
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm font-medium text-neutral-700">
+            <span className="inline-flex items-center gap-2">
+              {t('eventForm.fields.dailyRate')} · {t('eventForm.fields.nightRate')} <HelpHint topic="rates" />
+            </span>
+            <span className="inline-flex items-center gap-2">
+              {t('eventForm.pricing.discountsLabel')} <HelpHint topic="discounts" />
+            </span>
+          </div>
 
           {/* One block per age category, each carrying the offered tiers. Children
               expose only the daily + night rate; 15+ adds the arrival/departure
@@ -969,9 +995,12 @@ export default function EventStepper({
           {/* Per-day availability — which slots the event actually serves. This is
               what fixes the event's first and last meal. */}
           <div>
-            <h3 className="text-sm font-semibold text-neutral-900">
-              {t('eventForm.meals.availabilityTitle')}
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-neutral-900">
+                {t('eventForm.meals.availabilityTitle')}
+              </h3>
+              <HelpHint topic="mealExclude" />
+            </div>
             {relationsLocked ? (
               <div className="mt-3 space-y-3">
                 {(editData?.dates ?? []).map((d) => (
@@ -1069,6 +1098,7 @@ export default function EventStepper({
             <TextField
               label={t('eventForm.fields.maxRegistrations')}
               error={fieldError('maxRegistrations')}
+              hint="maxRegistrations"
             >
               <input
                 type="number"
@@ -1079,9 +1109,9 @@ export default function EventStepper({
                 })}
               />
             </TextField>
-            <TextField label={t('eventForm.fields.status')} error={fieldError('status')}>
+            <TextField label={t('eventForm.fields.status')} error={fieldError('status')} hint="status" hintAlign="end">
               <select className="bdc-input" {...register('status')}>
-                {STATUSES.map((s) => (
+                {STATUSES.filter((s) => s !== 'DRAFT' || canUnpublish).map((s) => (
                   <option key={s} value={s}>
                     {t(`eventStatus.${s}`)}
                   </option>
@@ -1362,15 +1392,29 @@ function StepHeading({ children }: { children: React.ReactNode }) {
 function TextField({
   label,
   error,
+  hint,
+  hintAlign,
   children,
 }: {
   label: string
   error?: string | null
+  // A "?" beside the label — outside it, so the label text stays exactly `label`.
+  hint?: HelpHintTopic
+  hintAlign?: 'start' | 'end'
   children: React.ReactNode
 }) {
   return (
     <div>
-      <span className="form-label">{label}</span>
+      {hint ? (
+        <div className="flex items-center gap-2">
+          <span className="form-label">{label}</span>
+          <span className="mb-2">
+            <HelpHint topic={hint} align={hintAlign} />
+          </span>
+        </div>
+      ) : (
+        <span className="form-label">{label}</span>
+      )}
       {children}
       {error && <p className="mt-1 text-sm text-danger-600">{error}</p>}
     </div>
@@ -1382,6 +1426,7 @@ function TextField({
 // by definition" rather than as a checkbox that will not move.
 function TierChecklist({
   title,
+  hint,
   note,
   standardNote,
   tiers,
@@ -1390,6 +1435,7 @@ function TierChecklist({
   onToggle,
 }: {
   title: string
+  hint?: HelpHintTopic
   note: string
   standardNote: string
   tiers: TierFlags
@@ -1399,7 +1445,10 @@ function TierChecklist({
 }) {
   return (
     <div className="rounded-xl border border-neutral-200 bg-stone-50 p-4">
-      <h3 className="text-sm font-semibold text-neutral-900">{title}</h3>
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-neutral-900">{title}</h3>
+        {hint && <HelpHint topic={hint} />}
+      </div>
       <p className="mt-1 text-xs text-neutral-500">{note}</p>
       <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
         {PRICING_TYPES.map((type) => {

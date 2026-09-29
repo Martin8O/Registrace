@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import EventStepper, {
@@ -32,9 +33,36 @@ export default async function EditEventPage({
   if (!event) notFound()
 
   const t = await getTranslations('admin.eventForm')
+
+  // Over (isEventEditable): read-only. The server refuses the write anyway; this
+  // says why instead of offering a wizard whose save could only fail.
+  if (!event.editable) {
+    return (
+      <div>
+        <header className="mb-6">
+          <h1 className="font-serif text-3xl font-semibold text-neutral-900">
+            {t('editTitle')}
+          </h1>
+          <div className="mt-2 h-0.5 w-12 rounded bg-primary-500" />
+        </header>
+        <section className="section-card space-y-4">
+          <p className="text-neutral-700">{t('endedNote')}</p>
+          <Link
+            href={`/${locale}/admin/registrations?event=${event.id}`}
+            className="btn-secondary inline-flex"
+          >
+            {t('endedRegistrations')}
+          </Link>
+        </section>
+      </div>
+    )
+  }
   // Scope the (now possibly editable) centre dropdown to what the admin may use.
   const centers = await getCentersForAdminSelect(ctx)
   const canEditRelations = event.status === 'DRAFT' && event.registrationCount === 0
+  // Once anyone has registered, a live event cannot go back to draft (the server
+  // refuses it too) — so the wizard does not offer it.
+  const canUnpublish = event.status === 'DRAFT' || event.registrationCount === 0
   const initialStep = Number(step) >= 0 ? Number(step) : 0
 
   const initial: EventStepperInitial = {
@@ -80,6 +108,7 @@ export default async function EditEventPage({
         initial={initial}
         editData={editData}
         canEditRelations={canEditRelations}
+        canUnpublish={canUnpublish}
         initialStep={initialStep}
       />
     </div>

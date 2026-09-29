@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useLocale, useTranslations } from 'next-intl'
 import { RegStatusBadge } from '@/components/admin/StatusBadge'
+import HelpHint from '@/components/admin/HelpHint'
 import { downloadRegistrationsExport } from '@/lib/admin/exportRegistrations'
 import type {
   AdminRegistrationListItem,
@@ -299,6 +300,7 @@ export default function RegistrationsTable({
             >
               {exporting ? t('registrations.exporting') : t('registrations.exportExcel')}
             </button>
+            <HelpHint topic="export" align="end" />
           </div>
         )}
       </div>

@@ -23,7 +23,7 @@ vi.mock("@/lib/db", () => ({
 }));
 vi.mock("@/lib/audit", () => ({ logAuditEvent: h.audit }));
 
-import { deriveLifecycleTransition, isPubliclyVisible, runEventLifecycle } from "./index";
+import { deriveLifecycleTransition, isEventEditable, isPubliclyVisible, runEventLifecycle } from "./index";
 
 // endDate is stored as UTC midnight of the calendar day (invariant 11).
 const day = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
@@ -113,6 +113,36 @@ describe("deriveLifecycleTransition", () => {
     for (const iso of ["2026-07-05T17:59:59Z", "2026-07-05T18:00:00Z", "2026-07-08T18:00:00Z"]) {
       const now = at(iso);
       expect(isPubliclyVisible(event, now)).toBe(deriveLifecycleTransition(event, now) === null);
+    }
+  });
+});
+
+// The admin may edit an event until it is over — the same 20:00 Prague instant
+// that takes it off the public web, read from the same helper.
+describe("isEventEditable", () => {
+  it("a draft is always editable, however old its dates", () => {
+    expect(isEventEditable({ status: "DRAFT", endDate: summerEnd }, at("2030-01-01T00:00:00Z"))).toBe(true);
+  });
+
+  it.each(["PUBLISHED", "CLOSED", "ARCHIVED"])(
+    "%s is editable until 20:00 Prague on its end day and read-only from then",
+    (s) => {
+      const status = s as EventStatusValue;
+      expect(isEventEditable({ status, endDate: summerEnd }, at("2026-07-05T17:59:59Z"))).toBe(true);
+      expect(isEventEditable({ status, endDate: summerEnd }, at("2026-07-05T18:00:00Z"))).toBe(false);
+    },
+  );
+
+  it("in winter the cut is 19:00 UTC", () => {
+    const event = { status: "PUBLISHED" as const, endDate: winterEnd };
+    expect(isEventEditable(event, at("2026-01-11T18:59:59Z"))).toBe(true);
+    expect(isEventEditable(event, at("2026-01-11T19:00:00Z"))).toBe(false);
+  });
+
+  it("agrees with isPubliclyVisible: a PUBLISHED event is editable exactly while it is visible", () => {
+    const event = { status: "PUBLISHED" as const, endDate: summerEnd };
+    for (const iso of ["2026-07-05T17:59:59Z", "2026-07-05T18:00:00Z", "2026-07-08T18:00:00Z"]) {
+      expect(isEventEditable(event, at(iso))).toBe(isPubliclyVisible(event, at(iso)));
     }
   });
 });

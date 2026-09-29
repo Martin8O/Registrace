@@ -41,7 +41,12 @@ const DESCRIPTION = [
   "Druhý nocležník v chatce/pokoji -> Standard (200 Kč / noc)",
 ].join("\n");
 
-type Mode = { mode?: "create" | "edit"; status?: EventFormStatus; canEditRelations?: boolean };
+type Mode = {
+  mode?: "create" | "edit";
+  status?: EventFormStatus;
+  canEditRelations?: boolean;
+  canUnpublish?: boolean;
+};
 type EventFormStatus = "DRAFT" | "PUBLISHED" | "CLOSED" | "ARCHIVED";
 
 function renderWizard(over: Mode = {}) {
@@ -54,6 +59,7 @@ function renderWizard(over: Mode = {}) {
         initial={isEdit ? { ...STORED, status: over.status ?? "DRAFT" } : undefined}
         editData={isEdit ? EDIT_DATA : undefined}
         canEditRelations={over.canEditRelations ?? false}
+        canUnpublish={over.canUnpublish ?? true}
       />
     </NextIntlClientProvider>,
   );
@@ -242,5 +248,43 @@ describe("saving an event that is about to BECOME public", () => {
     goToStep(F.steps.save);
     fireEvent.click(buttonNamed(F.save)!);
     expect(dialogShows(F.publishConfirmTitle)).toBe(false);
+  });
+});
+
+// Back to draft would hide a live event from everyone holding its link, so once
+// anyone has registered the server refuses it — and the wizard stops offering it.
+describe("the status dropdown on a live event", () => {
+  const statusOptions = () => {
+    goToStep(F.steps.settings);
+    const select = document.querySelector<HTMLSelectElement>('select[name="status"]');
+    return [...select!.options].map((o) => o.textContent);
+  };
+
+  it("does not offer Draft once people have registered", () => {
+    renderWizard({ mode: "edit", status: "PUBLISHED", canUnpublish: false });
+    expect(statusOptions()).not.toContain(cs.admin.eventStatus.DRAFT);
+    expect(statusOptions()).toContain(cs.admin.eventStatus.PUBLISHED);
+  });
+
+  it("still offers Draft while nobody has registered", () => {
+    renderWizard({ mode: "edit", status: "PUBLISHED" });
+    expect(statusOptions()).toContain(cs.admin.eventStatus.DRAFT);
+  });
+});
+
+describe("when the server refuses the save", () => {
+  it.each([
+    ["event_ended", F.errors.eventEnded],
+    ["unpublish_refused", F.errors.unpublishRefused],
+  ])("words the %s refusal instead of a generic failure", async (code, message) => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, status: 409, json: async () => ({ error: code }) }),
+    );
+    renderWizard({ mode: "edit", status: "PUBLISHED" });
+    goToStep(F.steps.save);
+    fireEvent.click(buttonNamed(F.saveChanges)!);
+    await waitFor(() => expect(document.body.textContent).toContain(message));
+    expect(document.body.textContent).not.toContain(F.errors.submitFailed);
   });
 });

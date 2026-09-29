@@ -203,6 +203,22 @@ export function isPubliclyVisible(
   return now.getTime() < closeInstant(event.endDate).getTime();
 }
 
+// Whether the admin may still edit the event itself (its registrations are
+// always editable — this is about the event). A draft always; anything that went
+// public only until its close moment, whatever the status column says: after
+// 20:00 Prague on the end day the event is over and read-only, even if the
+// daily job has not written CLOSED yet. Before that moment even a manually
+// CLOSED or ARCHIVED event stays editable, so an admin who closed it by mistake
+// can publish it again. A third READER of the one close instant, not a third
+// definition of it.
+export function isEventEditable(
+  event: { status: EventStatusValue; endDate: Date },
+  now: Date = new Date(),
+): boolean {
+  if (event.status === "DRAFT") return true;
+  return now.getTime() < closeInstant(event.endDate).getTime();
+}
+
 export type LifecycleTransition = "CLOSED" | "ARCHIVED";
 
 // What the scheduled job should write for one event at `now`, or null when the
@@ -410,6 +426,30 @@ export class EventStatusTransitionError extends Error {
   }
 }
 
+// Thrown when an edit/status write targets an event that is already over (see
+// isEventEditable). Handlers map it to HTTP 409.
+export class EventEndedError extends Error {
+  constructor(message = "The event has ended and can no longer be edited") {
+    super(message);
+    this.name = "EventEndedError";
+  }
+}
+
+// The one manual transition that harms registrants: un-publishing a live event
+// (PUBLISHED/CLOSED/ARCHIVED → DRAFT) that already has registrations would hide
+// it from everyone holding its public link. Shared by the wizard's save and the
+// status endpoint, so neither door stays open. `registrationCount` counts every
+// registration ever made (cancelled and soft-deleted included).
+function assertStatusChangeAllowed(
+  from: EventStatusValue,
+  to: EventStatusValue,
+  registrationCount: number,
+): void {
+  if (to === "DRAFT" && from !== "DRAFT" && registrationCount > 0) {
+    throw new EventStatusTransitionError();
+  }
+}
+
 export type AdminEventListItem = {
   id: string;
   title_cs: string;
@@ -418,6 +458,9 @@ export type AdminEventListItem = {
   startDate: string;
   endDate: string;
   center: CenterDTO;
+  // isEventEditable, decided on the server (the list is a client component and
+  // the close instant is a server helper).
+  editable: boolean;
 };
 
 // Localized meal-type words for the auto-derived EventMeal labels (server-side;
@@ -624,6 +667,7 @@ export async function getAdminDashboardCounts(
 // (invariant 20). Scope is by centre, not by creator — a centre may have several
 // admins who all manage its events.
 export async function listAdminEvents(ctx: AdminContext): Promise<AdminEventListItem[]> {
+  const now = new Date();
   const events = await prisma.event.findMany({
     where: {
       deletedAt: null,
@@ -641,6 +685,7 @@ export async function listAdminEvents(ctx: AdminContext): Promise<AdminEventList
     startDate: toIsoDay(e.startDate),
     endDate: toIsoDay(e.endDate),
     center: { id: e.center.id, name_cs: e.center.name_cs, name_en: e.center.name_en },
+    editable: isEventEditable({ status: e.status, endDate: e.endDate }, now),
   }));
 }
 
@@ -655,6 +700,9 @@ export type EventEditDTO = EventDetailDTO & {
   // A DRAFT with zero is fully editable (centre/dates/pricing/meals); otherwise
   // those are locked because existing rows depend on the EventDate/EventMeal ids.
   registrationCount: number;
+  // isEventEditable — false once the event is over; the edit page then shows a
+  // read-only notice instead of the wizard.
+  editable: boolean;
 };
 
 // Load an event for editing, ownership-scoped. Returns null when the event is
@@ -679,6 +727,7 @@ export async function getEventForEdit(
     centerId: event.centerId,
     maxRegistrations: event.maxRegistrations,
     registrationCount,
+    editable: isEventEditable({ status: event.status, endDate: event.endDate }),
   };
 }
 
@@ -701,12 +750,15 @@ async function loadEventForUpdate(id: string, ctx: AdminContext) {
       contactEmail: true,
       maxRegistrations: true,
       status: true,
+      endDate: true,
       _count: { select: { registrations: true } },
     },
   });
   if (!event) throw new EventNotFoundError();
   if (ctx.role === "ADMIN" && !ctx.centerIds.includes(event.centerId)) throw new EventOwnershipError();
-  const { _count, ...before } = event;
+  const { _count, endDate, ...before } = event;
+  // An event that is over is read-only for every write that loads it here.
+  if (!isEventEditable({ status: event.status, endDate })) throw new EventEndedError();
   return { before, status: event.status, registrationCount: _count.registrations };
 }
 
@@ -721,6 +773,7 @@ export async function updateEvent(
   ctx: AdminContext,
 ): Promise<{ id: string }> {
   const { before, status, registrationCount } = await loadEventForUpdate(id, ctx);
+  if (input.status !== undefined) assertStatusChangeAllowed(status, input.status, registrationCount);
 
   // The full payload (with relation arrays) only takes effect for an editable
   // draft; a locked event ignores centre/dates/relations even if they're sent.
@@ -910,12 +963,7 @@ export async function setEventStatus(
 ): Promise<{ id: string }> {
   const { before, registrationCount } = await loadEventForUpdate(id, ctx);
 
-  // Guard the one transition that harms registrants: un-publishing a live event
-  // (PUBLISHED/CLOSED → DRAFT) that already has registrations would hide it from
-  // everyone holding its public link. Every other transition stays permitted.
-  if (status === "DRAFT" && before.status !== "DRAFT" && registrationCount > 0) {
-    throw new EventStatusTransitionError();
-  }
+  assertStatusChangeAllowed(before.status, status, registrationCount);
 
   await prisma.event.update({ where: { id }, data: { status } });
 

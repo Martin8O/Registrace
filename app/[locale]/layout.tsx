@@ -50,7 +50,11 @@ export default async function LocaleLayout({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  const messages = await getMessages();
+  // The admin help texts stay on the server: the public site never uses them,
+  // and the admin panel layout hands its client components the short "?" hints
+  // it needs (the long help page is a Server Component).
+  const messages = { ...(await getMessages()) };
+  delete messages.help;
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages}>

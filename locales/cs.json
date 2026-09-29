@@ -156,7 +156,8 @@
       "users": "Správci",
       "logs": "Audit logy",
       "profile": "Profil",
-      "logout": "Odhlásit se"
+      "logout": "Odhlásit se",
+      "help": "Nápověda"
     },
     "common": {
       "all": "Vše",
@@ -325,6 +326,7 @@
       "empty": "Žádné akce neodpovídají filtru.",
       "filterStatus": "Stav",
       "edit": "Upravit",
+      "editEnded": "Akce skončila — lze ji jen prohlížet. Registrace u ní upravovat můžete dál.",
       "details": "Detaily",
       "export": "Export",
       "table": {
@@ -413,7 +415,8 @@
         "intro": "Cenová pravidla se uloží spolu s akcí.",
         "ageCategory": "Věková kategorie",
         "pricingType": "Typ ceny",
-        "childNote": "U dětských kategorií je sazba obvykle 0, ale můžete zadat vlastní denní sazbu i cenu za noc – výpočet vždy přesně odpovídá zadanému ceníku. Slevy za příjezd/odjezd se na děti nevztahují."
+        "childNote": "U dětských kategorií je sazba obvykle 0, ale můžete zadat vlastní denní sazbu i cenu za noc – výpočet vždy přesně odpovídá zadanému ceníku. Slevy za příjezd/odjezd se na děti nevztahují.",
+        "discountsLabel": "Slevy"
       },
       "settings": {
         "mealDeadlineNote": "Po tomto termínu už nepůjde u akce objednat jídlo (účast a ubytování zůstávají otevřené). Nepovinné — bez termínu (prázdné pole) je registrace na jídlo bez časového omezení. Čas je v českém čase (automaticky SELČ/SEČ).",
@@ -452,8 +455,12 @@
         "maxRegistrations": "Musí být kladné celé číslo",
         "mealDeadline": "Termín musí být max. týden před začátkem a nejpozději v den konce akce.",
         "forbidden": "Nemáte oprávnění vytvářet akce pro toto centrum.",
-        "submitFailed": "Uložení se nezdařilo. Zkuste to prosím znovu."
-      }
+        "submitFailed": "Uložení se nezdařilo. Zkuste to prosím znovu.",
+        "eventEnded": "Akce už skončila, proto ji nelze upravit. Registrace u ní upravovat můžete dál.",
+        "unpublishRefused": "Akci, na kterou se už někdo přihlásil, nelze vrátit do konceptu — zmizela by lidem, kteří na ni mají odkaz."
+      },
+      "endedNote": "Tato akce už skončila (ve 20:00 v poslední den), proto je jen ke čtení. Registrace u ní upravovat můžete dál — třeba nastavit Zaplaceno.",
+      "endedRegistrations": "Registrace akce"
     },
     "registrations": {
       "title": "Registrace",
@@ -639,6 +646,506 @@
       "passwordSaved": "Heslo bylo změněno.",
       "passwordFailed": "Změna hesla se nezdařila.",
       "passwordMismatch": "Hesla se neshodují."
+    }
+  },
+  "help": {
+    "page": {
+      "title": "Nápověda",
+      "lede": "Šest návodů podle toho, co právě potřebuješ udělat. Nic z toho není potřeba číst dopředu. Otazníky u polí vedou rovnou sem.",
+      "lock": {
+        "title": "Nejdůležitější věta: akce se zamyká",
+        "p1": "Dokud je akce <b>koncept a nikdo se nepřihlásil</b>, jde na ní změnit úplně všechno. Jakmile ji <b>publikuješ</b>, nebo dorazí první registrace, zamknou se <b>centrum, termín, ceník a strava</b>. Zamčené věci už nerozmyslíš: počítají se z nich ceny všech, kdo se přihlásí.",
+        "p2": "Dál jde měnit název a popis, kontakt na pořadatele, maximální počet registrací, uzávěrka objednávek jídla a stav akce. Po skončení akce už nic z toho."
+      },
+      "tocTitle": "Návody",
+      "tocAfter": "Nenašel jsi odpověď? Napiš na <mail>svoboda.m@protonmail.com</mail>",
+      "chips": {
+        "open": "jde měnit i potom",
+        "locked": "zamkne se",
+        "check": "jen kontrola",
+        "decide": "rozhodnutí"
+      },
+      "legend": {
+        "open": "zůstane přístupné",
+        "locked": "po publikování nebo první registraci"
+      },
+      "footer": "Tahle stránka pokrývá běžný provoz akce. Přiřazení center, zakládání správců a audit řeší super-admin. Když něco z toho potřebuješ, napiš mu.",
+      "recipes": [
+        {
+          "id": "zaklady",
+          "title": "Než založíš první akci",
+          "blocks": [
+            {
+              "p": "Tři věci, které se zpětně dohánějí špatně."
+            },
+            {
+              "ul": [
+                "<b>Registrace není účastník.</b> Jedna registrace může mít až deset lidí. Přihlašuje se jeden člověk za sebe i za ostatní, platí za všechny dohromady a jemu přijde potvrzení. Všude, kde se počítají registrace (třeba kapacita akce), jde o přihlášky, ne o hlavy.",
+                "<b>Spravuješ akce svého centra.</b> Centrum máš přiřazené už od pozvánky. V prvním kroku průvodce ho u každé nové akce vybereš ze seznamu. Akce tvého centra vidí a upravují všichni jeho správci, nejen ten, kdo akci založil. Super-admin spravuje správce a vidí všechna centra.",
+                "<b>Akce má čtyři stavy.</b> <i>Koncept</i> vidí jen správci v administraci, veřejnost ne. <i>Publikováno</i> znamená, že je venku a jde se registrovat. <i>Uzavřeno</i> a <i>Archivováno</i> si aplikace píše sama, když akce skončí."
+              ]
+            },
+            {
+              "callout": "<b>Koncept je pro veřejnost opravdu neviditelný.</b> Ani přes přímý odkaz, stránka se tváří, že neexistuje. Neprozradí ho ani kartička, která se vykreslí, když odkaz vložíš do chatu. Rozpracovanou akci si tedy můžeš v klidu nechat ležet."
+            }
+          ]
+        },
+        {
+          "id": "zalozit",
+          "title": "Jak založím akci",
+          "blocks": [
+            {
+              "p": "<k>Akce</k> → <k>Nová akce</k>. Průvodce má sedm kroků, mezi kroky se dá vracet a <b>nic se neuloží dřív, než dojdeš na konec</b>."
+            },
+            {
+              "steps": [
+                {
+                  "title": "Základní údaje",
+                  "chip": "open",
+                  "text": "Centrum, název a popis česky i anglicky (anglický název je povinný), kontaktní osoba, telefon a e-mail. Centrum je jediné, co se zamkne."
+                },
+                {
+                  "title": "Termín",
+                  "chip": "locked",
+                  "text": "Datum začátku a konce, začátek nesmí být v minulosti. Jednotlivé dny akce se z nich odvodí samy, nezadáváš je."
+                },
+                {
+                  "title": "Ceník",
+                  "chip": "locked",
+                  "text": "Které cenové hladiny akce nabízí za účast a ubytování a kolik v každé z nich stojí pobyt, po věkových kategoriích. Ceník je předvyplněný ukázkovými částkami: <b>přepiš je</b>, jinak se uloží."
+                },
+                {
+                  "title": "Strava",
+                  "chip": "locked",
+                  "text": "Které cenové hladiny nabízí strava, ceník jídla pro celou akci (také předvyplněný ukázkovými částkami) a u každého dne to, co se ten den podává."
+                },
+                {
+                  "title": "Nastavení",
+                  "chip": "open",
+                  "text": "Maximální počet registrací, uzávěrka objednávek jídla a stav akce."
+                },
+                {
+                  "title": "Náhled",
+                  "chip": "check",
+                  "text": "Všechno zadané na jedné stránce, jen ke kontrole. Chybu opravíš návratem do příslušného kroku."
+                },
+                {
+                  "title": "Uložení",
+                  "chip": "decide",
+                  "text": "Uložit akci, nebo Uložit a publikovat."
+                }
+              ]
+            },
+            {
+              "h": "Uložit, nebo uložit a publikovat?"
+            },
+            {
+              "p": "<b>Uložit akci</b> uloží akci se stavem, který je zvolený v kroku Nastavení. Výchozí je <i>Koncept</i>: veřejnost ji nevidí a můžeš ji dál libovolně přepisovat. <b>Uložit a publikovat</b> se ještě jednou zeptá a od potvrzení je akce na webu a jde se na ni přihlásit. Publikovat jde i později: otevřeš akci, v kroku Nastavení přepneš stav na <i>Publikováno</i> a uložíš."
+            },
+            {
+              "p": "Dokud se nikdo nepřihlásil, jde zveřejněnou akci vrátit do konceptu. <b>Jakmile má první registraci, zpátky do konceptu už nejde</b>: zmizela by lidem, kteří na ni mají odkaz."
+            },
+            {
+              "h": "Co se stane, až akce skončí"
+            },
+            {
+              "p": "Z webu akce zmizí <b>ve 20:00 v poslední den</b>, do té doby se dá přihlásit. Od té chvíle je akce <b>jen ke čtení</b> a tlačítko <i>Upravit</i> u ní zešedne. Štítek <i>Uzavřeno</i> si aplikace dopíše sama při nočním běhu, tedy až nad ránem. O tři dny později se akce přepne na <i>Archivováno</i>."
+            },
+            {
+              "callout": "<b>Registrace zůstávají editovatelné pořád</b>, i u skončené akce. „Zaplaceno“ si po víkendu v klidu doklikáš."
+            },
+            {
+              "p": "Stav <i>Uzavřeno</i> jde v kroku Nastavení zvolit i ručně, ale nedělej to: akce hned zmizí z webu. Když se to stane omylem, vrátíš ji zpátky do konce akce: <k>Upravit</k> → Nastavení → <i>Publikováno</i>."
+            }
+          ]
+        },
+        {
+          "id": "ceny",
+          "title": "Jak nastavím ceny",
+          "blocks": [
+            {
+              "p": "Nejdelší krok průvodce, ale drží se dvou pravidel: <b>každý člověk má dvě nezávislé cenové hladiny</b> a <b>žádný věk není zdarma sám od sebe</b>."
+            },
+            {
+              "h": "Dvě hladiny na jednoho člověka"
+            },
+            {
+              "p": "Jedna hladina platí za <b>účast a ubytování</b>, druhá za <b>stravu</b>. Účastník si je vybírá zvlášť a klidně si vezme vlastní pokoj a podporovanou stravu. Je to záměr, ne chyba. U každé poloviny proto zaškrtáváš zvlášť, které hladiny akce nabízí: za účast a ubytování v kroku Ceník, za stravu v kroku Strava. <i>Standardní</i> je v nabídce vždycky."
+            },
+            {
+              "callout": "<b>Hladiny nemají v aplikaci žádný pevný význam.</b> <i>Standardní</i>, <i>Podporovaná</i> a <i>Nadbytek</i> jsou tři úrovně ceny. Co znamenají u tvojí akce, určuješ ty a <b>napíšeš to do popisu akce</b>. U Kolíňáků je <i>Standardní</i> dormitory a <i>Nadbytek</i> pokoj nebo chatka; <i>Podporovanou</i> nenabízejí."
+            },
+            {
+              "h": "Denní sazba, cena za noc"
+            },
+            {
+              "p": "<b>Denní sazba</b> se násobí počtem dnů <i>včetně dne příjezdu i odjezdu</i>. <b>Cena za noc</b> počtem nocí, tedy o jeden méně, a platí ji jen ten, kdo má v registraci ubytování. Obojí zadáváš pro každou věkovou kategorii (0–3, 4–7, 8–14, 15+) a každou nabízenou hladinu."
+            },
+            {
+              "p": "Dětské kategorie jsou v průvodci předvyplněné nulou, ale <b>nula není pravidlo</b>. Aplikace účtuje každému věku přesně to, co je v ceníku. Když děti zdarma být nemají, napiš tam skutečnou sazbu."
+            },
+            {
+              "cards": [
+                {
+                  "title": "Kolíňáci · pá–ne, standardní",
+                  "rows": [
+                    [
+                      "denní sazba 0 × 3 dny",
+                      "0 Kč"
+                    ],
+                    [
+                      "noc 200 × 2 noci",
+                      "400 Kč"
+                    ]
+                  ],
+                  "sum": [
+                    "pobyt",
+                    "400 Kč"
+                  ],
+                  "note": "Pobyt naceněný jen ubytováním. Kdo přijede na jeden den a nepřespí, zaplatí jen jídlo. V hladině Nadbytek stojí noc 300 Kč, tedy 600 Kč za víkend."
+                },
+                {
+                  "title": "Obecně · 100 Kč/den, jeden den",
+                  "rows": [
+                    [
+                      "příjezd dopoledne",
+                      ""
+                    ],
+                    [
+                      "odjezd týž den po obědě",
+                      ""
+                    ],
+                    [
+                      "denní sazba 100 × 1 den",
+                      "100 Kč"
+                    ],
+                    [
+                      "noc 0 × 0 nocí",
+                      "0 Kč"
+                    ]
+                  ],
+                  "sum": [
+                    "pobyt",
+                    "100 Kč"
+                  ],
+                  "note": "Od toho se ještě odečte sleva za dopolední příjezd, pokud ji máš vyplněnou. Na odjezd po obědě žádná sleva není."
+                }
+              ]
+            },
+            {
+              "h": "Půldny se řeší slevami"
+            },
+            {
+              "p": "<b>Poloviční denní sazba v aplikaci neexistuje.</b> Kdo přijede až během dne, platí celý den a odečte se mu <b>sleva za příjezd</b>. Dopolední, odpolední a večerní se zadávají zvlášť, každá jako pevná částka. Odjet dřív jde jedinou cestou: <b>po snídani</b>. Kdo odjíždí po obědě, platí celý den."
+            },
+            {
+              "p": "Slevy se <b>odečítají</b> a zadávají se <b>u každé hladiny zvlášť</b>, jen pro dospělé (15+). Děti žádné slevy nemají."
+            },
+            {
+              "table": {
+                "caption": "Příklad: slevy u dospělého, dvě hladiny",
+                "head": [
+                  "Sleva",
+                  "Standardní",
+                  "Podporovaná"
+                ],
+                "rows": [
+                  [
+                    "Sleva za dopolední příjezd",
+                    "100",
+                    "60"
+                  ],
+                  [
+                    "Sleva za odpolední příjezd",
+                    "200",
+                    "120"
+                  ],
+                  [
+                    "Sleva za večerní příjezd",
+                    "300",
+                    "180"
+                  ],
+                  [
+                    "Sleva za dřívější odjezd (po snídani)",
+                    "150",
+                    "90"
+                  ]
+                ]
+              }
+            },
+            {
+              "small": "Pár kombinací aplikace nepustí, protože nedávají smysl: stejný den příjezdu i odjezdu nejde s večerním příjezdem, a „po snídani“ týž den jde jen při dopoledním příjezdu."
+            }
+          ]
+        },
+        {
+          "id": "strava",
+          "title": "Strava a uzávěrka",
+          "blocks": [
+            {
+              "p": "<b>Ceník jídla se zadává jednou pro celou akci</b>: snídaně, oběd a večeře, pro každou věkovou kategorii a každou nabízenou stravovací hladinu. U jednotlivých dnů se pak už neurčuje cena, jen <b>jestli se to jídlo ten den podává</b>."
+            },
+            {
+              "callout": "<b>Vyřazením krajních jídel řekneš, čím akce začíná a končí.</b> U víkendovky typicky vyřadíš všechno do páteční večeře a všechno po nedělním obědě. Tím je hotovo, nic dalšího se nikde nenastavuje."
+            },
+            {
+              "h": "Uzávěrka objednávek jídla"
+            },
+            {
+              "p": "V kroku Nastavení je to pole <i>Možnost registrovat se na jídlo do</i>. Nepovinné. Když ho vyplníš, po tomto okamžiku už si <b>nikdo neobjedná jídlo</b>, ale <b>účast a ubytování zůstávají otevřené</b>. Je to termín pro kuchyni, ne konec registrací. Čas je v českém čase. Nejdřív týden před začátkem, nejpozději v den konce akce. Prázdné pole znamená bez omezení."
+            },
+            {
+              "p": "Uzávěrka je vidět i <b>na veřejné stránce akce</b> a v náhledu sdíleného odkazu, takže ji nemusíš nikam opisovat. Jde ji změnit i u zveřejněné akce."
+            },
+            {
+              "p": "Kolik čeho uvařit zjistíš u konkrétní akce, viz návod <b>Seznam, statistiky a export</b>."
+            }
+          ]
+        },
+        {
+          "id": "zmeny",
+          "title": "Někdo chce něco změnit",
+          "blocks": [
+            {
+              "p": "<b>Účastník si registraci sám nezmění ani nezruší</b>, je to záměr. Všechno jde přes tebe, telefonem nebo na místě. V <k>Registrace</k> klikni na <b>číslo registrace</b> a otevře se její detail. Ten je zároveň editor: přepíšeš v něm skoro všechno a na konci jednou uložíš."
+            },
+            {
+              "h": "Co v detailu změníš"
+            },
+            {
+              "ul": [
+                "<b>Pobyt:</b> datum a čas příjezdu, datum odjezdu, odjezd po snídani a jestli lidé přespávají. Nesmyslné kombinace aplikace nepustí a řekne proč.",
+                "<b>Lidi:</b> jméno, věkovou kategorii, typ stravy (masitá / vege) a obě cenové hladiny, pobytovou i stravovací. Hladiny uvidíš jen tehdy, když akce nabízí víc než jednu.",
+                "<b>Jídla po dnech</b> u každého člověka zvlášť. Jídlo, které se ten den nepodává, zaškrtnout nejde. Když pobyt zkrátíš, jídla mimo nový pobyt se samy odškrtnou.",
+                "<b>Přidat nebo odebrat člověka</b>, nejvýš deset v jedné registraci. Posledního odebrat nejde. Když nepřijede nikdo, nastav stav <i>Zrušeno</i>.",
+                "<b>Stav:</b> Registrován/a, Zaplaceno, nebo Zrušeno."
+              ]
+            },
+            {
+              "p": "<b>Nezměníš e-mail</b> toho, kdo registraci poslal, ani jeho domovské centrum a akci. Když je e-mail špatně, potřebuješ novou registraci a starou zrušíš."
+            },
+            {
+              "p": "<b>Novou registraci v administraci nezaložíš.</b> Když ji chceš vyplnit za někoho, udělej to na webu akce jako kdokoli jiný, s jeho e-mailem."
+            },
+            {
+              "h": "Cena se počítá sama, průběžně"
+            },
+            {
+              "p": "Po každé změně, která hýbe cenou, se dole ukáže nová <b>Cena celkem</b> a u každého člověka jeho část. Počítá ji server stejně jako při registraci z webu, takže co vidíš, to se uloží. Dokud se cena počítá, uložit nejde."
+            },
+            {
+              "cards": [
+                {
+                  "title": "Zaplacená registrace a nová cena",
+                  "note": "Když se změní cena registrace, která je <i>Zaplaceno</i>, nahoru i dolů, vrátí se sama na <i>Registrován/a</i>. Až se to na místě vyrovná, nastav <i>Zaplaceno</i> a ulož. Oprava překlepu ve jméně cenu nemění, takže stav zůstane."
+                },
+                {
+                  "title": "Jídla po uzávěrce",
+                  "note": "Po uzávěrce objednávek jídla si je účastník z webu neobjedná, ale ty je v detailu změnit můžeš. Aplikace tě upozorní. Dej vědět kuchyni."
+                }
+              ]
+            },
+            {
+              "small": "Rozdíl proti původní ceně aplikace neukazuje. Doplácí a vrací se na místě."
+            },
+            {
+              "h": "Uložení"
+            },
+            {
+              "ul": [
+                "Nic se neuloží, dokud neklikneš na <k>Uložit změny</k>. <k>Zahodit změny</k> vrátí všechno zpátky.",
+                "Když z detailu odcházíš s neuloženými změnami, aplikace se zeptá, jestli opravdu.",
+                "Když tutéž registraci mezitím uložil někdo jiný, tvoje uložení neprojde. Klikni na <k>Načíst znovu</k> a změny udělej ještě jednou nad novou verzí.",
+                "<b>Účastníkovi se nic neposílá samo.</b> Chceš-li mu poslat nové potvrzení, klikni po uložení na <i>Znovu odeslat potvrzení</i>."
+              ]
+            },
+            {
+              "h": "Zrušení"
+            },
+            {
+              "p": "Stav <i>Zrušeno</i> a uložit. Zrušená registrace <b>nezabírá kapacitu ani se nepočítá do jídel</b>, čísla se srovnají sama. <b>E-mail o zrušení se neposílá</b>, ten člověk to ví od tebe."
+            },
+            {
+              "p": "Zrušenou registraci jde vrátit zpátky, jen pokud má akce ještě volné místo. Když je maximální počet registrací naplněný, aplikace obnovení odmítne."
+            },
+            {
+              "h": "Znovu odeslat potvrzení"
+            },
+            {
+              "p": "Pošle potvrzovací e-mail znovu, s tím, co je právě uložené. Hodí se, když se první ztratil, nebo po změně. Tlačítko je vypnuté, dokud máš neuložené změny, a u <b>zrušené registrace nejde vůbec</b>: potvrzoval by rezervaci a částku, které už neplatí."
+            }
+          ]
+        },
+        {
+          "id": "seznam",
+          "title": "Seznam, statistiky a export",
+          "blocks": [
+            {
+              "p": "Položka <k>Registrace</k> v menu je <b>souhrn přes všechny akce</b>: filtr podle centra a stavu, hledání podle čísla registrace. Registrace archivovaných akcí se tu neukazují, dokud nezapneš <b>Zobrazit i archivované</b>."
+            },
+            {
+              "p": "Když potřebuješ jednu konkrétní akci, jdi přes <k>Akce</k> → <k>Detaily</k>. Seznam je pak jen její a přibudou dvě tabulky:"
+            },
+            {
+              "ul": [
+                "<b>Počty jídel k přípravě</b>: po dnech a jídlech, celkem / masitá / vege.",
+                "<b>Počet ubytovaných na místě</b>: po jednotlivých nocích."
+              ]
+            },
+            {
+              "p": "Obě počítají jen platné registrace, zrušené v nich nejsou. Ukážou se, jakmile je co počítat."
+            },
+            {
+              "h": "Export"
+            },
+            {
+              "p": "<b>Export je vždycky u konkrétní akce</b>: tlačítko přímo v řádku v seznamu akcí, nebo v jejích Detailech. Souhrnný seznam přes všechny akce export nemá, a to schválně: exportuje se to, co se předává kuchyni a na recepci, tedy jedna akce."
+            },
+            {
+              "p": "Stáhne se sešit se čtyřmi listy:"
+            },
+            {
+              "table": {
+                "caption": "",
+                "head": [
+                  "List",
+                  "K čemu je"
+                ],
+                "rows": [
+                  [
+                    "Data – vše",
+                    "Kompletní registrace včetně všech účastníků, jejich hladin, stravy a cen."
+                  ],
+                  [
+                    "Data – výběr",
+                    "Zkrácená verze na místo, to podstatné při příjezdu."
+                  ],
+                  [
+                    "Jídlo",
+                    "Počty jídel po dnech: celkem, masitá, vege."
+                  ],
+                  [
+                    "Ubytování",
+                    "Počet osob po jednotlivých nocích."
+                  ]
+                ]
+              }
+            },
+            {
+              "p": "Export z Detailů stáhne to, co máš právě vyfiltrované (stav, hledání). V listech s daty jsou i zrušené registrace, poznáš je podle sloupce se stavem."
+            },
+            {
+              "small": "Export se zapisuje do auditu: kdo a kdy ho stáhl."
+            }
+          ]
+        }
+      ]
+    },
+    "hints": {
+      "label": "Nápověda: {topic}",
+      "newTab": "otevře se v nové záložce",
+      "description": {
+        "topic": "popis akce",
+        "body": [
+          "Veřejný text na stránce akce. Patří sem, <b>co u tvojí akce znamenají cenové hladiny</b>, jak se k vám dostat a co si vzít s sebou.",
+          "Když anglický popis necháš prázdný, anglicky čtoucí návštěvník neuvidí žádný. Do náhledu sdíleného odkazu se popis nedostane."
+        ],
+        "more": {
+          "anchor": "ceny",
+          "label": "Víc: Jak nastavím ceny"
+        }
+      },
+      "contact": {
+        "topic": "kontakt na pořadatele",
+        "body": [
+          "Jméno, telefon i e-mail jsou <b>veřejné</b>. Vypíšou se na stránce akce pod popisem, ještě než se kdokoli přihlásí, a jdou i do potvrzovacího e-mailu.",
+          "Nepiš sem nic, co nemá být venku."
+        ]
+      },
+      "tiers": {
+        "topic": "cenové hladiny",
+        "body": [
+          "Tři cenové úrovně: akce nabídne jednu až tři a účastník si z nich vybere. <b>Aplikace jim žádný význam nedává</b>, co znamenají u tvojí akce, napiš do popisu. Standardní je v nabídce vždycky.",
+          "Každý člověk si volí <b>dvě hladiny nezávisle</b>: jednu za pobyt, druhou za stravu. Nabídku pro stravu zaškrtáváš v kroku Strava."
+        ],
+        "more": {
+          "anchor": "ceny",
+          "label": "Víc: Jak nastavím ceny"
+        }
+      },
+      "rates": {
+        "topic": "denní sazba a cena za noc",
+        "body": [
+          "<b>Denní sazba</b> se násobí počtem dnů <i>včetně dne příjezdu i odjezdu</i>. <b>Cena za noc</b> počtem nocí, tedy o jeden méně, a jen tomu, kdo má v registraci ubytování.",
+          "Když je pobyt naceněný jen ubytováním, nech denní sazbu na nule. Kdo přijede jen na den a nepřespí, zaplatí pak jen jídlo."
+        ],
+        "more": {
+          "anchor": "ceny",
+          "label": "Víc: Jak nastavím ceny"
+        }
+      },
+      "discounts": {
+        "topic": "slevy",
+        "body": [
+          "Pevné částky, které se od ceny <b>odečtou</b>. Platí pro tu hladinu, u které stojí, a jen pro dospělé (15+). Děti slevy nemají.",
+          "<b>Půldny se řeší jen slevami.</b> Poloviční denní sazba v aplikaci neexistuje: kdo přijede během dne, platí celý den a odečte se mu sleva."
+        ],
+        "more": {
+          "anchor": "ceny",
+          "label": "Víc: Jak nastavím ceny"
+        }
+      },
+      "mealExclude": {
+        "topic": "vyřazení jídla",
+        "body": [
+          "Není to cena, ale <b>dostupnost</b>: tenhle den se tohle jídlo nepodává. Ceny jsou zadané jednou pro celou akci.",
+          "<b>Vyřazením krajních jídel určíš, čím akce začíná a končí</b>, typicky páteční večeří a nedělním obědem."
+        ],
+        "more": {
+          "anchor": "strava",
+          "label": "Víc: Strava a uzávěrka"
+        }
+      },
+      "maxRegistrations": {
+        "topic": "maximální počet registrací",
+        "body": [
+          "Počítá <b>registrace, ne osoby</b>. V jedné registraci může být až deset lidí. Zrušené se nepočítají.",
+          "<b>Prázdné pole znamená bez limitu.</b>"
+        ]
+      },
+      "status": {
+        "topic": "stav akce",
+        "body": [
+          "<b>Koncept veřejnost nevidí</b>, jen správci v administraci. Ani přes přímý odkaz, stránka se tváří, že neexistuje.",
+          "<i>Uzavřeno</i> a <i>Archivováno</i> si aplikace dopisuje sama po skončení akce. Ručně je nenastavuj: uzavřená akce hned zmizí z webu. Omyl vrátíš do konce akce přepnutím na <i>Publikováno</i>."
+        ],
+        "more": {
+          "anchor": "zalozit",
+          "label": "Víc: Jak založím akci"
+        }
+      },
+      "resend": {
+        "topic": "znovu odeslat potvrzení",
+        "body": [
+          "Pošle znovu <b>potvrzovací e-mail</b> s tím, co je právě uložené, včetně všech částek. Hodí se, když se první ztratil, nebo po změně. Neuložené změny v něm nebudou, proto je tlačítko do uložení vypnuté.",
+          "U <b>zrušené registrace to nejde</b>: potvrzoval by rezervaci a částku, které už neplatí. E-mail o zrušení aplikace neposílá vůbec."
+        ],
+        "more": {
+          "anchor": "zmeny",
+          "label": "Víc: Někdo chce něco změnit"
+        }
+      },
+      "export": {
+        "topic": "export",
+        "body": [
+          "Stáhne sešit se čtyřmi listy: <b>Data – vše</b> (kompletní registrace), <b>Data – výběr</b> (zkrácené na místo), <b>Jídlo</b> (počty po dnech, masitá / vege) a <b>Ubytování</b> (osoby po nocích).",
+          "Vždy jen za tuhle akci a podle zapnutého filtru. Stažení se <b>zapíše do auditu</b>."
+        ],
+        "more": {
+          "anchor": "seznam",
+          "label": "Víc: Seznam, statistiky a export"
+        }
+      }
     }
   }
 }
