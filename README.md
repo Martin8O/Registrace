@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-431%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-439%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -223,7 +223,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 431 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 439 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -634,7 +634,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **431 Vitest tests** across 30 files, with **no database required**:
+`npm test` runs **439 Vitest tests** across 31 files, with **no database required**:
 
 - **Pricing engine** (48) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -657,6 +657,11 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 - **Event configuration** (8) — that an event's two tier sets must each be non-empty and contain
   the standard tier, and that neither price list may quote a tier the event does not offer —
   each list checked against its own set, never the other's.
+- **Event numbering** (8) — the frozen `YYEEE` prefix a new event's registration numbers carry:
+  one past the highest issued for the event's year, so a draft moved to another year cannot make
+  the next create re-issue a taken prefix (it used to fail on the unique index on every retry);
+  a new year starts at `001`; a collision with a concurrent create is retried once with a fresh
+  prefix, and only a unique collision is.
 - **Submit service** (25) — control-flow with a **mocked Prisma** (`vi.mock('@/lib/db')`) while
   keeping the real engine, so `totalPrice` is asserted end-to-end; plus the two tiers pricing
   the two halves independently, both being persisted, each meal snapshotted at the meal tier's

@@ -425,6 +425,31 @@ export type AdminEventListItem = {
 const MEAL_LABEL_CS: Record<string, string> = { BREAKFAST: "snídaně", LUNCH: "oběd", DINNER: "večeře" };
 const MEAL_LABEL_EN: Record<string, string> = { BREAKFAST: "breakfast", LUNCH: "lunch", DINNER: "dinner" };
 
+// YY of a registration-number prefix ("26" for 2026).
+function yearPrefix(year: number): string {
+  return String(year).slice(-2);
+}
+
+// Next frozen `YYEEE` prefix for an event starting in `year`, given the highest
+// prefix already issued for that year (null = none yet). The ordinal is fixed at
+// three digits, which is also what keeps the string ordering of `numberPrefix`
+// equal to the numeric one for the "highest" read.
+export function nextNumberPrefix(year: number, highest: string | null): string {
+  const ordinal = highest ? Number(highest.slice(2)) + 1 : 1;
+  return `${yearPrefix(year)}${String(ordinal).padStart(3, "0")}`;
+}
+
+// Duck-typed P2002 check — avoids importing generated-client error classes
+// (same as modules/registrations).
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: unknown }).code === "P2002"
+  );
+}
+
 // Create an event + its dates, pricing rules and meals in ONE transaction.
 // `createdBy` comes only from the session context (never the request body —
 // memory b7-createdby-from-session). ADMIN may only create for an assigned
@@ -440,21 +465,24 @@ export async function createEvent(
   // Day label lookup for deriving meal labels.
   const dayLabels = new Map(input.dates.map((d) => [d.date, { cs: d.label_cs, en: d.label_en }]));
 
-  const created = await prisma.$transaction(async (tx) => {
-    // Freeze the registration-number prefix: YY (event's year) + its per-year
-    // ordinal (the Nth event of that year, counting all incl. soft-deleted so
-    // numbers are never reused). The @unique on numberPrefix guards the rare
-    // concurrent-create collision. Year basis = UTC, matching the backfill.
+  // The @unique on numberPrefix is the real guard; a collision (two admins
+  // creating in the same year at the same moment) re-reads the highest prefix
+  // and tries once more instead of surfacing as a 500 (audit 2026-09-06 S3).
+  const create = () => prisma.$transaction(async (tx) => {
+    // Freeze the registration-number prefix: YY (event's year) + one past the
+    // highest ordinal already issued for that year. Derived from the MAXIMUM
+    // prefix, not a count of this year's events: a draft's start date can move
+    // to another year after its prefix is frozen, which lowered the count and
+    // made the next create re-issue a taken prefix forever (audit S3). Soft-
+    // deleted events keep their prefix, so numbers are never reused.
+    // Year basis = UTC, matching the backfill.
     const year = input.startDate.getUTCFullYear();
-    const priorThisYear = await tx.event.count({
-      where: {
-        startDate: {
-          gte: new Date(Date.UTC(year, 0, 1)),
-          lt: new Date(Date.UTC(year + 1, 0, 1)),
-        },
-      },
+    const highest = await tx.event.findFirst({
+      where: { numberPrefix: { startsWith: yearPrefix(year) } },
+      orderBy: { numberPrefix: "desc" },
+      select: { numberPrefix: true },
     });
-    const numberPrefix = `${String(year).slice(-2)}${String(priorThisYear + 1).padStart(3, "0")}`;
+    const numberPrefix = nextNumberPrefix(year, highest?.numberPrefix ?? null);
 
     const event = await tx.event.create({
       data: {
@@ -548,6 +576,14 @@ export async function createEvent(
       },
     };
   });
+
+  let created: Awaited<ReturnType<typeof create>>;
+  try {
+    created = await create();
+  } catch (err) {
+    if (!isUniqueViolation(err)) throw err;
+    created = await create();
+  }
 
   // Audit AFTER the transaction commits — best-effort, never blocks the write (P4).
   await logAuditEvent({
