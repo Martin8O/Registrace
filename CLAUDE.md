@@ -61,7 +61,8 @@ next-intl 4 (i18n) · Zod 4 (validation — only lib) · React Hook Form · Rese
 6. Email = Resend only. Email failure is non-blocking (never rollback DB transaction).
 7. Hosting = Vercel + Supabase. No Docker.
 8. No fat route handlers. Business logic in /modules/* services.
-9. Soft delete (deletedAt) on all audit-relevant entities. No permanent deletion.
+9. Soft delete (deletedAt) on events, registrations and participants; centres are deactivated
+   (`isActive`), never deleted. Removing an admin deletes the User row (its removal is audited).
 10. Monetary values = whole CZK integers (80 CZK stored as 80, not 8000).
 11. Datetimes = UTC in DB, displayed in Europe/Prague timezone in UI.
 12. User.id = @db.Uuid (matches Supabase Auth auth.users.id UUID format).
@@ -136,7 +137,10 @@ Full map with model relations: architecture.md.
 ## Translation key conventions
 All keys are nested — no flat root-level keys. Namespaces: `form` (registration form),
 `home` (homepage), `event` (event detail page), `badge` (status badges),
-`meta` (site name + description for the link-preview card — site-wide, hence not under `home`).
+`meta` (site name + description for the link-preview card — site-wide, hence not under `home`),
+`admin` (the admin panel), and `help` (the admin help page + "?" hints — **Czech only, in `cs.json`
+alone**; `i18n/request.ts` grafts it onto every locale, the root layout withholds it from the public
+site, the admin panel layout passes only `help.hints` to the browser).
 Keep these distinct — different UI elements, never merge one into the other:
 - `form.pricing_info` — section label **inside** the registration form
 - `event.pricingInfo` — button label on the event **detail page**

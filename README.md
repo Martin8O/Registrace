@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-439%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-467%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -71,23 +71,26 @@ bilingual flow:
 2. The **server** recalculates every price from the event's own pricing rules (the browser
    figure is informational only), writes an idempotent registration, and sends a confirmation
    email carrying a human-readable registration number (e.g. `260020108`).
-3. Centre admins review, filter, search, mark paid, resend confirmations, and export a
-   per-event XLSX for the kitchen and accommodation teams — always scoped to the centres they
-   manage.
+3. Centre admins review, filter, search, **edit any registration in full** (stay, people,
+   meals — re-priced by the server), mark paid, resend confirmations, and export a per-event
+   XLSX for the kitchen and accommodation teams — always scoped to the centres they manage. A
+   built-in help page and "?" hints beside the harder fields explain how events and prices work.
 
 It is **live in production at [registrace.online](https://registrace.online)** on Vercel +
 Supabase, and has been through a full internal build (B1–B8), a production-hardening pass
-(P1–P8) and a multi-agent security audit. This README is the
+(P1–P8) and a multi-agent security audit, and has run real events since. This README is the
 single source of orientation for anyone joining the project.
 
 ---
 
 ## Screenshots
 
-> All screenshots show a **demo dataset — fictional families on the RFC-2606 reserved
-> `example.*` domains**, never real registrants. The **admin email addresses and the audit-log
-> IP column are blurred here on purpose** for privacy: they are shown normally to admins in the
-> running app — only these public screenshots hide them.
+> The registrations in these screenshots are a **demo dataset — fictional families on the
+> RFC-2606 reserved `example.*` domains**, never real registrants; the maintainer's throwaway
+> test events are left out of the events list. The organiser contact on the event page is the
+> maintainer's own. The **admin email addresses and the audit-log IP column are blurred here on
+> purpose** for privacy: they are shown normally to admins in the running app — only these
+> public screenshots hide them.
 
 ### Visitor side
 
@@ -119,12 +122,12 @@ single source of orientation for anyone joining the project.
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/admin-events.png" alt="Event management list with lifecycle badges" /></td>
-    <td width="50%"><img src="docs/screenshots/admin-event-form.png" alt="Event wizard on its pricing step, showing the age by tier price list" /></td>
+    <td width="50%"><img src="docs/screenshots/admin-events.png" alt="Event management list with lifecycle badges; finished events have a greyed-out Edit" /></td>
+    <td width="50%"><img src="docs/screenshots/admin-event-form.png" alt="Event wizard on its pricing step, showing the age by tier price list and help hints" /></td>
   </tr>
   <tr>
-    <td align="center"><em>Event management — draft / published / archived, per-event export</em></td>
-    <td align="center"><em>7-step bilingual event wizard — here its price list, per age &times; tier</em></td>
+    <td align="center"><em>Event management — draft / published / archived, read-only once over, per-event export</em></td>
+    <td align="center"><em>7-step bilingual event wizard — here a booked event's locked price list, per age &times; tier, with its "?" hints</em></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/admin-registrations.png" alt="Registrations list with filters, search and status badges" /></td>
@@ -149,6 +152,11 @@ single source of orientation for anyone joining the project.
   <em>Per-event kitchen &amp; accommodation planning — meat/veg counts per meal and headcount per night, ready for the kitchen and accommodation teams.</em>
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/admin-help.png" width="80%" alt="Admin help page (Czech): the event-lock rule first, then six task recipes with a table of contents" /><br/>
+  <em>Built-in admin help (Czech only) — the one rule that matters most, then six task recipes; the "?" hints on the admin screens link straight into them.</em>
+</p>
+
 ---
 
 ## Feature highlights
@@ -163,6 +171,10 @@ single source of orientation for anyone joining the project.
   supported food. A tier the event offers only one of is not asked about at all.
 - **Per-day meal selection** with a per-event **meal-ordering deadline** (after the cut-off,
   meal choice is closed and enforced server-side).
+- **Organiser contact and meal cut-off on the event page** — readable before registering, not
+  only in the confirmation.
+- **Link previews** — a shared event link unfurls in chat apps with the centre, event name,
+  dates and meal cut-off; a draft or finished event shows only the neutral site card.
 - **Live, server-authoritative pricing** — the form shows a running total, but the backend
   always recomputes the authoritative price before saving.
 - **Arrival time, early departure and accommodation** all feed into the price via the event's
@@ -189,23 +201,31 @@ single source of orientation for anyone joining the project.
 - **Event lifecycle** — draft → published → closed → archived. Public visibility is derived
   on read (an event leaves the public list at 20:00 Prague on its end day), and a **daily
   Vercel Cron** (`GET /api/cron/event-lifecycle`) writes the stored status to match — closed
-  after that moment, archived three days later — so the admin list tells the truth too. Two
-  consequences an admin sees: a closed or archived event is **read-only** in the admin (its
-  registrations stay fully editable), and once archived its registrations move behind the
-  registrations list's "show archived" switch — the event's own view still lists them all.
+  after that moment, archived three days later — so the admin list tells the truth too. What an
+  admin sees: from that same moment the event itself is **read-only** — its Edit link greys out
+  and the server refuses the write — while its registrations stay fully editable; once archived
+  its registrations move behind the registrations list's "show archived" switch (the event's own
+  view still lists them all). An event closed by hand before its end can be published again
+  until the end, and once anyone has registered a live event cannot go back to draft.
 - **Registration workflow** — filter by centre / status / archived, search by number, and a
   **full editor** for each registration: status, the stay (days, arrival time, early departure,
   accommodation), and every participant's name, age, both pricing tiers, diet and meals per day —
   people added or removed. The price is recalculated live and again on save by the real engine,
   the save is guarded against a concurrent edit, and meal rows are re-priced at the meal tier.
-  Plus resend confirmations, and
-  **kitchen** (meat / veg totals) and **accommodation** (per-night headcount) tables.
+  Plus resend confirmations (refused for a cancelled registration, since the mail says the
+  booking stands), and **kitchen** (meat / veg totals) and **accommodation** (per-night
+  headcount) tables.
 - **Per-event XLSX export** — one click per event, with a formula-injection-safe serializer.
 - **Centre & admin management** — invite/edit/remove admins, assign centres, soft-delete and
   restore centres. An invited admin lands on a guided password setup: the requirements are
   listed up front and tick as they are met, with a show/hide toggle and a live match check
   (details and the important caveat under [Security & privacy](#security--privacy)).
-- **Audit log** — a forensic trail of admin actions (actor, action, entity, IP, time).
+- **Audit log** — a forensic trail of admin actions (actor — or *system* for the daily job —
+  action, entity, IP, time, and a before/after diff).
+- **Built-in help** — a help page with six task recipes (creating an event, prices, meals,
+  changing a registration, lists and export) and "?" hints beside the ten fields whose meaning
+  is not obvious, each linking to its recipe. Czech only, by decision: the admins are Czech
+  centres, and one well-kept language beats two drifting ones.
 
 ---
 
@@ -223,7 +243,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 439 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 467 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -245,7 +265,10 @@ These invariants are enforced across the codebase (full list in
 4. UI text lives in next-intl JSON; **event content lives in bilingual DB columns**
    (`*_cs` / `*_en`).
 5. **Email failure never rolls back** the registration transaction.
-6. **Soft delete** (`deletedAt`) everywhere — no permanent deletion of audit-relevant data.
+6. **Soft delete** (`deletedAt`) on events, registrations and participants; centres are
+   deactivated, never deleted. An admin account removed from the panel is deleted outright:
+   its removal is audited with the account's email, but its earlier audit entries lose their
+   actor.
 7. **Money = whole-CZK integers**; **datetimes = UTC in the DB, Europe/Prague in the UI**.
 8. Registration submit is **idempotent** (client-supplied UUID v4 key), honeypot-guarded,
    and capped at 10 participants.
@@ -343,7 +366,7 @@ included.
 
 ### Data model
 
-11 Prisma models, 9 enums, 6 applied migrations. The source of truth is
+12 Prisma models, 9 enums, 9 applied migrations. The source of truth is
 [`prisma/schema.prisma`](prisma/schema.prisma).
 
 <details>
@@ -418,9 +441,10 @@ Validation errors return a canonical `400 { error, details }` (Zod issues) via t
   `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
   `Referrer-Policy: strict-origin-when-cross-origin`,
   `Permissions-Policy: camera=(), microphone=(), geolocation=()` and
-  `Cross-Origin-Resource-Policy: same-origin`. (The `preload` directive is a one-way
-  commitment and only takes effect once the domain is submitted at
-  [hstspreload.org](https://hstspreload.org/).)
+  `Cross-Origin-Resource-Policy: same-origin` — except the link-preview images
+  (`opengraph-image`), which are `cross-origin` so chat apps can fetch them. The `X-Powered-By`
+  header is off. (The `preload` directive is a one-way commitment and only takes effect once
+  the domain is submitted at [hstspreload.org](https://hstspreload.org/).)
 - **CSRF** — mutating admin requests must be same-origin, checked against
   `NEXT_PUBLIC_APP_URL`. **Fail-closed**: a missing Origin *and* Referer, or an unset
   `NEXT_PUBLIC_APP_URL`, is rejected; the any-localhost relaxation is gated to non-production.
@@ -602,25 +626,27 @@ Database utilities: `npx prisma migrate deploy` (apply migrations), `npx prisma 
 app/
   [locale]/(public)/           public pages (home, event detail + registration form)
   [locale]/admin/(panel)/      admin panel — dashboard, events, registrations,
-                               centres (/admin/centers), admins (/admin/users), logs, profile
+                               centres (/admin/centers), admins (/admin/users), logs, help, profile
   [locale]/admin/login|set-password|auth/confirm   auth entry points
   api/                         route handlers (public + admin) + _lib (guard, http helpers)
 components/{public,admin,shared}   UI components
 modules/{events,registrations,pricing,auth,centers,users}   business services (no fat handlers)
 lib/                           infrastructure
-  {db,security,email,export,supabase,utils,mock,admin}/   modules
+  {db,security,email,export,metadata,og,supabase,utils,mock,admin}/   modules
   validation/                  client-safe Zod schemas + the admin password policy
   audit.ts · types.ts          audit-log writer · shared types
   auth-errors.ts               Supabase auth-error code → next-intl key
-locales/{cs,en}.json           UI translations
+locales/{cs,en}.json           UI translations (+ the Czech-only admin help, in cs.json)
 prisma/
-  schema.prisma · migrations/  data layer (6 applied migrations)
+  schema.prisma · migrations/  data layer (9 applied migrations)
   seed.ts                      the 25 centre rows (no demo data — see Getting started)
   promote-super-admin.ts       one-off super-admin bootstrap
 public/images/                 static assets (BDC logo)
 proxy.ts                       edge middleware (i18n + session + admin hardening + CSP)
 i18n/request.ts                next-intl request config
 next.config.ts                 static security headers
+vercel.json                    function region (dub1) + the daily lifecycle cron
+assets/                        font for the link-preview cards (Crimson Pro, OFL)
 prisma.config.ts               Prisma CLI config (reads DIRECT_URL)
 vitest.config.ts               test runner config
 generated/prisma/              generated Prisma client (gitignored)
@@ -634,7 +660,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **439 Vitest tests** across 31 files, with **no database required**:
+`npm test` runs **467 Vitest tests** across 34 files, with **no database required**:
 
 - **Pricing engine** (48) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -691,11 +717,15 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   and the preview each: guard first, validation, the service called with the id and context, a
   refusal passed through, an unexpected error not swallowed; the save refuses a body without its
   `updatedAt`.
-- **Event lifecycle** (15) — the one definition of when a published event closes (20:00 Prague
+- **Event save endpoint** (3) — the wizard's save passes through to the service, and its two
+  refusals leave as a 409 with a code the wizard words (`event_ended`, `unpublish_refused`)
+  rather than as a 500 it could only call a failed save.
+- **Event lifecycle** (21) — the one definition of when a published event closes (20:00 Prague
   on its end day, in summer and winter time alike) and archives (20:00 three days later, pinned
   across a DST switch and across a year end), that DRAFT and ARCHIVED are never touched, that a missed close goes
   straight to ARCHIVED, and that the derivation agrees with `isPubliclyVisible` at every
-  instant. Plus the scheduled job's write: guarded by the status it read (a concurrent admin
+  instant. The same instant ends admin editing: a draft is always editable, anything that went
+  public (a hand-closed or hand-archived event included) only until then. Plus the scheduled job's write: guarded by the status it read (a concurrent admin
   edit wins and is skipped, audit entry included), audited as a system write, and a dry run
   that reports the same plan and writes nothing.
 - **Cron endpoint** (9) — that nothing runs without the bearer Vercel sends, that a deployment
@@ -757,7 +787,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   letters and non-ASCII symbols must **not** tick a rule, or the checklist would green-light a
   password Supabase rejects), that the checklist and the submit gate can never disagree, and
   that every rule is labelled in both locales.
-- **Component rendering** (21 + 38 + 12) — the two islands that move money, rendered for real in
+- **Component rendering** (21 + 38 + 16 + 5) — the two islands that move money, rendered for real in
   jsdom with the actual locale file as messages (so a missing key fails here rather than showing
   a raw key to a registrant). The public form: which tier selector each of the four offer-variants
   renders, meal labels priced from the **meal** tier and repainted by it and by age but never by
@@ -766,7 +796,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   the stay tier, miss the price list and bill the meal at 0. Plus the success panel: the
   registration number, the confirmation actually going to the address shown, the honest "it did
   not send" when it did not, and nothing extra for the honeypot's numberless fake success. The
-  admin **full registration editor** (M50b): it opens exactly as the registrant submitted it (stay,
+  admin **full registration editor**: it opens exactly as the registrant submitted it (stay,
   names, ages, diets, ticked meals), shows the stored prices greyed until the server has priced the
   registration once on open — a stored total today's engine disagrees with shows the number the
   save will write — and typing a name never costs a request; a failed price request can be sent
@@ -782,7 +812,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   against. The save sends the loaded `updatedAt`, ids for stored people and none for a new one, no
   e-mail, no amounts; a refused meal names the person, a refused tier the person and the half, a
   concurrent save offers a reload. Re-ticking a meal is not a change, and an in-app link asks
-  before leaving unsaved changes. The old tier editor's guarantees are kept:
+  before leaving unsaved changes. The tier guarantees of the editor it replaced are kept:
   the tier-select variants, each half listing only its own set, an empty set reading as all three,
   a stranded tier kept visible and selected, and the resend button disabled for a **cancelled**
   registration (following the SELECTED status) — and now also while there are unsaved changes,
@@ -795,7 +825,12 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   The same suite pins that **publishing is a transition, not a state**: an event that is already
   public is saved without being asked for permission to publish it, is reported as saved rather
   than as newly published, and offers one button instead of two — while a draft, a closed event
-  going public again, and a brand-new event all still confirm before they become visible.
+  going public again, and a brand-new event all still confirm before they become visible. It
+  also pins that a live event with registrations is not offered Draft, and that the server's two
+  refusals (the event is over; back to draft) are worded rather than reported as a failed save.
+  The help hint: closed until clicked, every paragraph formatted rather than raw tags, a link to
+  its recipe that opens in a new tab (a same-tab link would throw away a half-filled wizard), and
+  closing on Escape or a click elsewhere.
 - **Price popups** (12 + 21) — the two informational panels a registrant opens to see how a
   number was reached. The price overview: an all-zero column and an all-zero category are
   dropped whole (a Těnovice weekend charges no daily rate, nothing under 15 and nothing to feed
@@ -817,11 +852,19 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   form row and the breakdown's total — because the stay half is a daily rate AND a rate per
   night, and naming only one of them is how 400 CZK ended up under a heading that never
   mentioned nights.
-- **Event edit lock** (7) — that an event stops accepting relation edits the moment anything
+- **Event edit lock** (14) — that an event stops accepting relation edits the moment anything
   references it (a DRAFT with a registration is as locked as a published one — the lock is not
   about publishing), and that neither tier set is ever written by the scalar path. This is what
   makes a stranded tier unreachable through the product, and it used to be argued only in a
-  comment; adding either set to that whitelist "for completeness" now fails a test.
+  comment; adding either set to that whitelist "for completeness" now fails a test. Plus the two
+  guards on the event itself: an event that is over refuses every write (the wizard's save and
+  the status endpoint alike) with nothing written or audited, while one closed by hand before its
+  end can still be published again; and a live event cannot go back to draft once anyone has
+  registered, while one nobody registered for can.
+- **Translation files** (3) — that Czech and English carry the same keys (the help excepted: it
+  exists in Czech only, and English must not grow a half-copy), that every one of the help's
+  rich-text strings formats with the tags the page provides, and that each "?" hint exists and
+  links only to a recipe that exists.
 - **RLS guard** (3) — that every model's table has `ENABLE ROW LEVEL SECURITY` in a migration,
   and that no migration defines a policy or forces RLS on the owner. It reads the schema and
   the migration SQL, not the database. It exists because RLS used to be a dashboard setting:
@@ -842,6 +885,9 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 - **Hosting:** Vercel (serverless), auto-deploying every push to `main` (~1–2 min).
 - **Database/Auth:** Supabase (`eu-west-1`). Migrations are applied with
   `prisma migrate deploy` (a no-op when already in sync).
+- **Region:** functions are pinned to `dub1` (Dublin) in `vercel.json`, next to the database —
+  every request makes several database round-trips, and the move cut the admin price preview
+  from about 1–2 s to about 0.3 s.
 - **Domain:** `registrace.online` — apex canonical, `www` → 308 → apex, DNS kept at Wedos.
 - **Email:** Resend sends from the verified subdomain `send.registrace.online`
   (DKIM/SPF/DMARC), isolating sending reputation.
@@ -861,7 +907,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 | Document | What's in it |
 |---|---|
-| [`CLAUDE.md`](CLAUDE.md) | Project constitution — the 20 architectural invariants, roles, folder map and translation-key conventions the code is held to. Written for [Claude Code](https://claude.com/claude-code), which built the app; readable as plain architecture notes. It also references a `local/` workspace that is gitignored and not published — see the note at the top of the file. |
+| [`CLAUDE.md`](CLAUDE.md) | Project constitution — the numbered architectural invariants, roles, folder map and translation-key conventions the code is held to. Written for [Claude Code](https://claude.com/claude-code), which built the app; readable as plain architecture notes. It also references a `local/` workspace that is gitignored and not published — see the note at the top of the file. |
 | [`AGENTS.md`](AGENTS.md) | Briefing for AI coding agents (the [agents.md](https://agents.md) convention, read by Claude Code, Cursor, Copilot and others) — commands, the non-negotiable rules, and the things about this codebase that surprise people. Its top block is Next.js-managed and points agents at the version-matched docs bundled in `node_modules/next/dist/docs/`. |
 | [`.env.example`](.env.example) | Annotated environment-variable template — every variable with its purpose, where to find its value, and the build-time vs runtime distinction. |
 | [`LICENSE`](LICENSE) | MIT. |
@@ -874,7 +920,9 @@ This README is the only document a reader needs; the rest are supporting detail.
 
 The full build (**B1–B8**) and production-hardening (**P1–P8**) phases are complete, and the
 app is **deployed and verified in production**. A multi-agent security audit has been run and
-its findings fixed.
+its findings fixed. Since then: two independent price tiers with a per-age meal price list, a
+daily lifecycle job, link previews, a full admin registration editor, and the built-in admin
+help.
 
 **Known parking-lot items** (non-blocking):
 
@@ -901,7 +949,8 @@ Licensed under the **MIT License** — see [`LICENSE`](LICENSE). The code is ope
 from and reuse.
 
 The **Buddhismus Diamantové cesty (BDC)** name, logo and visual identity belong to BDC and are
-**not** covered by the MIT grant, which applies to the source code only.
+**not** covered by the MIT grant, which applies to the source code only. The link-preview cards
+use Crimson Pro (SIL Open Font License, `assets/CrimsonPro-OFL.txt`).
 
 Built with Next.js, Prisma, Supabase, next-intl, Zod, React Hook Form, Resend, exceljs, Tailwind
 CSS and Vitest.
