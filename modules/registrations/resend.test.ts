@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { AdminContext } from "@/modules/auth";
 
-// ─── Mock the I/O boundary (same pattern as update-repricing.test.ts) ─────────
+// ─── Mock the I/O boundary (same pattern as full-update.test.ts) ──────────────
 // Prisma and Resend are mocked — no test DB exists and no mail may leave a test
 // run. What is asserted here is not the template but the GATE in front of it.
 

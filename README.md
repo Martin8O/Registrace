@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-462%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-431%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -193,10 +193,12 @@ single source of orientation for anyone joining the project.
   consequences an admin sees: a closed or archived event is **read-only** in the admin (its
   registrations stay fully editable), and once archived its registrations move behind the
   registrations list's "show archived" switch — the event's own view still lists them all.
-- **Registration workflow** — filter by centre / status / archived, search by number, edit
-  status (registered / paid / cancelled), accommodation, and **each participant's two pricing
-  tiers** — every one of which is re-priced server-side by the real engine, with a meal-tier
-  change also rewriting the stored price of each ordered meal. Plus resend confirmations, and
+- **Registration workflow** — filter by centre / status / archived, search by number, and a
+  **full editor** for each registration: status, the stay (days, arrival time, early departure,
+  accommodation), and every participant's name, age, both pricing tiers, diet and meals per day —
+  people added or removed. The price is recalculated live and again on save by the real engine,
+  the save is guarded against a concurrent edit, and meal rows are re-priced at the meal tier.
+  Plus resend confirmations, and
   **kitchen** (meat / veg totals) and **accommodation** (per-night headcount) tables.
 - **Per-event XLSX export** — one click per event, with a formula-injection-safe serializer.
 - **Centre & admin management** — invite/edit/remove admins, assign centres, soft-delete and
@@ -221,7 +223,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 462 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 431 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -382,8 +384,9 @@ included.
 **Admin** (edge: session + rate-limit + CSRF; handler: role/ownership)
 - Events — `GET`/`POST /api/admin/events`, `GET`/`PUT /api/admin/events/[id]`,
   `PATCH /api/admin/events/[id]/status`
-- Registrations — `GET /api/admin/registrations`, `GET`/`PUT /api/admin/registrations/[id]`,
-  `POST /api/admin/registrations/export`, `POST /api/admin/registrations/[id]/resend-confirmation`
+- Registrations — `GET /api/admin/registrations`, `GET /api/admin/registrations/[id]`,
+  `PUT /api/admin/registrations/[id]/full` (full edit), `POST /api/admin/registrations/[id]/calculate-price`
+  (its live price), `POST /api/admin/registrations/export`, `POST /api/admin/registrations/[id]/resend-confirmation`
 - Centres — `GET`/`POST /api/admin/centers`, `PUT`/`DELETE`/`PATCH /api/admin/centers/[id]`
   (`DELETE` soft-deletes, `PATCH` restores)
 - Admins — `GET`/`POST /api/admin/users`, `PUT`/`DELETE /api/admin/users/[id]`,
@@ -631,7 +634,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **462 Vitest tests** across 31 files, with **no database required**:
+`npm test` runs **431 Vitest tests** across 30 files, with **no database required**:
 
 - **Pricing engine** (48) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -663,24 +666,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   caller's language: the confirmation groups meals by day, which it cannot do from the
   pre-composed slot label it used to be handed. Four more pin the three stay-order rules on the
   submit path (and that a same-day morning visit leaving after breakfast is accepted).
-- **Admin re-pricing** (30) — that toggling a registration's accommodation re-prices it through
-  the real engine (both directions, children included — no age is special-cased), that a centre
-  or status edit writes no price and issues no extra query, that the registration and its
-  participants move in one transaction, that a participant eating on a non-standard tier keeps
-  their meal price, and that the meals already ordered survive a re-price **after** the meal
-  deadline. That last one is the trap: the submit path strips meals once the cut-off passes, and
-  copying that gate into an edit would delete what people had ordered. Plus the **tier edit**:
-  each of the two tiers re-prices its own half and only its own half, a meal-tier change also
-  re-snapshots every stored `ParticipantMeal.price`, an unchanged tier list re-prices nothing,
-  and a tier the event does not offer — or a participant from another registration — is refused
-  before anything is written. Two of them guard the shape of that refusal: only a tier the admin
-  is actually **changing** is checked, so one participant stranded on a tier the event no longer
-  offers cannot block every save on the registration; and the meal re-snapshot is written **one
-  statement per distinct price**, because row-at-a-time made a large booking dozens of sequential
-  round trips inside a single transaction. Three more check the audit entry: a tier edit records
-  the before/after tiers of exactly the people who moved, beside the old and new total, and adds
-  nothing at all when no tier moved.
-- **Admin full edit** (40) — the registration team's on-site fix of a stored booking: a family
+- **Admin full edit** (39) — the registration team's on-site fix of a stored booking: a family
   member removed (soft-deleted, the total drops by exactly their price, their meal rows kept for
   the audit), a person added, meals swapped, the stay moved, accommodation and early departure,
   a child re-booked as an adult — each re-priced by the real engine. The meal tier prices the

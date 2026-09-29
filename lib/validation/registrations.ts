@@ -98,33 +98,8 @@ export const registrationSubmitSchema = z
   // never shown in the UI. See prisma/schema.prisma Registration.ipAddress.
   .superRefine((data, ctx) => applySharedRefinements(data, ctx));
 
-// ─── Admin registration edit (P2.5) ──────────────────────────────────────────
-// Editable fields: registrant home centre, accommodation, status, and each
-// participant's two pricing tiers. The stay days and the meal selection stay
-// immutable because existing Participant/ParticipantMeal rows reference them.
-// Everything editable here that moves money is re-priced server-side through the
-// real engine before the write (invariants 3–4) — accommodation since M39, the
-// two tiers since M40c.
+// ─── Registration status (admin edit + export) ─────────────────────────────────
 const registrationStatusValues = ["REGISTERED", "CANCELLED", "PAID"] as const;
-
-// Per-participant tier edit. Both tiers are always sent for a participant the
-// admin can see, and the service re-prices only the ones that actually moved —
-// so a status-only save still writes no price. Whether THIS event offers a given
-// tier is checked in the service, which is the only layer holding the event.
-const registrationParticipantTierSchema = z.object({
-  id: z.string().min(1).max(64),
-  pricingType: z.enum(pricingTypeValues),
-  mealPricingType: z.enum(pricingTypeValues),
-});
-
-export const registrationUpdateSchema = z.object({
-  centerId: z.string().min(1).max(64),
-  hasAccommodation: z.boolean(),
-  status: z.enum(registrationStatusValues),
-  // Optional so a client that predates the tier editor keeps working untouched:
-  // absent means "leave every tier exactly as stored", never "reset to STANDARD".
-  participants: z.array(registrationParticipantTierSchema).max(10).optional(),
-});
 
 // ─── Admin FULL registration edit (M50) ──────────────────────────────────────
 // Everything the registrant chose, editable by an admin: the stay, accommodation,
@@ -219,7 +194,6 @@ export const registrationExportSchema = z.object({
 
 export type CalculatePriceInput = z.infer<typeof calculatePriceSchema>;
 export type RegistrationSubmitInput = z.infer<typeof registrationSubmitSchema>;
-export type RegistrationUpdateInput = z.infer<typeof registrationUpdateSchema>;
 export type RegistrationExportInput = z.infer<typeof registrationExportSchema>;
 export type RegistrationFullPreviewInput = z.infer<typeof registrationFullPreviewSchema>;
 export type RegistrationFullUpdateInput = z.infer<typeof registrationFullUpdateSchema>;

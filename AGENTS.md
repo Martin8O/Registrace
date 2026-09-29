@@ -18,7 +18,7 @@ list of invariants before changing anything structural.
 ```bash
 npm run dev                 # dev server on :3000
 npm run build               # production build
-npm test                    # Vitest (462 tests, no database needed)
+npm test                    # Vitest (431 tests, no database needed)
 npm run lint                # ESLint
 npx prisma migrate deploy   # apply migrations (needs DIRECT_URL)
 ```
@@ -89,9 +89,10 @@ These are enforced across the codebase — do not violate them to make something
   existed one tier priced both halves. That fallback belongs at the service boundary — the engine
   takes the meal tier literally. Anything that re-prices a stored registration must load **both**
   tiers: dropping the meal one silently re-prices 65 live participants' meals downward, and it is
-  pinned by a fixture in `update-repricing.test.ts` that stays STANDARD but eats SUPPORTED.
-  Admins can edit **either tier on a stored registration**; the server re-prices through the real
-  engine and writes each tier in the same update as the amount it produced. A **meal**-tier edit
+  pinned by a fixture in `full-update.test.ts` that stays STANDARD but eats SUPPORTED.
+  Admins can edit **either tier on a stored registration** (the full edit, `PUT …/[id]/full`); the
+  server re-prices through the real engine and writes each tier in the same update as the amount
+  it produced. A **meal**-tier edit
   must also rewrite every `ParticipantMeal.price` — accommodation never can, so the "an edit never
   touches those rows" rule is about accommodation only, not a general one.
 - **RLS is enabled deny-all** on the data tables as a backstop, but Prisma connects directly

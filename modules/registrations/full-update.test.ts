@@ -3,7 +3,7 @@ import type { AdminContext } from "@/modules/auth";
 import type { RegistrationFullUpdateInput } from "@/lib/validation";
 
 // ─── The admin FULL edit (M50) ────────────────────────────────────────────────
-// Same harness as update-repricing.test.ts: Prisma mocked (no test DB exists),
+// Prisma mocked (no test DB exists — Supabase is the only instance),
 // the pricing engine REAL — every number asserted below is arithmetic the
 // production engine performs.
 
@@ -32,7 +32,6 @@ vi.mock("@/modules/events", () => ({ isPubliclyVisible: () => true }));
 import {
   applyFullUpdate,
   previewFullUpdate,
-  updateRegistration,
   listRegistrations,
   getEventAccommodationStats,
   RegistrationCapacityError,
@@ -584,24 +583,6 @@ describe("previewFullUpdate", () => {
 });
 
 // ─── Existing paths the full edit depends on ──────────────────────────────────
-
-describe("updateRegistration — un-cancelling respects the registration limit (M50)", () => {
-  it("refuses CANCELLED → REGISTERED on a full event, writing nothing", async () => {
-    h.prisma.registration.findFirst.mockResolvedValue({
-      centerId: "c1", hasAccommodation: false, status: "CANCELLED", totalPrice: 625,
-      event: { id: "evt1", centerId: "evt-center", maxRegistrations: 3, participationPricingTypes: ALL_TIERS, mealPricingTypes: ALL_TIERS },
-      participants: [],
-    });
-    h.prisma.center.findFirst.mockResolvedValue({ id: "c1" });
-    h.tx.registration.count.mockResolvedValue(3);
-
-    await expect(
-      updateRegistration("r1", { centerId: "c1", hasAccommodation: false, status: "REGISTERED" }, SUPER),
-    ).rejects.toBeInstanceOf(RegistrationCapacityError);
-    expect(h.tx.registration.update).not.toHaveBeenCalled();
-    expect(h.logAuditEvent).not.toHaveBeenCalled();
-  });
-});
 
 describe("counts of people read only live participants (M50 removes people by soft delete)", () => {
   it("the admin registrations list", async () => {
