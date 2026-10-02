@@ -21,7 +21,16 @@ const h = vi.hoisted(() => ({
   auditCreate: vi.fn(),
 }));
 
-function findHighest({ where }: { where: { numberPrefix: { startsWith: string } } }) {
+// The QUERY is the fix, so the stand-in refuses any other one: an ascending or
+// missing order, or a `deletedAt: null` added "for consistency", would re-issue a
+// taken prefix in production while a lenient mock kept every case below green.
+function findHighest(args: { where: { numberPrefix: { startsWith: string } } }) {
+  expect(args).toEqual({
+    where: { numberPrefix: { startsWith: expect.stringMatching(/^\d{2}$/) } },
+    orderBy: { numberPrefix: "desc" },
+    select: { numberPrefix: true },
+  });
+  const { where } = args;
   const matching = h.prefixes.filter((p) => p.startsWith(where.numberPrefix.startsWith)).sort();
   const top = matching.at(-1);
   return Promise.resolve(top ? { numberPrefix: top } : null);
@@ -103,7 +112,7 @@ describe("createEvent — registration-number prefix", () => {
     await createEvent(input, ctx);
 
     expect(h.eventCreate).toHaveBeenCalledTimes(1);
-    expect(h.eventCreate.mock.calls[0][0].data.numberPrefix).toBe("26017");
+    expect(h.eventCreate.mock.calls[0]![0].data.numberPrefix).toBe("26017");
   });
 
   it("does not re-issue a prefix after a draft moved to another year (audit S3)", async () => {
@@ -115,7 +124,7 @@ describe("createEvent — registration-number prefix", () => {
 
     await createEvent(input, ctx);
 
-    expect(h.eventCreate.mock.calls[0][0].data.numberPrefix).toBe("26004");
+    expect(h.eventCreate.mock.calls[0]![0].data.numberPrefix).toBe("26004");
   });
 
   it("gives the first event of a new year 001, ignoring other years", async () => {
@@ -124,7 +133,7 @@ describe("createEvent — registration-number prefix", () => {
 
     await createEvent({ ...input, startDate: new Date("2027-01-10T00:00:00Z") }, ctx);
 
-    expect(h.eventCreate.mock.calls[0][0].data.numberPrefix).toBe("27001");
+    expect(h.eventCreate.mock.calls[0]![0].data.numberPrefix).toBe("27001");
   });
 
   it("retries once with a fresh prefix when a concurrent create took it", async () => {
