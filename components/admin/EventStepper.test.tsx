@@ -46,6 +46,7 @@ type Mode = {
   status?: EventFormStatus;
   canEditRelations?: boolean;
   canUnpublish?: boolean;
+  readOnly?: boolean;
 };
 type EventFormStatus = "DRAFT" | "PUBLISHED" | "CLOSED" | "ARCHIVED";
 
@@ -60,6 +61,7 @@ function renderWizard(over: Mode = {}) {
         editData={isEdit ? EDIT_DATA : undefined}
         canEditRelations={over.canEditRelations ?? false}
         canUnpublish={over.canUnpublish ?? true}
+        readOnly={over.readOnly ?? false}
       />
     </NextIntlClientProvider>,
   );
@@ -286,5 +288,88 @@ describe("when the server refuses the save", () => {
     fireEvent.click(buttonNamed(F.saveChanges)!);
     await waitFor(() => expect(document.body.textContent).toContain(message));
     expect(document.body.textContent).not.toContain(F.errors.submitFailed);
+  });
+
+  it("a locked event's save leaves the status out unless the admin changed it", async () => {
+    // The form holds the status from when the page was opened. Echoing it back
+    // would undo another admin's hand-close made in the meantime.
+    const sent = () => JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.at(-1)![1].body);
+    renderWizard({ mode: "edit", status: "PUBLISHED" });
+    goToStep(F.steps.save);
+    fireEvent.click(buttonNamed(F.saveChanges)!);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(sent()).not.toHaveProperty("status");
+    expect(sent().title_cs).toBe("Kolíňáci v Těnovicích");
+    cleanup();
+
+    renderWizard({ mode: "edit", status: "PUBLISHED" });
+    goToStep(F.steps.settings);
+    fireEvent.change(document.querySelector<HTMLSelectElement>('select[name="status"]')!, { target: { value: "CLOSED" } });
+    goToStep(F.steps.save);
+    fireEvent.click(buttonNamed(F.saveChanges)!);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(sent().status).toBe("CLOSED");
+  });
+
+  it("says the data is wrong when the server's schema refuses it — not 'try again'", async () => {
+    // 400 is what app/api/_lib/http.ts answers for a payload the schema refuses.
+    // The wizard used to look for 422, which the server never sends, so this
+    // case fell through to "saving failed, please try again" — advice that
+    // cannot help, since the same data fails the same way every time.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, status: 400, json: async () => ({ error: "Validation failed" }) }),
+    );
+    renderWizard({ mode: "edit", status: "PUBLISHED" });
+    goToStep(F.steps.save);
+    fireEvent.click(buttonNamed(F.saveChanges)!);
+    await waitFor(() => expect(document.body.textContent).toContain(F.validationError));
+    expect(document.body.textContent).not.toContain(F.errors.submitFailed);
+  });
+});
+
+// An event that is over cannot be saved (the server answers 409 event_ended), so
+// it gets no wizard — but it must stay READABLE: this is the only admin screen
+// that shows an event's price list, meal days and settings, and the people
+// settling payments after the event need exactly those. It used to be one
+// sentence and a link, under a tooltip promising "view only".
+describe("an event that is over, opened read-only", () => {
+  it("shows the whole review and offers nothing that could be saved or stepped through", () => {
+    renderWizard({ mode: "edit", status: "CLOSED", readOnly: true, canUnpublish: false });
+
+    // The stored event is on the screen without a single click…
+    expect(previewValue(F.fields.title_cs)?.textContent).toBe("Kolíňáci v Těnovicích");
+    expect(previewValue(F.fields.startDate)?.textContent).toBe("2026-09-18");
+    expect(previewValue(F.fields.contactEmail)?.textContent).toBe("martin@example.cz");
+    expect(document.body.textContent).toContain(F.preview.pricing);
+    expect(document.body.textContent).toContain(F.preview.settings);
+
+    // …and there is no step to go to, no field to type into, nothing to save.
+    expect(document.querySelectorAll("button")).toHaveLength(0);
+    expect(document.querySelectorAll("input:not([type=hidden]), textarea, select")).toHaveLength(0);
+    expect(document.body.textContent).not.toContain(F.preview.intro);
+  });
+
+  it("prints the STORED price list — a cell the event never priced is 0, not the catalogue default", () => {
+    // EDIT_DATA stores no price row at all. The wizard's state used to start from
+    // the catalogue defaults (15+ standard 200 a day, 150 a night; lunch at the
+    // default price) whatever the event stored, so this screen — now the reference
+    // for settling payments — printed prices the engine never charged.
+    renderWizard({ mode: "edit", status: "CLOSED", readOnly: true });
+    const adultStandard = `${cs.admin.age.AGE_15_PLUS} · ${cs.admin.pricingType.STANDARD}`;
+    const rows = [...document.querySelectorAll("span")].filter((s) => s.textContent?.trim() === adultStandard);
+    expect(rows).toHaveLength(2); // the stay row and the meal row
+    for (const row of rows) {
+      const numbers = row.nextElementSibling!.textContent!.match(/\d+/g) ?? [];
+      expect(numbers.length).toBeGreaterThan(0);
+      expect(numbers.every((n) => n === "0")).toBe(true);
+    }
+  });
+
+  it("does not write its step into the address bar", () => {
+    const replaceState = vi.spyOn(window.history, "replaceState");
+    renderWizard({ mode: "edit", status: "ARCHIVED", readOnly: true });
+    expect(replaceState).not.toHaveBeenCalled();
+    replaceState.mockRestore();
   });
 });

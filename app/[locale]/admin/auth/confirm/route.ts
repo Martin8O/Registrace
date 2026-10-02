@@ -1,6 +1,8 @@
 import { type EmailOtpType } from '@supabase/supabase-js'
 import { type NextRequest } from 'next/server'
 import { redirect } from 'next/navigation'
+import { hasLocale } from 'next-intl'
+import { routing } from '@/i18n/routing'
 import { createClient } from '@/lib/supabase/server'
 
 // Landing route for the Supabase invite + password-reset e-mails. The e-mail
@@ -20,7 +22,15 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ locale: string }> },
 ) {
-  const { locale } = await params
+  // The locale goes straight into a redirect target, and nothing has vetted it:
+  // proxy.ts skips every path containing a dot, and the [locale] layout's 404
+  // wraps pages, not route handlers. Route params arrive DECODED, so
+  // `/%5Cevil.com/admin/auth/confirm` would have redirected to `/\evil.com/…`,
+  // which a browser resolves to another site — a link on our own domain landing
+  // an admin on someone else's login page. Anything but a real locale becomes
+  // the default one, before the one-time token is spent.
+  const { locale: requested } = await params
+  const locale = hasLocale(routing.locales, requested) ? requested : routing.defaultLocale
   const { searchParams } = new URL(request.url)
   const token_hash = searchParams.get('token_hash')
   const type = searchParams.get('type') as EmailOtpType | null

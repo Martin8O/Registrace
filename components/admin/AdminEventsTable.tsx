@@ -122,22 +122,15 @@ export default function AdminEventsTable({ events }: { events: AdminEventListIte
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-3 whitespace-nowrap">
                         {/* Edit until the event is over (isEventEditable, decided
-                            on the server); after that it is read-only. */}
-                        {event.editable ? (
-                          <Link
-                            href={`${base}/events/${event.id}/edit`}
-                            className="text-sm font-medium text-primary-600 hover:text-primary-700"
-                          >
-                            {t('events.edit')}
-                          </Link>
-                        ) : (
-                          <span
-                            className="text-sm font-medium text-neutral-300"
-                            title={t('events.editEnded')}
-                          >
-                            {t('events.edit')}
-                          </span>
-                        )}
+                            on the server); after that the same page is read-only,
+                            so the link says "View" instead of going dead. */}
+                        <Link
+                          href={`${base}/events/${event.id}/edit`}
+                          className="text-sm font-medium text-primary-600 hover:text-primary-700"
+                          title={event.editable ? undefined : t('events.editEnded')}
+                        >
+                          {event.editable ? t('events.edit') : t('events.view')}
+                        </Link>
                         <Link
                           href={`${base}/registrations?event=${event.id}`}
                           className="text-sm font-medium text-primary-600 hover:text-primary-700"

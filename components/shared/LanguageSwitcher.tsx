@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation'
 import { useLocale } from 'next-intl'
+import { confirmLeave } from '@/lib/utils/unsavedGuard'
 
 export default function LanguageSwitcher() {
   const pathname = usePathname()
@@ -9,6 +10,9 @@ export default function LanguageSwitcher() {
   const locale = useLocale()
 
   function switchTo(targetLocale: string) {
+    // The route remounts in the other language; a screen holding unsaved work
+    // (the admin registration editor) would lose it without a word.
+    if (targetLocale !== locale && !confirmLeave()) return
     const segments = pathname.split('/')
     segments[1] = targetLocale
     // Preserve the current query string so switching language stays on the SAME

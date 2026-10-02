@@ -18,8 +18,10 @@ list of invariants before changing anything structural.
 ```bash
 npm run dev                 # dev server on :3000
 npm run build               # production build
-npm test                    # Vitest (467 tests, no database needed)
+npm test                    # Vitest (512 tests, no database needed)
 npm run lint                # ESLint
+npm run typecheck           # tsc --noEmit, test files included
+npm run gate                # typecheck → lint → tests → build: run this before any commit
 npx prisma migrate deploy   # apply migrations (needs DIRECT_URL)
 ```
 
@@ -37,7 +39,8 @@ These are enforced across the codebase — do not violate them to make something
 5. **UI text → next-intl JSON** (`locales/*.json`); **event content → bilingual DB columns**
    (`*_cs` / `*_en`).
 6. **Email failure never rolls back** the registration transaction.
-7. **Soft delete (`deletedAt`)** on audit-relevant entities — no permanent deletion.
+7. **Soft delete (`deletedAt`)** on events, registrations and participants; centres are
+   deactivated (`isActive`). The one hard delete is removing an admin (its removal is audited).
 8. **Money = whole-CZK integers** (80 CZK is `80`). **Datetimes = UTC in the DB**, rendered in
    Europe/Prague.
 9. **SUPER_ADMIN sees all; ADMIN is scoped to their centre(s).** An *owner* tier guards
@@ -51,6 +54,17 @@ These are enforced across the codebase — do not violate them to make something
   `/api/auth/me`) and the cron endpoint (`/api/cron/**`) bypass the edge entirely and rate-limit
   themselves inside each handler; the cron one also demands the bearer Vercel sends
   (`CRON_SECRET`, fail-closed when unset).
+- **The proxy is not the admin pages' only gate — and must not become it.** The matcher skips
+  every path containing a dot, and `[locale]` would accept any string, so `/a.b/admin/help` used
+  to reach the app without meeting the proxy and rendered for anyone. Three gates now: the
+  `[locale]` layout 404s a locale outside `i18n/routing.ts`, the panel layout redirects without
+  an admin, and **every page under `admin/(panel)` must be a server component that calls
+  `getAdminContext()` and redirects itself** (a layout is skipped when a client asks for the page
+  segment alone). `app/[locale]/admin/panel-guard.test.ts` reads the pages from disk and fails
+  for one that forgets; a client-component page needs a server shell (see `profile/page.tsx`).
+  A **route handler** under `[locale]` is wrapped by no layout and gets its params decoded:
+  validate the locale with `hasLocale(routing.locales, …)` before using it in a redirect
+  (`admin/auth/confirm/route.ts` — an unvalidated one was an open redirect).
 - **An event's stored status lags the calendar — on purpose.** Public visibility is derived on
   read (`isPubliclyVisible`: gone at 20:00 Prague on the end day), while the `status` column is
   written by a **daily** Vercel Cron (`runEventLifecycle`: CLOSED after that moment, ARCHIVED
@@ -58,8 +72,9 @@ These are enforced across the codebase — do not violate them to make something
   is missed (delivery is best-effort, so the job reconciles instead of stepping). Both read the
   same instants from one helper; do not add a third definition, and do not make the public side
   wait for the column. The same close instant also ends **admin editing of the event**
-  (`isEventEditable`): from then on the Edit link greys out and `updateEvent` / `setEventStatus`
-  refuse with 409 — whatever the column says, so an event closed by hand *before* its end stays
+  (`isEventEditable`): from then on the Edit link becomes View — the same page rendering the
+  wizard's review step read-only, the only admin view of an event's price list — and
+  `updateEvent` / `setEventStatus` refuse with 409 — whatever the column says, so an event closed by hand *before* its end stays
   editable and can be published again. A live event with registrations cannot go back to DRAFT
   (both writes refuse it). The registrations list hides ARCHIVED events' rows behind its "show
   archived" switch; registration editing, resend and export look at none of this.
@@ -98,6 +113,15 @@ These are enforced across the codebase — do not violate them to make something
   it produced. A **meal**-tier edit
   must also rewrite every `ParticipantMeal.price` — accommodation never can, so the "an edit never
   touches those rows" rule is about accommodation only, not a general one.
+- **A meal outside the stay is not always refused.** The full edit refuses a meal outside the
+  new stay — except one the participant **already holds** while the stay itself does not move
+  (the meal twin of the stranded tier). Such rows exist because the public submit never checked
+  the window; refusing them made every save fail, marking the registration paid or cancelled
+  included. The admin editor mirrors it (`mealProblemOf`: `stranded` is flagged but priced and
+  saved, `refused` blocks) and, unlike the public form, **never unticks meals on a stay change**
+  — they stay flagged until the admin removes them with one click. Do not "align" it back with
+  the public form: there it is the registrant's fresh choice, here it deleted ten people's
+  stored bookings on a mis-click.
 - **RLS is enabled deny-all** on the data tables as a backstop, but Prisma connects directly
   and bypasses it. The real authorization is the role/ownership gate in the handlers and
   services. It lives in a migration and is guarded by `prisma/rls.test.ts` — **a new model
@@ -126,7 +150,10 @@ These are enforced across the codebase — do not violate them to make something
 ## Conventions
 
 - Translation keys are **nested**, never flat. Namespaces: `form`, `home`, `event`, `badge`,
-  `admin`, `meta`. Keep `form.pricing_info` (in-form label) and `event.pricingInfo` (detail-page
+  `admin`, `meta`, and `help` — the admin help page and "?" hints, **Czech only, in `cs.json`
+  alone**: `i18n/request.ts` grafts it onto every locale, the `[locale]` layout withholds it from
+  the public site, the panel layout passes only `help.hints` to the browser, and
+  `lib/messages.test.ts` fails if `en.json` grows a `help`. Keep `form.pricing_info` (in-form label) and `event.pricingInfo` (detail-page
   button) distinct — different elements, never merge. `meta` is the link-preview card (site name
   and description); it is site-wide, which is why it is not folded into `home`.
 - Validation lives in `lib/validation/*` and must stay **client-safe** (no Prisma imports).

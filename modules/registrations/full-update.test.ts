@@ -19,6 +19,8 @@ const h = vi.hoisted(() => {
     center: { findFirst: vi.fn() },
     event: { findFirst: vi.fn() },
     eventDate: { findMany: vi.fn() },
+    eventMeal: { findMany: vi.fn() },
+    participantMeal: { findMany: vi.fn() },
     $transaction: vi.fn(),
   };
   return { prisma, tx, logAuditEvent: vi.fn() };
@@ -34,6 +36,10 @@ import {
   previewFullUpdate,
   listRegistrations,
   getEventAccommodationStats,
+  getEventMealStats,
+  getRegistrationForDetail,
+  resendConfirmation,
+  buildRegistrationExport,
   RegistrationCapacityError,
   RegistrationCenterInvalidError,
   RegistrationChangedError,
@@ -370,6 +376,47 @@ describe("applyFullUpdate — the stay", () => {
     });
   });
 
+  // ── Stranded meals: stored outside the stay (the public submit never checked) ──
+  // The registration arrives on day 2 but holds day-1 meals: adult b1 + l1, child l1.
+
+  it("a meal already stored outside the stay does not block a save that leaves the stay alone", async () => {
+    h.prisma.registration.findFirst.mockResolvedValue(stored({ arrivalDateId: "d2" }));
+
+    const res = await applyFullUpdate("r1", input({ arrivalDateId: "d2", status: "CANCELLED" }), SUPER);
+
+    // Still priced, exactly as it was when it was sold: adult 100 × 2 + 55 + 90 = 345,
+    // child 40 × 2 + 60 = 140. Nothing is quietly dropped from the guest's total.
+    expect(res.totalPrice).toBe(485);
+    expect(regWrite().data).toMatchObject({ status: "CANCELLED", totalPrice: 485 });
+    expect(h.tx.participantMeal.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("…but a meal ADDED outside the stay is still refused, for the person it was added to", async () => {
+    h.prisma.registration.findFirst.mockResolvedValue(stored({ arrivalDateId: "d2" }));
+
+    await expect(
+      applyFullUpdate(
+        "r1",
+        input({
+          arrivalDateId: "d2",
+          // The child holds l1 only; b1 is the adult's stranded meal, not theirs.
+          participants: [asInput(ADULT), { ...asInput(CHILD), mealIds: ["b1", "l1"] }],
+        }),
+        SUPER,
+      ),
+    ).rejects.toMatchObject({ code: "meal_outside_stay", participantIndex: 1, mealId: "b1" });
+    nothingWritten();
+  });
+
+  it("…and moving the stay at all ends the exemption", async () => {
+    h.prisma.registration.findFirst.mockResolvedValue(stored({ arrivalDateId: "d2" }));
+
+    await expect(
+      applyFullUpdate("r1", input({ arrivalDateId: "d2", arrivalTime: "AFTERNOON" }), SUPER),
+    ).rejects.toMatchObject({ code: "meal_outside_stay", participantIndex: 0, mealId: "b1" });
+    nothingWritten();
+  });
+
   it("early departure after breakfast subtracts the discount per tier", async () => {
     const res = await applyFullUpdate(
       "r1",
@@ -605,5 +652,52 @@ describe("counts of people read only live participants (M50 removes people by so
       select: { participants: { where: { deletedAt: null } } },
     });
     expect(nights.map((n) => n.count)).toEqual([1, 1]);
+  });
+
+  // A removed person stays in the table (soft delete), so every reader has to
+  // leave them out itself. Each filter below is one dropped line away from putting
+  // them back into a price, an e-mail, the kitchen's count or the spreadsheet —
+  // and none of those would fail any other test.
+
+  it("the full edit's own load — a removed person's id must read as unknown", async () => {
+    await applyFullUpdate("r1", input(), SUPER);
+    expect(h.prisma.registration.findFirst.mock.calls[0]![0].select.participants.where).toEqual({
+      deletedAt: null,
+    });
+  });
+
+  it("the registration detail", async () => {
+    h.prisma.registration.findFirst.mockResolvedValue(null);
+    await getRegistrationForDetail("r1", SUPER);
+    expect(h.prisma.registration.findFirst.mock.calls[0]![0].include.participants.where).toEqual({
+      deletedAt: null,
+    });
+  });
+
+  it("the re-sent confirmation e-mail", async () => {
+    h.prisma.registration.findFirst.mockResolvedValue(null);
+    await resendConfirmation("r1", SUPER).catch(() => undefined);
+    expect(h.prisma.registration.findFirst.mock.calls[0]![0].include.participants.where).toEqual({
+      deletedAt: null,
+    });
+  });
+
+  it("the kitchen's meal counts", async () => {
+    h.prisma.event.findFirst.mockResolvedValue({ id: "evt1" });
+    h.prisma.eventDate.findMany.mockResolvedValue([]);
+    h.prisma.eventMeal.findMany.mockResolvedValue([]);
+    h.prisma.participantMeal.findMany.mockResolvedValue([]);
+    await getEventMealStats("evt1", SUPER);
+    expect(h.prisma.participantMeal.findMany.mock.calls[0]![0].where.participant).toMatchObject({
+      deletedAt: null,
+    });
+  });
+
+  it("the export", async () => {
+    h.prisma.registration.findMany.mockResolvedValue([]);
+    await buildRegistrationExport({}, SUPER, "cs");
+    expect(h.prisma.registration.findMany.mock.calls[0]![0].include.participants.where).toEqual({
+      deletedAt: null,
+    });
   });
 });

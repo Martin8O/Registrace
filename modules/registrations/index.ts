@@ -1047,6 +1047,19 @@ async function prepareFullUpdate(
   // deliberately not a gate here (Martin, 2026-09-28): it closes the public form,
   // and the team adding a lunch on site after it is the point of this editor. The
   // flag goes back to the editor, which says so.
+  //
+  // One exemption, the meal twin of the stranded tier above (Martin, 2026-10-02):
+  // a meal a participant ALREADY holds outside the stay is kept while the stay
+  // itself does not move. Such rows exist (the public submit never checked the
+  // window), and refusing them made every save fail — marking the registration
+  // paid or cancelled included — until the admin unticked meals nobody had asked
+  // to change, which lowered a price the guest had already been told. Move the
+  // stay and the exemption is gone: then the meals really are being re-decided.
+  const stayUnchanged =
+    input.arrivalDateId === stored.arrivalDateId &&
+    input.arrivalTime === stored.arrivalTime &&
+    input.departureDateId === stored.departureDateId &&
+    input.earlyDeparture === stored.earlyDeparture;
   const eventDates = ev.dates.map((d) => ({
     id: d.id,
     date: d.date.toISOString().slice(0, 10),
@@ -1066,11 +1079,15 @@ async function prepareFullUpdate(
     ev.meals,
   );
   for (const [i, p] of input.participants.entries()) {
+    const current = p.id ? storedById.get(p.id) : undefined;
+    const held = stayUnchanged && current ? new Set(current.meals.map((m) => m.eventMealId)) : null;
     for (const mealId of p.mealIds) {
       const slot = mealById.get(mealId);
       if (!slot) throw new RegistrationMealInvalidError("meal_unknown", i, mealId);
       if (slot.isClosed) throw new RegistrationMealInvalidError("meal_closed", i, mealId);
-      if (!presentFor.has(mealId)) throw new RegistrationMealInvalidError("meal_outside_stay", i, mealId);
+      if (!presentFor.has(mealId) && !held?.has(mealId)) {
+        throw new RegistrationMealInvalidError("meal_outside_stay", i, mealId);
+      }
     }
   }
 

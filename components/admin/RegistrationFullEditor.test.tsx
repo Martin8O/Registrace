@@ -13,6 +13,7 @@ import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/re
 import { NextIntlClientProvider } from "next-intl";
 import cs from "@/locales/cs.json";
 import RegistrationFullEditor, { type FullEditorData, type FullEditorParticipant } from "./RegistrationFullEditor";
+import { confirmLeave } from "@/lib/utils/unsavedGuard";
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
@@ -62,15 +63,21 @@ function data(over: Partial<Omit<FullEditorData, "event">> & { event?: Partial<F
   };
 }
 
+const editor = (d: FullEditorData) => (
+  <NextIntlClientProvider locale="cs" messages={cs}>
+    <RegistrationFullEditor data={d} numberLabel="Číslo registrace" pricingButton={null}>
+      <div>summary</div>
+    </RegistrationFullEditor>
+  </NextIntlClientProvider>
+);
 function renderEditor(d: FullEditorData = data()) {
-  return render(
-    <NextIntlClientProvider locale="cs" messages={cs}>
-      <RegistrationFullEditor data={d} numberLabel="Číslo registrace" pricingButton={null}>
-        <div>summary</div>
-      </RegistrationFullEditor>
-    </NextIntlClientProvider>,
-  );
+  return render(editor(d));
 }
+const flagged = (pKey: string, mealId: string) =>
+  document.querySelector(`label[for="meal-${pKey}-${mealId}"]`)?.getAttribute("data-flagged") === "true";
+// "N ticked meals lie outside the stay…" — the count is the point, the plural form is not.
+const outsideBanner = () => screen.queryByText(/mimo pobyt\. Dokud tam (je|jsou),/);
+const fullBody = (n = 0) => JSON.parse(calls("/full")[n]![1].body as string);
 
 const fetchMock = () => fetch as unknown as ReturnType<typeof vi.fn>;
 const calls = (suffix: string) => fetchMock().mock.calls.filter((c) => String(c[0]).endsWith(suffix));
@@ -156,6 +163,25 @@ describe("the stored registration, shown as it is", () => {
     expect(calls("/calculate-price")).toHaveLength(2);
   });
 
+  it("a failure does not stick: coming back to a state that once failed asks again instead of reporting it failed", async () => {
+    renderEditor();
+    await priced();
+    const tier = (value: string) => fireEvent.change(byId("tier-participation-p1")!, { target: { value } });
+
+    fetchMock().mockRejectedValue(new Error("offline"));
+    tier("STANDARD");
+    await waitFor(() => expect(screen.getByText(RD.priceFailed)).toBeTruthy(), { timeout: 2000 });
+
+    previewReturns(565, [385, 180]);
+    tier("SUPPORTED"); // another state — the server answers this one
+    await waitFor(() => expect(screen.getByTestId("total-price").textContent).toBe("565 CZK"), { timeout: 2000 });
+    await priced();
+
+    tier("STANDARD"); // the state that failed a moment ago
+    expect(screen.queryByText(RD.priceFailed)).toBeNull();
+    expect(screen.getByText(RD.calculating)).toBeTruthy();
+  });
+
   it("prices each meal pill for THAT person at their MEAL tier (not the stay tier)", () => {
     renderEditor();
     // Adult stays SURPLUS but eats SUPPORTED → lunch 90, never STANDARD 120 or the flat 999.
@@ -168,19 +194,37 @@ describe("the stored registration, shown as it is", () => {
     expect(meal("p1", "l2")).not.toBeNull();
   });
 
-  it("a stored meal outside the stay is shown ticked and flagged, and blocks the save until unticked", () => {
-    // Stay d2→d3, but b1 (day 1) is stored — the 24 seeded demo registrations look like this.
+  it("a meal already stored outside the stay is flagged and explained — but priced, and no obstacle to a save", async () => {
+    // Stay d2→d3, but b1 (day 1) is stored — the 24 seeded demo registrations look
+    // like this. It used to block every save, marking the registration paid or
+    // cancelled included, until the admin unticked a meal nobody had asked about.
     renderEditor(data({ arrivalDateId: "d2", participants: [{ ...ADULT, mealIds: ["b1", "l2"] }] }));
     expect(meal("p1", "b1")!.checked).toBe(true);
-    expect(document.querySelector('label[for="meal-p1-b1"]')!.getAttribute("data-flagged")).toBe("true");
-    expect(screen.getByText(RD.outsideStayNote)).toBeTruthy();
-
-    fireEvent.change(byId("fullName-p1")!, { target: { value: "Jan Novák ml." } });
-    expect(saveButton().disabled).toBe(true);
-
-    fireEvent.click(meal("p1", "b1")!);
-    expect(meal("p1", "b1")).toBeNull(); // unticked, and not a slot of this stay
+    expect(flagged("p1", "b1")).toBe(true);
+    expect(screen.getByText(RD.strandedMealsNote)).toBeTruthy();
     expect(screen.queryByText(RD.outsideStayNote)).toBeNull();
+    expect(outsideBanner()).toBeNull();
+
+    await priced(); // the server is asked, with the stranded meal still in the request
+    expect(JSON.parse(calls("/calculate-price")[0]![1].body as string).participants[0].mealIds).toEqual(["b1", "l2"]);
+
+    fireEvent.change(statusSelect(), { target: { value: "CANCELLED" } });
+    expect(saveButton().disabled).toBe(false);
+
+    // Unticking it is still possible; it is then simply not a slot of this stay.
+    fireEvent.click(meal("p1", "b1")!);
+    expect(meal("p1", "b1")).toBeNull();
+    expect(screen.queryByText(RD.strandedMealsNote)).toBeNull();
+  });
+
+  it("…while a meal ticked NOW outside the stay is refused: flagged, counted, and it blocks the save", () => {
+    // The child does not hold b1; only a stored meal is exempt, and only for its holder.
+    renderEditor(data({ arrivalDateId: "d2", participants: [{ ...ADULT, mealIds: ["b1", "l2"] }, { ...CHILD, mealIds: [] }] }));
+    fireEvent.click(radio("arrivalTime-AFTERNOON")); // the stay moved → nothing is exempt any more
+    expect(flagged("p1", "b1")).toBe(true);
+    expect(screen.getByText(RD.outsideStayNote)).toBeTruthy();
+    expect(outsideBanner()!.textContent).toContain("1 zaškrtnuté jídlo leží");
+    expect(saveButton().disabled).toBe(true);
   });
 
   it("after the meal deadline: a notice, and the meals stay editable", () => {
@@ -228,6 +272,17 @@ describe("tier selects", () => {
     expect(optionsOf(el)).toEqual(["SURPLUS", "STANDARD"]);
     expect(byId("tier-meal-p1")).toBeNull();
   });
+
+  it("…and moving off it is not a one-way door: the stored tier stays on offer", () => {
+    renderEditor(data({
+      participants: [{ ...ADULT, pricingType: "SURPLUS", mealPricingType: "STANDARD" }],
+      event: { participationPricingTypes: ["STANDARD"], mealPricingTypes: ["STANDARD"] },
+    }));
+    fireEvent.change(byId("tier-participation-p1")!, { target: { value: "STANDARD" } });
+    const el = byId<HTMLSelectElement>("tier-participation-p1")!; // the select did not vanish
+    expect(el.value).toBe("STANDARD");
+    expect(optionsOf(el)).toEqual(["SURPLUS", "STANDARD"]);
+  });
 });
 
 // ─── The stay ─────────────────────────────────────────────────────────────────
@@ -249,13 +304,49 @@ describe("the stay", () => {
     expect(radio("arrivalTime-EVENING").disabled).toBe(true);
   });
 
-  it("arriving a day later drops everyone's first-day meals, in the same click", () => {
+  it("arriving a day later unticks NOTHING: the first-day meals stay, flagged and counted, and block the save", () => {
     renderEditor();
     fireEvent.click(radio("arrivalDateId-d2"));
+    expect(meal("p1", "b1")!.checked).toBe(true);
+    expect(meal("p1", "l1")!.checked).toBe(true);
+    expect(meal("p2", "l1")!.checked).toBe(true);
+    expect(flagged("p1", "b1") && flagged("p1", "l1") && flagged("p2", "l1")).toBe(true);
+    expect(outsideBanner()!.textContent).toContain("3 zaškrtnutá jídla leží");
+    expect(saveButton().disabled).toBe(true);
+  });
+
+  it("…so a mis-click on a day costs nothing: put the stay back and every meal is as it was", () => {
+    renderEditor();
+    fireEvent.click(radio("arrivalDateId-d2"));
+    fireEvent.click(radio("arrivalDateId-d1"));
+    expect(meal("p1", "b1")!.checked).toBe(true);
+    expect(meal("p2", "l1")!.checked).toBe(true);
+    expect(flagged("p1", "b1")).toBe(false);
+    expect(outsideBanner()).toBeNull();
+    expect(screen.queryByText(RD.unsaved)).toBeNull(); // back to exactly the stored state
+  });
+
+  it("…and one deliberate click unticks them for everyone, which is what then reaches the save", async () => {
+    renderEditor();
+    await priced();
+    previewReturns(280, [200, 80]);
+    fireEvent.click(radio("arrivalDateId-d2"));
+    fireEvent.click(radio("arrivalTime-AFTERNOON"));
+    fireEvent.click(radio("earlyDeparture-AFTER_BREAKFAST"));
+    fireEvent.click(screen.getByText(RD.dropOutsideMeals));
     expect(meal("p1", "b1")).toBeNull();
     expect(meal("p1", "l1")).toBeNull();
     expect(meal("p2", "l1")).toBeNull();
     expect(meal("p1", "l2")).not.toBeNull();
+    expect(outsideBanner()).toBeNull();
+
+    await waitFor(() => expect(saveButton().disabled).toBe(false), { timeout: 2000 });
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(calls("/full")).toHaveLength(1));
+    expect(fullBody()).toMatchObject({
+      arrivalDateId: "d2", arrivalTime: "AFTERNOON", departureDateId: "d3", earlyDeparture: "AFTER_BREAKFAST",
+      participants: [{ id: "p1", mealIds: [] }, { id: "p2", mealIds: [] }],
+    });
   });
 
   it("an impossible stay is explained, not priced, and cannot be saved — and keeps the meals", async () => {
@@ -367,9 +458,87 @@ describe("a PAID registration", () => {
 // ─── Saving ───────────────────────────────────────────────────────────────────
 
 describe("saving", () => {
-  it("is disabled until something changed", () => {
+  it("is disabled until something changed", async () => {
     renderEditor();
+    await priced(); // otherwise it is the unknown price that disables it, not "nothing changed"
     expect(saveButton().disabled).toBe(true);
+  });
+
+  it("every edit to a stored person and to the stay reaches the save", async () => {
+    renderEditor();
+    await priced();
+    previewReturns(700, [400, 300]);
+    fireEvent.click(radio("departureDateId-d2"));
+    fireEvent.click(radio("hasAccommodation-no"));
+    fireEvent.click(radio("diet-p1-VEGETARIAN"));
+    fireEvent.change(byId("tier-meal-p1")!, { target: { value: "STANDARD" } });
+    fireEvent.change(byId("fullName-p2")!, { target: { value: "Eva Velká" } });
+    fireEvent.click(radio("age-p2-AGE_15_PLUS"));
+    fireEvent.change(byId("tier-participation-p2")!, { target: { value: "STANDARD" } });
+    fireEvent.click(meal("p2", "b1")!);
+    await waitFor(() => expect(saveButton().disabled).toBe(false), { timeout: 2000 });
+    fireEvent.click(saveButton());
+
+    await waitFor(() => expect(calls("/full")).toHaveLength(1));
+    expect(fullBody()).toEqual({
+      expectedUpdatedAt: "2026-09-20T10:00:00.000Z",
+      status: "REGISTERED",
+      centerId: "c1",
+      hasAccommodation: false,
+      arrivalDateId: "d1",
+      arrivalTime: "MORNING",
+      departureDateId: "d2",
+      earlyDeparture: "NONE",
+      participants: [
+        { id: "p1", fullName: "Jan Novák", ageCategory: "AGE_15_PLUS", pricingType: "SURPLUS", mealPricingType: "STANDARD", mealType: "VEGETARIAN", mealIds: ["b1", "l1"] },
+        { id: "p2", fullName: "Eva Velká", ageCategory: "AGE_15_PLUS", pricingType: "STANDARD", mealPricingType: "SURPLUS", mealType: "VEGETARIAN", mealIds: ["b1", "l1"] },
+      ],
+    });
+  });
+
+  it("nothing can be edited while the save is under way — it would be dropped under a 'saved' toast", async () => {
+    renderEditor();
+    await priced();
+    let answer!: (value: unknown) => void;
+    fetchMock().mockImplementation(() => new Promise((resolve) => { answer = resolve; }));
+    fireEvent.change(byId("fullName-p1")!, { target: { value: "Jan Novák ml." } });
+    fireEvent.click(saveButton());
+
+    await waitFor(() => expect(byId("fullName-p1")!.closest("fieldset")!.disabled).toBe(true));
+    expect(radio("arrivalDateId-d2").closest("fieldset")!.disabled).toBe(true);
+    expect(meal("p2", "l1")!.closest("fieldset")!.disabled).toBe(true);
+    expect(statusSelect().disabled).toBe(true);
+
+    answer({ ok: false, status: 500, json: async () => ({}) });
+    await waitFor(() => expect(byId("fullName-p1")!.closest("fieldset")!.disabled).toBe(false));
+  });
+
+  it("after a save the screen starts again from the refreshed data — a second save cannot add the new person twice", async () => {
+    const view = renderEditor();
+    await priced();
+    previewReturns(805, [445, 180, 180]);
+    fireEvent.click(screen.getByText(RD.addParticipant));
+    fireEvent.change(document.querySelectorAll<HTMLInputElement>('input[id^="fullName-new-"]')[0]!, { target: { value: "Host" } });
+    await waitFor(() => expect(saveButton().disabled).toBe(false), { timeout: 2000 });
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+
+    // What router.refresh() brings back: the person now has an id, the row a new token.
+    view.rerender(editor(data({
+      updatedAt: "2026-09-20T10:05:00.000Z",
+      totalPrice: 805,
+      participants: [ADULT, CHILD, { ...ADULT, id: "p3", fullName: "Host", pricingType: "STANDARD", mealPricingType: "STANDARD", mealIds: [], totalPrice: 180 }],
+    })));
+    expect(document.querySelectorAll('input[id^="fullName-new-"]')).toHaveLength(0);
+    expect(byId<HTMLInputElement>("fullName-p3")!.value).toBe("Host");
+    expect(screen.queryByText(RD.unsaved)).toBeNull();
+
+    await priced();
+    fireEvent.change(byId("fullName-p3")!, { target: { value: "Host Nový" } });
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(calls("/full")).toHaveLength(2));
+    expect(fullBody(1).expectedUpdatedAt).toBe("2026-09-20T10:05:00.000Z");
+    expect(fullBody(1).participants.map((p: { id?: string }) => p.id)).toEqual(["p1", "p2", "p3"]);
   });
 
   it("sends the whole state with the loaded updatedAt — ids for the stored people, none for a new one, no e-mail, no amounts", async () => {
@@ -474,10 +643,51 @@ describe("saving", () => {
     expect(confirm).not.toHaveBeenCalled(); // nothing to lose yet
 
     fireEvent.change(byId("fullName-p1")!, { target: { value: "Jan Novák ml." } });
+    // Opening the link in another tab leaves this screen where it is — no question.
+    fireEvent.click(link, { ctrlKey: true });
+    expect(confirm).not.toHaveBeenCalled();
+
     const event = new MouseEvent("click", { bubbles: true, cancelable: true });
     link.dispatchEvent(event);
     expect(confirm).toHaveBeenCalledWith(RD.leaveWarning);
     expect(event.defaultPrevented).toBe(true);
+    confirm.mockRestore();
+  });
+
+  it("the exits that are not links — language switch, logout — ask through the shared guard", () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const view = renderEditor();
+    expect(confirmLeave()).toBe(true); // nothing to lose: no question at all
+    expect(confirm).not.toHaveBeenCalled();
+
+    fireEvent.change(byId("fullName-p1")!, { target: { value: "Jan Novák ml." } });
+    expect(confirmLeave()).toBe(false);
+    expect(confirm).toHaveBeenCalledWith(RD.leaveWarning);
+
+    fireEvent.click(screen.getByText(RD.discard));
+    confirm.mockClear();
+    expect(confirmLeave()).toBe(true);
+
+    fireEvent.change(byId("fullName-p1")!, { target: { value: "Jan Novák ml." } });
+    view.unmount(); // the guard must not outlive the screen that set it
+    expect(confirmLeave()).toBe(true);
+    expect(confirm).not.toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+
+  it("once a save has gone through, a link clicked before the refresh lands is not asked about", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const { container } = renderEditor();
+    await priced();
+    const link = document.createElement("a");
+    link.href = "/cs/admin/registrations";
+    container.appendChild(link);
+    fireEvent.change(byId("fullName-p1")!, { target: { value: "Jan Novák ml." } });
+    fireEvent.click(saveButton());
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+
+    fireEvent.click(link);
+    expect(confirm).not.toHaveBeenCalled();
     confirm.mockRestore();
   });
 
@@ -509,6 +719,15 @@ describe("resending the confirmation", () => {
     fireEvent.change(statusSelect(), { target: { value: "CANCELLED" } });
     expect(resendButton().disabled).toBe(true);
     expect(screen.getByText(RD.resendCancelled)).toBeTruthy();
+  });
+
+  it("a resend that fails says the RESEND failed, not a save", async () => {
+    renderEditor();
+    await priced();
+    fetchMock().mockResolvedValue({ ok: false, status: 429, json: async () => ({}) });
+    fireEvent.click(resendButton());
+    await waitFor(() => expect(screen.getByText(RD.resendError)).toBeTruthy());
+    expect(screen.queryByText(RD.saveFailed)).toBeNull();
   });
 
   it("waits for unsaved changes to be saved — it always sends the stored version", () => {

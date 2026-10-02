@@ -34,29 +34,6 @@ export default async function EditEventPage({
 
   const t = await getTranslations('admin.eventForm')
 
-  // Over (isEventEditable): read-only. The server refuses the write anyway; this
-  // says why instead of offering a wizard whose save could only fail.
-  if (!event.editable) {
-    return (
-      <div>
-        <header className="mb-6">
-          <h1 className="font-serif text-3xl font-semibold text-neutral-900">
-            {t('editTitle')}
-          </h1>
-          <div className="mt-2 h-0.5 w-12 rounded bg-primary-500" />
-        </header>
-        <section className="section-card space-y-4">
-          <p className="text-neutral-700">{t('endedNote')}</p>
-          <Link
-            href={`/${locale}/admin/registrations?event=${event.id}`}
-            className="btn-secondary inline-flex"
-          >
-            {t('endedRegistrations')}
-          </Link>
-        </section>
-      </div>
-    )
-  }
   // Scope the (now possibly editable) centre dropdown to what the admin may use.
   const centers = await getCentersForAdminSelect(ctx)
   const canEditRelations = event.status === 'DRAFT' && event.registrationCount === 0
@@ -92,6 +69,41 @@ export default async function EditEventPage({
     mealPricingRules: event.mealPricingRules,
     participationPricingTypes: event.participationPricingTypes,
     mealPricingTypes: event.mealPricingTypes,
+  }
+
+  // Over (isEventEditable): read-only. The server refuses the write anyway, so
+  // no wizard and no save — but the event stays READABLE: this is the only screen
+  // in the admin that shows its price list, meal days and settings, and whoever
+  // settles payments after the event needs exactly those.
+  if (!event.editable) {
+    return (
+      <div>
+        <header className="mb-6">
+          <h1 className="font-serif text-3xl font-semibold text-neutral-900">
+            {t('viewTitle')}
+          </h1>
+          <div className="mt-2 h-0.5 w-12 rounded bg-primary-500" />
+        </header>
+        <section className="section-card mb-6 space-y-4">
+          <p className="text-neutral-700">{t('endedNote')}</p>
+          <Link
+            href={`/${locale}/admin/registrations?event=${event.id}`}
+            className="btn-secondary inline-flex"
+          >
+            {t('endedRegistrations')}
+          </Link>
+        </section>
+        <EventStepper
+          centers={centers}
+          mode="edit"
+          initial={initial}
+          editData={editData}
+          canEditRelations={false}
+          canUnpublish={false}
+          readOnly
+        />
+      </div>
+    )
   }
 
   return (

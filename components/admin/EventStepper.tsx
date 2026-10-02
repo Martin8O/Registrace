@@ -86,6 +86,8 @@ const STEP_KEYS = [
   'preview',
   'save',
 ] as const
+// The step that lists everything entered; also all a read-only (ended) event shows.
+const REVIEW_STEP = STEP_KEYS.indexOf('preview')
 
 const STATUSES: EventFormValues['status'][] = [
   'DRAFT',
@@ -211,14 +213,21 @@ function isoMinusDays(iso: string, n: number): string {
 // catalogue defaults; children start at 0 across all three tiers, which is what
 // most events charge — an admin who does charge them (real BDC courses charge
 // 8–14) sets the rate per tier.
+//
+// `locked` (relations no longer editable): nothing is being proposed, so nothing
+// starts from a default — a cell the event does not store reads as 0, which is
+// what the engine charges for it. Seeding it with the catalogue price made the
+// review step (all a read-only event shows) print 300/200 for a tier the event
+// never priced.
 function initialPricingRules(
   editData?: EventStepperEditData,
+  locked = false,
 ): Record<string, PricingRow> {
   const base: Record<string, PricingRow> = {}
   for (const age of ALL_AGES) {
     for (const type of PRICING_TYPES) {
       base[ruleKey(age, type)] =
-        age === 'AGE_15_PLUS' ? { ...DEFAULT_PRICING_15[type] } : { ...ZERO_ROW }
+        age === 'AGE_15_PLUS' && !locked ? { ...DEFAULT_PRICING_15[type] } : { ...ZERO_ROW }
     }
   }
   for (const r of editData?.pricingRules ?? []) {
@@ -240,14 +249,17 @@ function initialPricingRules(
 // defaults to the same catalogue price, so a new event bills meals exactly as
 // every event did before the matrix existed until the admin differentiates —
 // defaulting children to 0 here would quietly feed them free.
+// On a `locked` event a cell the list does not store is 0, as in the locked step
+// and in the engine (a combination missing from a list that exists is 0).
 function initialMealPrices(
   editData?: EventStepperEditData,
+  locked = false,
 ): Record<string, number> {
   const base: Record<string, number> = {}
   for (const meal of MEAL_TYPES) {
     for (const age of ALL_AGES) {
       for (const type of PRICING_TYPES) {
-        base[mealPriceKey(meal, age, type)] = DEFAULT_MEAL_PRICE[meal]
+        base[mealPriceKey(meal, age, type)] = locked ? 0 : DEFAULT_MEAL_PRICE[meal]
       }
     }
   }
@@ -279,6 +291,7 @@ export default function EventStepper({
   canEditRelations = false,
   canUnpublish = true,
   initialStep = 0,
+  readOnly = false,
 }: {
   centers: CenterOption[]
   mode?: 'create' | 'edit'
@@ -294,6 +307,10 @@ export default function EventStepper({
   // The step to open on (read from ?step= by the server page) so switching
   // language keeps the current step instead of jumping back to step 1.
   initialStep?: number
+  // An event that is over (isEventEditable is false): nothing can be saved, so
+  // only the review step is rendered — the one place the admin panel shows an
+  // event's whole price list, meal days and settings. No steps, no save.
+  readOnly?: boolean
 }) {
   const t = useTranslations('admin')
   const locale = useLocale()
@@ -314,7 +331,7 @@ export default function EventStepper({
   const relationsLocked = isEdit && !canEditRelations
 
   const [step, setStep] = useState(() =>
-    Math.min(Math.max(0, initialStep), STEP_KEYS.length - 1),
+    readOnly ? REVIEW_STEP : Math.min(Math.max(0, initialStep), STEP_KEYS.length - 1),
   )
   const [publishModal, setPublishModal] = useState(false)
   const [successKind, setSuccessKind] = useState<'published' | 'saved' | null>(null)
@@ -325,22 +342,22 @@ export default function EventStepper({
   // language switcher (which re-navigates and remounts this island) can restore
   // it from the query instead of resetting to step 1.
   useEffect(() => {
-    if (typeof window === 'undefined') return
+    if (typeof window === 'undefined' || readOnly) return
     const sp = new URLSearchParams(window.location.search)
     if (step === 0) sp.delete('step')
     else sp.set('step', String(step))
     const qs = sp.toString()
     window.history.replaceState(null, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`)
-  }, [step])
+  }, [step, readOnly])
 
   // UI-only state (assembled into the payload on save). For a fully-editable
   // draft these prefill from the saved event; otherwise they're catalogue
   // defaults (create) and unused (locked edit renders read-only from editData).
   const [pricingRules, setPricingRules] = useState<Record<string, PricingRow>>(() =>
-    initialPricingRules(editData),
+    initialPricingRules(editData, relationsLocked),
   )
   const [mealPrices, setMealPrices] = useState<Record<string, number>>(() =>
-    initialMealPrices(editData),
+    initialMealPrices(editData, relationsLocked),
   )
   const [mealExcluded, setMealExcluded] = useState<Record<string, boolean>>(() =>
     initialMealExcluded(editData),
@@ -561,7 +578,11 @@ export default function EventStepper({
           contactEmail: data.contactEmail,
           maxRegistrations: data.maxRegistrations,
           mealRegistrationDeadline: deadline,
-          status: data.status,
+          // Only a status the admin CHANGED is sent. The form holds the status
+          // from when the page was opened; echoing it back on every save let a
+          // form opened before another admin closed the event silently publish
+          // it again while fixing a typo. Absent means "leave it" to the server.
+          ...(data.status !== initial?.status ? { status: data.status } : {}),
         })
       }
       const res = await fetch(url, {
@@ -590,7 +611,9 @@ export default function EventStepper({
       } else if (res.status === 403) {
         setSubmitError(t('eventForm.errors.forbidden'))
         setStep(0)
-      } else if (res.status === 422) {
+      } else if (res.status === 400) {
+        // What the server answers for a payload its schema refuses
+        // (app/api/_lib/http.ts) — "try again" would be the wrong advice.
         setSubmitError(t('eventForm.validationError'))
       } else {
         setSubmitError(t('eventForm.errors.submitFailed'))
@@ -654,7 +677,7 @@ export default function EventStepper({
   return (
     <div className="space-y-6">
       {/* Step indicator (clickable — free navigation across all 7 steps) */}
-      <div className="section-card">
+      {!readOnly && <div className="section-card">
         <p className="text-sm font-medium text-neutral-500">
           {t('eventForm.stepLabel', { current: step + 1, total: STEP_KEYS.length })}
         </p>
@@ -674,7 +697,7 @@ export default function EventStepper({
             </button>
           ))}
         </div>
-      </div>
+      </div>}
 
       {/* ── Step 1 · Basic info ── */}
       {step === 0 && (
@@ -1154,10 +1177,12 @@ export default function EventStepper({
       )}
 
       {/* ── Step 6 · Preview ── */}
-      {step === 5 && (
+      {step === REVIEW_STEP && (
         <section className="section-card space-y-5">
           <StepHeading>{t('eventForm.steps.preview')}</StepHeading>
-          <p className="text-sm text-neutral-500">{t('eventForm.preview.intro')}</p>
+          {!readOnly && (
+            <p className="text-sm text-neutral-500">{t('eventForm.preview.intro')}</p>
+          )}
 
           <PreviewBlock title={t('eventForm.preview.basic')}>
             <PreviewRow
@@ -1307,7 +1332,7 @@ export default function EventStepper({
       )}
 
       {/* ── Step nav ── */}
-      <div className="flex items-center justify-between">
+      {!readOnly && <div className="flex items-center justify-between">
         <button
           type="button"
           onClick={() => setStep((s) => Math.max(0, s - 1))}
@@ -1321,7 +1346,7 @@ export default function EventStepper({
             {t('eventForm.next')}
           </button>
         )}
-      </div>
+      </div>}
 
       {/* Publish confirmation (status PUBLISHED or "Save and Publish") */}
       {publishModal && (

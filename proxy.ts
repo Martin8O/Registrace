@@ -1,23 +1,10 @@
 import createMiddleware from 'next-intl/middleware';
-import { defineRouting } from 'next-intl/routing';
 import { NextResponse, NextRequest } from 'next/server';
+import { routing } from '@/i18n/routing';
 import { updateSession } from '@/lib/supabase/middleware';
 import { clientIp, rateLimit, rateLimitResponse } from '@/lib/security/rate-limit';
 import { isMutating, isSameOrigin, csrfFailureResponse } from '@/lib/security/csrf';
 import { buildCsp, generateNonce } from '@/lib/security/csp';
-
-const routing = defineRouting({
-  locales: ['cs', 'en'],
-  defaultLocale: 'cs',
-  // NEXT_LOCALE cookie hardening: next-intl doesn't set Secure by default, which
-  // MDN Observatory flags (−5, "cookie without Secure flag"). Secure only in prod
-  // — a Secure cookie over http://localhost would be dropped in dev. sameSite:lax
-  // keeps the locale surviving top-level navigations from external links.
-  localeCookie: {
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-  },
-});
 
 const handleI18nRouting = createMiddleware(routing);
 

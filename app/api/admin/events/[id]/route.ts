@@ -27,7 +27,7 @@ export async function GET(
 }
 
 // PUT — persist scalar+status edits (relations/centre/dates immutable, §0
-// decision 1). 422 invalid, 403 not-owner, 404 missing, 409 with a code the
+// decision 1). 400 invalid, 403 not-owner, 404 missing, 409 with a code the
 // wizard words: `event_ended` (the event is over, read-only) or
 // `unpublish_refused` (back to draft while it has registrations).
 export async function PUT(

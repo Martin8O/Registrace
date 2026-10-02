@@ -1,4 +1,6 @@
+import { redirect } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
+import { getAdminContext } from '@/modules/auth'
 
 // The admin help page: six task recipes, in Czech only (a product decision —
 // see i18n/request.ts). The texts are the `help.page` messages; this file only
@@ -33,7 +35,15 @@ export async function generateMetadata() {
   return { title: t('title') }
 }
 
-export default async function HelpPage() {
+export default async function HelpPage({
+  params,
+}: {
+  params: Promise<{ locale: string }>
+}) {
+  const { locale } = await params
+  const ctx = await getAdminContext()
+  if (!ctx) redirect(`/${locale}/admin/login`)
+
   const t = await getTranslations('help.page')
   const tags = {
     b: (chunks: React.ReactNode) => <strong className="font-semibold text-neutral-900">{chunks}</strong>,

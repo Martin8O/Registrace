@@ -8,6 +8,7 @@ import HelpHint from '@/components/admin/HelpHint'
 import { getAvailableMealIds, type ArrivalTime, type EarlyDeparture } from '@/lib/utils/mealAvailability'
 import { resolveMealPrice } from '@/lib/utils/mealPrice'
 import { checkStayOrder } from '@/lib/utils/stayRules'
+import { setUnsavedGuard } from '@/lib/utils/unsavedGuard'
 import { useDebounce } from '@/lib/utils/useDebounce'
 import { registrationFullUpdateSchema } from '@/lib/validation'
 import type { EventDateDTO, EventMealDTO, MealPricingRuleDTO } from '@/lib/types'
@@ -23,7 +24,9 @@ import type { AdminRegistrationStatus } from '@/modules/registrations'
 // editable after the meal deadline, with a notice; a closed meal is never offered;
 // the last person cannot be removed; a PAID registration whose price changes drops
 // back to REGISTERED until the team collects the difference; the e-mail is not
-// editable; nothing is mailed on save.
+// editable; nothing is mailed on save. And (2026-10-02): a stay change unticks
+// no meal by itself — the meals it leaves outside stay ticked and flagged, so the
+// admin sees what a click is about to take from up to ten people.
 
 const REG_STATUSES: AdminRegistrationStatus[] = ['REGISTERED', 'PAID', 'CANCELLED']
 const TIERS = ['STANDARD', 'SUPPORTED', 'SURPLUS'] as const
@@ -101,14 +104,38 @@ function offeredTiers(set: string[]): readonly Tier[] {
   const offered = TIERS.filter((t) => set.includes(t))
   return offered.length > 0 ? offered : TIERS
 }
-// The offered tiers, plus the one this person is stranded on if the event no
-// longer offers it — a <select> whose value matches no option would SHOW another.
-function optionsFor(offered: readonly Tier[], current: Tier): readonly Tier[] {
-  return offered.includes(current) ? offered : [current, ...offered]
+// The offered tiers, plus any this person is stranded on that the event no longer
+// offers — a <select> whose value matches no option would SHOW another. `held` is
+// the selected tier AND the stored one: the server still accepts the stored tier
+// for the person who holds it, so picking another must not be a one-way door.
+function optionsFor(offered: readonly Tier[], ...held: (Tier | undefined)[]): readonly Tier[] {
+  const stranded = held.filter((t): t is Tier => t !== undefined && !offered.includes(t))
+  return [...new Set([...stranded, ...offered])]
 }
-// A select only where there is a choice, or where the stored tier must be seen.
-function showTier(offered: readonly Tier[], current: Tier): boolean {
-  return offered.length > 1 || !offered.includes(current)
+// A select only where there is a choice, or where a stranded tier must be seen.
+function showTier(offered: readonly Tier[], ...held: (Tier | undefined)[]): boolean {
+  return optionsFor(offered, ...held).length > 1
+}
+
+// ─── Meal helpers ───
+type Stay = Pick<Draft, 'arrivalDateId' | 'arrivalTime' | 'departureDateId' | 'earlyDeparture'>
+function sameStay(a: Stay, b: Stay): boolean {
+  return (
+    a.arrivalDateId === b.arrivalDateId &&
+    a.arrivalTime === b.arrivalTime &&
+    a.departureDateId === b.departureDateId &&
+    a.earlyDeparture === b.earlyDeparture
+  )
+}
+// What is wrong with a ticked meal — the editor's reading of the server's rule
+// (prepareFullUpdate). `refused` blocks the price and the save. `stranded` does
+// not: a meal the person already holds outside a stay that has not moved is kept
+// and still priced, so marking such a registration paid or cancelled just works.
+type MealProblem = 'refused' | 'stranded' | null
+function mealProblemOf(meal: EventMealDTO | undefined, inStay: boolean, heldInSameStay: boolean): MealProblem {
+  if (!meal || meal.isClosed) return 'refused'
+  if (inStay) return null
+  return heldInSameStay ? 'stranded' : 'refused'
 }
 
 function draftFrom(data: FullEditorData): Draft {
@@ -279,43 +306,58 @@ function EditorBody({
     [draft.arrivalDateId, draft.arrivalTime, draft.departureDateId, draft.earlyDeparture, ev.dates, ev.meals],
   )
   // A ticked meal this person cannot have: outside their stay, or one the event
-  // does not serve. Only the 24 seeded demo registrations store such meals today;
-  // they are shown ticked and flagged — never hidden — so the admin sees why the
-  // price drops when they untick them, and the server refuses to save them.
-  const isFlagged = (mealId: string) => !presentFor.has(mealId) || (mealById.get(mealId)?.isClosed ?? true)
-  const anyFlagged = draft.participants.some((p) => p.mealIds.some(isFlagged))
+  // does not serve. Shown ticked and flagged — never hidden — so the admin sees
+  // what is there. Whether it also BLOCKS depends on how it got there (see
+  // mealProblemOf): stored before and the stay untouched → kept; anything else
+  // (the stay just moved, the meal was just ticked) → must be unticked first.
+  const storedMeals = useMemo(
+    () => new Map(data.participants.map((p) => [p.id, new Set(p.mealIds)])),
+    [data.participants],
+  )
+  const stayUnchanged = sameStay(draft, data)
+  const mealProblem = (p: Pick<DraftParticipant, 'id'>, mealId: string): MealProblem =>
+    mealProblemOf(
+      mealById.get(mealId),
+      presentFor.has(mealId),
+      stayUnchanged && p.id !== undefined && (storedMeals.get(p.id)?.has(mealId) ?? false),
+    )
+  const refusedCount = draft.participants.reduce(
+    (n, p) => n + p.mealIds.filter((id) => mealProblem(p, id) === 'refused').length,
+    0,
+  )
+  const anyRefused = refusedCount > 0
 
+  // Set by a save that went through, until the refresh remounts this body — see
+  // the leave guard below. Any further edit means the remount did not come (the
+  // refresh failed), so the guard has unsaved work to protect again.
+  const [saved, setSaved] = useState(false)
   const clearFeedback = () => {
     setToast(null)
     setError(null)
-  }
-
-  // A stay change the admin makes drops the meals it takes the person away from,
-  // exactly like the public form — in the same update, so the preview never sees
-  // a stay and a meal set that contradict each other. An invalid combination
-  // drops nothing: it is flagged, and the admin is still choosing.
-  function changeStay(patch: Partial<Pick<Draft, 'arrivalDateId' | 'arrivalTime' | 'departureDateId' | 'earlyDeparture'>>) {
-    clearFeedback()
-    setDraft((prev) => {
-      const next = { ...prev, ...patch }
-      const violation = checkStayOrder({
-        arrivalSortOrder: orderById.get(next.arrivalDateId) ?? 0,
-        departureSortOrder: orderById.get(next.departureDateId) ?? 0,
-        arrivalTime: next.arrivalTime,
-        earlyDeparture: next.earlyDeparture,
-      })
-      if (violation) return next
-      const window = getAvailableMealIds(next, ev.dates, ev.meals)
-      return {
-        ...next,
-        participants: next.participants.map((p) => ({ ...p, mealIds: p.mealIds.filter((id) => window.has(id)) })),
-      }
-    })
+    setSaved(false)
   }
 
   function changeDraft(patch: Partial<Draft>) {
     clearFeedback()
     setDraft((prev) => ({ ...prev, ...patch }))
+  }
+
+  // A stay change unticks nothing by itself. The public form drops the meals a
+  // new stay leaves outside, but there it is the registrant's own fresh choice;
+  // here they are stored bookings of up to ten people, and a mis-click on a day
+  // (or an arrow key passing through one) used to delete them all for good,
+  // with a lower total as the only sign. They stay ticked and flagged instead,
+  // counted under the stay pills, and go with one deliberate click — or come
+  // back unharmed when the stay is put back.
+  const changeStay = (patch: Partial<Stay>) => changeDraft(patch)
+
+  function dropRefusedMeals() {
+    changeDraft({
+      participants: draft.participants.map((p) => ({
+        ...p,
+        mealIds: p.mealIds.filter((id) => mealProblem(p, id) !== 'refused'),
+      })),
+    })
   }
 
   function changeParticipant(key: string, patch: Partial<DraftParticipant>) {
@@ -383,7 +425,14 @@ function EditorBody({
     // A state the server would refuse is not sent: the editor already shows why.
     if (stayViolationOf(body, orderById)) return
     const window = getAvailableMealIds(body, ev.dates, ev.meals)
-    if (body.participants.some((p) => p.mealIds.some((id) => !window.has(id) || mealById.get(id)?.isClosed !== false))) return
+    const unmoved = sameStay(body, data)
+    const refused = (p: { id?: string }, id: string) =>
+      mealProblemOf(
+        mealById.get(id),
+        window.has(id),
+        unmoved && p.id !== undefined && (storedMeals.get(p.id)?.has(id) ?? false),
+      ) === 'refused'
+    if (body.participants.some((p) => p.mealIds.some((id) => refused(p, id)))) return
     let stale = false
     fetch(`/api/admin/registrations/${data.registrationId}/calculate-price`, {
       method: 'POST',
@@ -393,6 +442,10 @@ function EditorBody({
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
       .then((json: { data: { totalPrice: number; participants: { subtotal: number }[] } }) => {
         if (stale) return
+        // An answer for any state ends an earlier failure: without this, coming
+        // back to a state that once failed showed "could not calculate" at once,
+        // before it had been asked again.
+        setFailedKey(null)
         setPreview({
           key: debouncedKey,
           totalPrice: json.data.totalPrice,
@@ -405,14 +458,14 @@ function EditorBody({
     return () => {
       stale = true
     }
-  }, [debouncedKey, retryNonce, data.registrationId, data.centerId, orderById, mealById, ev.dates, ev.meals])
+  }, [debouncedKey, retryNonce, data, orderById, mealById, storedMeals, ev.dates, ev.meals])
 
   // What the price currently IS: the server's answer for exactly this state, else
   // unknown. Until it is known the stored figures are shown greyed, not as fact.
   const current: { totalPrice: number; subtotals: number[] } | null = preview?.key === priceKey ? preview : null
   const unchangedPrices = priceKey === initialPriceKey
   const previewFailed = failedKey === priceKey && current === null
-  const priceBlocked = stayViolation !== null || anyFlagged
+  const priceBlocked = stayViolation !== null || anyRefused
   const calculating = current === null && !priceBlocked && !previewFailed
   const shownTotal = current?.totalPrice ?? preview?.totalPrice ?? data.totalPrice
   const retryPrice = () => {
@@ -434,19 +487,26 @@ function EditorBody({
   const status: AdminRegistrationStatus = autoSwitched ? 'REGISTERED' : draft.status
   const cancelled = status === 'CANCELLED'
 
-  // Leaving with unsaved changes asks first.
+  // Leaving with unsaved changes asks first. Off again the moment a save has
+  // gone through: until the refresh remounts this body the draft still differs
+  // from the data it was opened with, and a link clicked in that gap would be
+  // asked about changes that are already saved.
   useEffect(() => {
-    if (!dirty) return
+    if (!dirty || saved) return
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       e.preventDefault()
       e.returnValue = ''
     }
     // Next's <Link> navigates client-side, so closing the tab is the only exit
-    // beforeunload covers. Every in-app link (header, sidebar, the event link,
-    // the language switch) is caught here, in the capture phase, before Next's
-    // own click handler runs.
+    // beforeunload covers. Every in-app LINK (header, sidebar, the event link) is
+    // caught here, in the capture phase, before Next's own click handler runs.
+    // The two exits that are buttons calling router.push — the language switch
+    // and the logout — cannot be seen from here; they ask through the shared
+    // guard instead. The browser's Back button is covered by neither.
     const leaveMessage = t('registrationDetail.leaveWarning')
     const onClick = (e: MouseEvent) => {
+      // A click that opens another tab or window leaves this screen where it is.
+      if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return
       const a = (e.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null
       if (!a || a.target === '_blank' || a.origin !== window.location.origin) return
       if (!window.confirm(leaveMessage)) {
@@ -454,13 +514,15 @@ function EditorBody({
         e.stopPropagation()
       }
     }
+    setUnsavedGuard(leaveMessage)
     window.addEventListener('beforeunload', onBeforeUnload)
     document.addEventListener('click', onClick, true)
     return () => {
+      setUnsavedGuard(null)
       window.removeEventListener('beforeunload', onBeforeUnload)
       document.removeEventListener('click', onClick, true)
     }
-  }, [dirty, t])
+  }, [dirty, saved, t])
 
   // ─── Save / resend ───
   const personName = (index: number | undefined) => {
@@ -516,6 +578,7 @@ function EditorBody({
         body: JSON.stringify(body),
       })
       if (res.ok) {
+        setSaved(true)
         setToast(t('registrationDetail.saved'))
         // New ids for added people and a new updatedAt arrive with the refresh,
         // which remounts this body (it is keyed on updatedAt). Until then the
@@ -552,10 +615,10 @@ function EditorBody({
       } else if (json?.code === 'registration_cancelled') {
         setError({ message: t('registrationDetail.resendRefused.registration_cancelled') })
       } else {
-        setError({ message: t('registrationDetail.saveFailed') })
+        setError({ message: t('registrationDetail.resendError') })
       }
     } catch {
-      setError({ message: t('registrationDetail.saveFailed') })
+      setError({ message: t('registrationDetail.resendError') })
     } finally {
       setBusy(false)
     }
@@ -563,7 +626,7 @@ function EditorBody({
 
   // Also held while the new price is still being calculated: until it is known,
   // whether a PAID registration stays paid (D4) is not known either.
-  const saveDisabled = working || !dirty || stayViolation !== null || anyFlagged || current === null
+  const saveDisabled = working || !dirty || stayViolation !== null || anyRefused || current === null
 
   return (
     <div className="space-y-6 pb-16 md:pb-0">
@@ -584,6 +647,15 @@ function EditorBody({
       {/* Read-only facts (server-rendered): e-mail, event, home centre */}
       {children}
 
+      {/* Everything editable goes dead while a save (or the refresh after it) is
+          under way: the request already carries the state it was sent with, and
+          the body remounts when it lands — anything typed in between was dropped
+          under a "saved" toast. */}
+      <fieldset
+        disabled={working}
+        aria-busy={working}
+        className="m-0 min-w-0 space-y-6 border-0 p-0 disabled:pointer-events-none disabled:opacity-60"
+      >
       {/* ─── Stay ─── */}
       <section className="section-card">
         <SectionHeading>{t('registrationDetail.sectionStay')}</SectionHeading>
@@ -642,6 +714,14 @@ function EditorBody({
             {t(`registrationDetail.stayInvalid.${stayViolation}`)}
           </p>
         )}
+        {!stayViolation && anyRefused && (
+          <p role="alert" className="mt-4 rounded-lg border border-danger-500/40 bg-danger-50 p-3 text-sm text-danger-700">
+            {t('registrationDetail.mealsOutsideStay', { count: refusedCount })}{' '}
+            <button type="button" onClick={dropRefusedMeals} className="font-medium underline underline-offset-2">
+              {t('registrationDetail.dropOutsideMeals')}
+            </button>
+          </p>
+        )}
       </section>
 
       {/* ─── Participants ─── */}
@@ -661,7 +741,8 @@ function EditorBody({
 
         <div className="mt-5 space-y-4">
           {draft.participants.map((p, i) => {
-            const flaggedHere = p.mealIds.filter(isFlagged)
+            const problems = p.mealIds.map((id) => mealProblem(p, id))
+            const storedTiers = p.id ? data.participants.find((s) => s.id === p.id) : undefined
             // Greyed stored figure until the server answers (never for a new person).
             const subtotal = current?.subtotals[i] ?? (unchangedPrices ? data.participants[i]?.totalPrice : undefined)
             const onlyOne = draft.participants.length <= 1
@@ -718,24 +799,25 @@ function EditorBody({
                   />
                 </Field>
 
-                {(showTier(participationTiers, p.pricingType) || showTier(mealTiers, p.mealPricingType)) && (
+                {(showTier(participationTiers, p.pricingType, storedTiers?.pricingType) ||
+                  showTier(mealTiers, p.mealPricingType, storedTiers?.mealPricingType)) && (
                   <div className="form-field grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {showTier(participationTiers, p.pricingType) && (
+                    {showTier(participationTiers, p.pricingType, storedTiers?.pricingType) && (
                       <TierSelect
                         id={`tier-participation-${p.key}`}
                         label={t('registrationDetail.participationPriceType')}
                         value={p.pricingType}
-                        options={optionsFor(participationTiers, p.pricingType)}
+                        options={optionsFor(participationTiers, p.pricingType, storedTiers?.pricingType)}
                         optionLabel={(v) => t(`pricingType.${v}`)}
                         onChange={(v) => changeParticipant(p.key, { pricingType: v })}
                       />
                     )}
-                    {showTier(mealTiers, p.mealPricingType) && (
+                    {showTier(mealTiers, p.mealPricingType, storedTiers?.mealPricingType) && (
                       <TierSelect
                         id={`tier-meal-${p.key}`}
                         label={t('registrationDetail.mealPriceType')}
                         value={p.mealPricingType}
-                        options={optionsFor(mealTiers, p.mealPricingType)}
+                        options={optionsFor(mealTiers, p.mealPricingType, storedTiers?.mealPricingType)}
                         optionLabel={(v) => t(`pricingType.${v}`)}
                         onChange={(v) => changeParticipant(p.key, { mealPricingType: v })}
                       />
@@ -760,7 +842,7 @@ function EditorBody({
                     meals={ev.meals}
                     selected={p.mealIds}
                     isOffered={(m) => presentFor.has(m.id) && !m.isClosed}
-                    isFlagged={isFlagged}
+                    isFlagged={(mealId) => mealProblem(p, mealId) !== null}
                     priceOf={(m) =>
                       resolveMealPrice(
                         m.mealType,
@@ -775,11 +857,13 @@ function EditorBody({
                     emptyLabel={t('registrationDetail.noMealsInStay')}
                     onToggle={(mealId) => toggleMeal(p.key, mealId)}
                   />
-                  {flaggedHere.length > 0 && (
+                  {problems.includes('refused') ? (
                     <p role="alert" className="mt-2 text-sm text-danger-700">
                       {t('registrationDetail.outsideStayNote')}
                     </p>
-                  )}
+                  ) : problems.includes('stranded') ? (
+                    <p className="mt-2 text-sm text-neutral-600">{t('registrationDetail.strandedMealsNote')}</p>
+                  ) : null}
                 </Field>
 
                 <div className="price-field mt-4">
@@ -807,6 +891,7 @@ function EditorBody({
           )}
         </div>
       </section>
+      </fieldset>
 
       {/* ─── Status, price, save / resend ─── */}
       <section className="section-card space-y-5">
@@ -839,6 +924,7 @@ function EditorBody({
               id="status"
               className="bdc-input w-auto"
               value={status}
+              disabled={working}
               onChange={(e) => {
                 setStatusPickedAt(priceKey)
                 changeDraft({ status: e.target.value as AdminRegistrationStatus })

@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-467%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-512%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -202,8 +202,9 @@ single source of orientation for anyone joining the project.
   on read (an event leaves the public list at 20:00 Prague on its end day), and a **daily
   Vercel Cron** (`GET /api/cron/event-lifecycle`) writes the stored status to match — closed
   after that moment, archived three days later — so the admin list tells the truth too. What an
-  admin sees: from that same moment the event itself is **read-only** — its Edit link greys out
-  and the server refuses the write — while its registrations stay fully editable; once archived
+  admin sees: from that same moment the event itself is **read-only** — its Edit link becomes
+  View (the whole event on one page: price list, meal days, settings; nothing to save) and the
+  server refuses the write — while its registrations stay fully editable; once archived
   its registrations move behind the registrations list's "show archived" switch (the event's own
   view still lists them all). An event closed by hand before its end can be published again
   until the end, and once anyone has registered a live event cannot go back to draft.
@@ -224,7 +225,7 @@ single source of orientation for anyone joining the project.
   action, entity, IP, time, and a before/after diff).
 - **Built-in help** — a help page with six task recipes (creating an event, prices, meals,
   changing a registration, lists and export) and "?" hints beside the ten fields whose meaning
-  is not obvious, each linking to its recipe. Czech only, by decision: the admins are Czech
+  is not obvious, most of them linking to their recipe. Czech only, by decision: the admins are Czech
   centres, and one well-kept language beats two drifting ones.
 
 ---
@@ -243,7 +244,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 467 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 512 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -317,7 +318,11 @@ flowchart LR
   pages and `/api/admin/**` **only**. On pages it does locale routing, the CSP nonce and
   Supabase session refresh; on the admin API it adds rate-limiting (120/min/IP), a CSRF
   same-origin check on mutations, and a 401 for anonymous callers. It checks session
-  **presence** only.
+  **presence** only — and it is **not the admin pages' only gate**: the matcher skips every
+  path containing a dot, and `[locale]` would accept any string, so `/a.b/admin/help` used to
+  reach the app without meeting the proxy at all. An unknown locale is therefore a 404 in the
+  `[locale]` layout, the panel layout redirects to the login without an admin, and every panel
+  page resolves the admin itself.
 - **The public API bypasses the edge entirely** — `/api/events`, `/api/registration/**`,
   `/api/auth/me` and the cron endpoint `/api/cron/**` are excluded by the matcher and reach
   their handlers directly, so each one enforces its own rate limit (submit 10/h, price 60/min,
@@ -610,6 +615,8 @@ noted.
 | `npm run build` | Production build. |
 | `npm start` | Serve the production build. |
 | `npm run lint` | ESLint. |
+| `npm run typecheck` | `tsc --noEmit` over the whole project, test files included. |
+| `npm run gate` | The one-command quality gate: typecheck → lint → tests → build, stopping at the first failure. |
 | `npm test` | Run the Vitest suite once (CI-friendly). |
 | `npm run test:watch` | Vitest in watch mode. |
 | `npm run test:coverage` | Vitest with v8 coverage. |
@@ -628,7 +635,7 @@ app/
   [locale]/admin/(panel)/      admin panel — dashboard, events, registrations,
                                centres (/admin/centers), admins (/admin/users), logs, help, profile
   [locale]/admin/login|set-password|auth/confirm   auth entry points
-  api/                         route handlers (public + admin) + _lib (guard, http helpers)
+  api/                         route handlers (public + admin) + _lib (guard, http, full-edit refusals)
 components/{public,admin,shared}   UI components
 modules/{events,registrations,pricing,auth,centers,users}   business services (no fat handlers)
 lib/                           infrastructure
@@ -660,7 +667,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **467 Vitest tests** across 34 files, with **no database required**:
+`npm test` runs **512 Vitest tests** across 38 files, with **no database required**:
 
 - **Pricing engine** (48) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -697,7 +704,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   caller's language: the confirmation groups meals by day, which it cannot do from the
   pre-composed slot label it used to be handed. Four more pin the three stay-order rules on the
   submit path (and that a same-day morning visit leaving after breakfast is accepted).
-- **Admin full edit** (39) — the registration team's on-site fix of a stored booking: a family
+- **Admin full edit** (47) — the registration team's on-site fix of a stored booking: a family
   member removed (soft-deleted, the total drops by exactly their price, their meal rows kept for
   the audit), a person added, meals swapped, the stay moved, accommodation and early departure,
   a child re-booked as an adult — each re-priced by the real engine. The meal tier prices the
@@ -710,8 +717,14 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   stale save un-cancels), the new `updatedAt` written and handed back so a second save needs no
   reload, un-cancelling onto a full event refused under an Event row lock that never touches the
   registration numbers, the whole before/after image audited, and the live preview pricing the
-  same state without writing. Plus the two counts of people (list, beds per night) reading live
-  participants only.
+  same state without writing. One exemption, the meal twin of the stranded tier: a meal a
+  person **already holds** outside a stay that has not moved is kept and still priced — such
+  rows exist, and refusing them made every save fail, marking the registration paid or cancelled
+  included — while a meal added outside the stay, or any move of the stay, is refused as before.
+  Plus every reader of people — the two counts (list, beds per night), the edit's own load, the
+  detail, the re-sent e-mail, the kitchen totals and the export — pinned to live participants
+  only: a removed person stays in the table, and each of those filters is one dropped line away
+  from putting them back into a price, a mail or the kitchen's count.
 - **Full-edit endpoints** (17 + 8 + 8) — the refusal map both endpoints share (every service
   error to its own status and `code`; a body that is not JSON is a 400, not a 500), then the save
   and the preview each: guard first, validation, the service called with the id and context, a
@@ -787,7 +800,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   letters and non-ASCII symbols must **not** tick a rule, or the checklist would green-light a
   password Supabase rejects), that the checklist and the submit gate can never disagree, and
   that every rule is labelled in both locales.
-- **Component rendering** (21 + 38 + 16 + 5) — the two islands that move money, rendered for real in
+- **Component rendering** (21 + 49 + 21 + 5 + 3 + 2) — the two islands that move money, rendered for real in
   jsdom with the actual locale file as messages (so a missing key fails here rather than showing
   a raw key to a registrant). The public form: which tier selector each of the four offer-variants
   renders, meal labels priced from the **meal** tier and repainted by it and by age but never by
@@ -800,21 +813,33 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   names, ages, diets, ticked meals), shows the stored prices greyed until the server has priced the
   registration once on open — a stored total today's engine disagrees with shows the number the
   save will write — and typing a name never costs a request; a failed price request can be sent
-  again. Meal pills are priced at the person's **meal** tier,
+  again — and a failure does not stick: coming back to a state that once failed asks again
+  instead of reporting it failed. Meal pills are priced at the person's **meal** tier,
   a closed meal never offered, a stored meal outside the stay shown ticked and **flagged** rather
-  than hidden and blocking the save until unticked, the meal-deadline notice with the meals still
-  editable. The stay pills are disabled by the same shared stay rules the server applies (arrival
-  days excepted, so both ends can be moved), a later arrival drops everyone's meals of the day they
-  now miss, an impossible stay is explained and neither priced nor saved.
+  than hidden — explained, still priced and no obstacle to a save while the stay is untouched,
+  refused (counted, blocking) once the stay moves or for a meal ticked now — the meal-deadline
+  notice with the meals still editable. The stay pills are disabled by the same shared stay rules
+  the server applies (arrival days excepted, so both ends can be moved). A stay change **unticks
+  nothing by itself**: the meals it leaves outside stay ticked, flagged and counted, block the
+  save, come back untouched when the stay is put back, and go with one deliberate click — in the
+  public form dropping them is the registrant's own fresh choice, here they are up to ten people's
+  stored bookings, and a mis-click on a day used to delete them all with a lower total as the only
+  sign. An impossible stay is explained and neither priced nor saved.
   The last person cannot be removed, ten is the ceiling. The live price comes from the server and
   the request carries choices only. A **paid** registration drops to registered when its price
   changes, stays paid on a name fix, and the admin's own pick wins — for the price it was made
   against. The save sends the loaded `updatedAt`, ids for stored people and none for a new one, no
-  e-mail, no amounts; a refused meal names the person, a refused tier the person and the half, a
-  concurrent save offers a reload. Re-ticking a meal is not a change, and an in-app link asks
-  before leaving unsaved changes. The tier guarantees of the editor it replaced are kept:
+  e-mail, no amounts — and every edit to a stored person and to the stay is in it; a refused meal
+  names the person, a refused tier the person and the half, a concurrent save offers a reload.
+  Nothing can be edited while a save is under way (it would be dropped under a "saved" toast), and
+  after it the screen starts again from the refreshed data, so a second save cannot add the new
+  person twice. Re-ticking a meal is not a change. An in-app link asks before leaving unsaved
+  changes (a click that opens another tab does not, nor one made after the save went through), and
+  the two exits that are buttons rather than links — the language switch and the logout — ask
+  through a shared guard, pinned from both ends (the last two numbers are the language switch's
+  and the logout's own suites; the logout asks **before** the session is ended). A resend that fails says the resend failed. The tier guarantees of the editor it replaced are kept:
   the tier-select variants, each half listing only its own set, an empty set reading as all three,
-  a stranded tier kept visible and selected, and the resend button disabled for a **cancelled**
+  a stranded tier kept visible and selected — and still on offer after moving off it — and the resend button disabled for a **cancelled**
   registration (following the SELECTED status) — and now also while there are unsaved changes,
   because it always sends the stored version.
   The event wizard: the description survives the review step — the last screen before publishing —
@@ -826,8 +851,14 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   public is saved without being asked for permission to publish it, is reported as saved rather
   than as newly published, and offers one button instead of two — while a draft, a closed event
   going public again, and a brand-new event all still confirm before they become visible. It
-  also pins that a live event with registrations is not offered Draft, and that the server's two
-  refusals (the event is over; back to draft) are worded rather than reported as a failed save.
+  also pins that a live event with registrations is not offered Draft, that the server's two
+  refusals (the event is over; back to draft) are worded rather than reported as a failed save,
+  that a locked event's save sends the status only when the admin changed it (echoing the one
+  the page was opened with would undo a colleague's hand-close), that a payload the server's
+  schema refuses says so instead of "try again", and that an event
+  that is over opens as its whole review with no step, no field and no save — printing the
+  **stored** price list, where a cell the event never priced is 0 (what the engine charges) and
+  not the catalogue default the wizard proposes for a new event.
   The help hint: closed until clicked, every paragraph formatted rather than raw tags, a link to
   its recipe that opens in a new tab (a same-tab link would throw away a half-filled wizard), and
   closing on Escape or a click elsewhere.
@@ -861,6 +892,16 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   the status endpoint alike) with nothing written or audited, while one closed by hand before its
   end can still be published again; and a live event cannot go back to draft once anyone has
   registered, while one nobody registered for can.
+- **Admin gate** (10 + 6) — that the admin panel does not depend on `proxy.ts` alone. Its matcher
+  skips every path containing a dot and `[locale]` accepts any string, so `/a.b/admin/help`
+  reached a page that had no check of its own and rendered for anyone. Pinned: an unknown locale
+  is a 404 (and builds no metadata), the panel layout redirects to the login without an admin,
+  and — read from disk, so a new page cannot forget — every panel page is a server component
+  that resolves the admin itself. Six more hold the one route handler under `[locale]`, the
+  invite / password-reset landing: a layout never wraps a route handler, its params arrive
+  decoded, and it puts the locale straight into a redirect — so `/%5Cevil.com/admin/auth/confirm`
+  redirected to `/\evil.com/…`, which a browser resolves to another site. An unknown locale now
+  falls back to the default one before the one-time token is spent.
 - **Translation files** (3) — that Czech and English carry the same keys (the help excepted: it
   exists in Czech only, and English must not grow a half-copy), that every one of the help's
   rich-text strings formats with the tags the page provides, and that each "?" hint exists and
