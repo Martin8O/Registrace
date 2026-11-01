@@ -78,6 +78,10 @@ const ARRIVAL_TIMES = ['MORNING', 'AFTERNOON', 'EVENING'] as const
 const EARLY_DEPARTURE = ['NONE', 'AFTER_BREAKFAST'] as const
 const MEAL_TYPES = ['MEAT', 'VEGETARIAN'] as const
 const MAX_PARTICIPANTS = 10
+// A day's meals in the order they are eaten. The event's meal rows arrive in
+// whatever order the database returns them, which once listed a Sunday as
+// lunch, dinner, breakfast.
+const MEAL_SLOT_ORDER: Record<string, number> = { BREAKFAST: 0, LUNCH: 1, DINNER: 2 }
 
 const mealTypeLabelKey: Record<string, string> = {
   MEAT: 'meal_meat',
@@ -222,7 +226,9 @@ export default function RegistrationForm({
       hasAccommodation: true,
       honeypot: '',
       idempotencyKey: '',
-      centerId: centers[0]?.id ?? '',
+      // No home centre is pre-selected: the first in the list (Brno) used to be
+      // stored for everyone who never touched the picker.
+      centerId: '',
       email: '',
       gdprConsent: false,
       participants: [makeParticipant()],
@@ -241,7 +247,7 @@ export default function RegistrationForm({
   const [submitted, setSubmitted] = useState<
     { registrationNumber: string | null; confirmationSent: boolean; email: string } | null
   >(null)
-  const [submitError, setSubmitError] = useState<'submit' | 'capacity' | null>(null)
+  const [submitError, setSubmitError] = useState<'submit' | 'capacity' | 'rateLimited' | null>(null)
   const [gdprOpen, setGdprOpen] = useState(false)
   // Which participant's participation-price breakdown popup is open (index | null).
   const [participationInfo, setParticipationInfo] = useState<number | null>(null)
@@ -392,7 +398,9 @@ export default function RegistrationForm({
         window.scrollTo({ top: 0, behavior: 'smooth' })
         return
       }
-      setSubmitError(res.status === 409 ? 'capacity' : 'submit')
+      setSubmitError(
+        res.status === 409 ? 'capacity' : res.status === 429 ? 'rateLimited' : 'submit',
+      )
     } catch {
       setSubmitError('submit')
     }
@@ -651,9 +659,14 @@ export default function RegistrationForm({
                       // priced in CZK only invites the question of how to click it.
                       // The engine and the submit service already refuse a closed
                       // meal id, so hiding it removes an option nobody had.
-                      const slots = meals.filter(
-                        (m) => m.eventDateId === d.id && availableMealIds.has(m.id) && !m.isClosed,
-                      )
+                      const slots = meals
+                        .filter(
+                          (m) => m.eventDateId === d.id && availableMealIds.has(m.id) && !m.isClosed,
+                        )
+                        .sort(
+                          (a, b) =>
+                            (MEAL_SLOT_ORDER[a.mealType] ?? 0) - (MEAL_SLOT_ORDER[b.mealType] ?? 0),
+                        )
                       if (slots.length === 0) return null
                       return (
                         <div key={d.id}>
@@ -753,12 +766,16 @@ export default function RegistrationForm({
             {t('center')}
           </label>
           <select id="centerId" className="bdc-input" {...register('centerId')}>
+            <option value="" disabled>
+              {t('center_placeholder')}
+            </option>
             {centers.map((c) => (
               <option key={c.id} value={c.id}>
                 {locale === 'cs' ? c.name_cs : c.name_en}
               </option>
             ))}
           </select>
+          {errors.centerId && <p className="mt-1 text-sm text-danger-600">{t('errors.center')}</p>}
         </div>
 
         <div className="form-field">

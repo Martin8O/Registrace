@@ -60,7 +60,9 @@
       "required": "Toto pole je povinné",
       "mealType": "Zvolte typ stravy",
       "submit": "Registraci se nepodařilo odeslat. Zkuste to prosím znovu.",
-      "capacity": "Kapacita akce je již naplněna."
+      "capacity": "Kapacita akce je již naplněna.",
+      "center": "Vyberte své centrum",
+      "rateLimited": "Z tohoto připojení přišlo během krátké doby příliš mnoho registrací. Zkuste to prosím znovu později (nejpozději za hodinu)."
     },
     "participationModal": {
       "title": "Výpočet ceny za účast a noc – účastník {number}",
@@ -91,7 +93,8 @@
       "rights_body": "Máte právo na přístup ke svým údajům, jejich opravu, výmaz, omezení zpracování, přenositelnost a právo vznést námitku (čl. 15–21 GDPR). Své žádosti zasílejte na info@bdc.cz.",
       "close": "Zavřít"
     },
-    "add_another_participant": "Přidat dalšího účastníka"
+    "add_another_participant": "Přidat dalšího účastníka",
+    "center_placeholder": "— vyberte své centrum —"
   },
   "meta": {
     "siteName": "Registrace na akce BDC",
@@ -144,7 +147,9 @@
       "eveningArrivalDiscount": "Sleva za večerní příjezd (15+)",
       "earlyDepartureDiscount": "Sleva za brzký odjezd (15+)"
     },
-    "registrationFormPlaceholder": "Registrační formulář — připravuje se"
+    "registrationFormPlaceholder": "Registrační formulář — připravuje se",
+    "full": "Akce je plně obsazená.",
+    "fullNote": "Další registrace už nejsou možné. Pokud se místo uvolní, formulář se tu znovu objeví."
   },
   "admin": {
     "brand": "Administrace",
@@ -437,7 +442,7 @@
         "include": "Zařadit zpět",
         "excluded": "Není v nabídce",
         "priceListTitle": "Ceník jídla",
-        "priceListNote": "Ceny platí pro celou akci — u každého dne se pak už jen určuje, zda se jídlo podává. Výchozí cena je pro všechny kategorie stejná; snižte ji tam, kde má platit jiná (např. děti nebo podporovaná hladina).",
+        "priceListNote": "Ceny platí pro celou akci — u každého dne se pak už jen určuje, zda se jídlo podává. Výchozí cena je pro všechny kategorie stejná, jen děti 0–3 roky začínají na 0; snižte ji tam, kde má platit jiná (např. starší děti nebo podporovaná hladina).",
         "availabilityTitle": "Nabídka po dnech"
       },
       "preview": {
@@ -729,7 +734,7 @@
                 {
                   "title": "Strava",
                   "chip": "locked",
-                  "text": "Které cenové hladiny akce nabízí u stravy, ceník jídla pro celou akci (také předvyplněný ukázkovými částkami) a u každého dne to, co se ten den podává."
+                  "text": "Které cenové hladiny akce nabízí u stravy, ceník jídla pro celou akci (také předvyplněný ukázkovými částkami, jen děti 0–3 roky mají předvyplněnou 0) a u každého dne to, co se ten den podává."
                 },
                 {
                   "title": "Nastavení",
@@ -1014,7 +1019,7 @@
               "p": "<b>Export je vždycky u konkrétní akce</b>: tlačítko přímo v řádku v seznamu akcí, nebo v jejích Detailech. Souhrnný seznam přes všechny akce export nemá, a to schválně: exportuje se to, co se předává kuchyni a na recepci, tedy jedna akce."
             },
             {
-              "p": "Stáhne se sešit se čtyřmi listy:"
+              "p": "Stáhne se sešit s pěti listy, v tomto pořadí:"
             },
             {
               "table": {
@@ -1024,10 +1029,6 @@
                   "K čemu je"
                 ],
                 "rows": [
-                  [
-                    "Data – vše",
-                    "Kompletní registrace včetně všech účastníků, jejich hladin, stravy a cen."
-                  ],
                   [
                     "Data – výběr",
                     "Zkrácená verze na místo, to podstatné při příjezdu."
@@ -1039,6 +1040,14 @@
                   [
                     "Ubytování",
                     "Počet osob po jednotlivých nocích."
+                  ],
+                  [
+                    "Vyúčtování",
+                    "Po dnech počet osob a částky za ubytování, denní sazbu a stravu. Vedle sebe všichni přihlášení a jen ti označení jako zaplacení."
+                  ],
+                  [
+                    "Data – vše",
+                    "Kompletní registrace včetně všech účastníků, jejich hladin, stravy a cen."
                   ]
                 ]
               }
@@ -1150,7 +1159,7 @@
       "export": {
         "topic": "export",
         "body": [
-          "Stáhne sešit s pěti listy: <b>Data – vše</b> (kompletní registrace), <b>Data – výběr</b> (zkrácené na místo), <b>Jídlo</b> (počty po dnech, masitá / vege), <b>Ubytování</b> (osoby po nocích) a <b>Vyúčtování</b> (po dnech osoby a částky za ubytování, denní sazbu a stravu — vedle sebe všichni přihlášení a jen ti označení jako zaplacení).",
+          "Stáhne sešit s pěti listy: <b>Data – výběr</b> (zkrácené na místo), <b>Jídlo</b> (počty po dnech, masitá / vege), <b>Ubytování</b> (osoby po nocích), <b>Vyúčtování</b> (po dnech osoby a částky za ubytování, denní sazbu a stravu — vedle sebe všichni přihlášení a jen ti označení jako zaplacení) a <b>Data – vše</b> (kompletní registrace).",
           "Vždy jen za tuhle akci. Zapnutý filtr zúží jen dva listy s daty; <b>Jídlo</b>, <b>Ubytování</b> a <b>Vyúčtování</b> jsou vždy za celou akci. Stažení se <b>zapíše do auditu</b>."
         ],
         "more": {

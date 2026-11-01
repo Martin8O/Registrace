@@ -5,6 +5,7 @@ import { getTranslations } from 'next-intl/server'
 import PricingInfoButton from '@/components/public/PricingInfoButton'
 import RegistrationForm from '@/components/public/RegistrationForm'
 import { getCentersForSelect, getPublicEventForDetail } from '@/modules/events'
+import { isEventFull } from '@/modules/registrations'
 import { formatDateRangeShort, formatDeadlineDateTime } from '@/lib/utils/formatDate'
 import { ogLocales } from '@/lib/metadata/openGraph'
 
@@ -101,7 +102,7 @@ export default async function EventPage({
 
   // The form's centre dropdown is the registrant's home centre — the full
   // active-centre list, not the event's hosting centre (invariant: distinct).
-  const centers = await getCentersForSelect()
+  const [centers, full] = await Promise.all([getCentersForSelect(), isEventFull(event.id)])
 
   const title = locale === 'cs' ? event.title_cs : event.title_en
   const description = locale === 'cs' ? event.description_cs : event.description_en
@@ -216,17 +217,24 @@ export default async function EventPage({
         />
       </div>
 
-      <RegistrationForm
-        eventId={event.id}
-        dates={event.dates}
-        meals={event.meals}
-        centers={centers}
-        pricingRules={event.pricingRules}
-        mealPricingRules={event.mealPricingRules}
-        participationPricingTypes={event.participationPricingTypes}
-        mealPricingTypes={event.mealPricingTypes}
-        mealRegistrationDeadline={event.mealRegistrationDeadline}
-      />
+      {full ? (
+        <section className="section-card mt-6">
+          <p className="font-semibold text-neutral-900">{t('full')}</p>
+          <p className="mt-1.5 text-neutral-600">{t('fullNote')}</p>
+        </section>
+      ) : (
+        <RegistrationForm
+          eventId={event.id}
+          dates={event.dates}
+          meals={event.meals}
+          centers={centers}
+          pricingRules={event.pricingRules}
+          mealPricingRules={event.mealPricingRules}
+          participationPricingTypes={event.participationPricingTypes}
+          mealPricingTypes={event.mealPricingTypes}
+          mealRegistrationDeadline={event.mealRegistrationDeadline}
+        />
+      )}
     </div>
   )
 }

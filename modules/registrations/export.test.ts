@@ -191,39 +191,39 @@ describe("buildRegistrationExport — ownership scoping (cross-center IDOR regre
 });
 
 describe("buildRegistrationExportWorkbook", () => {
-  it("returns five sheets: full data, selection, meals, accommodation, settlement", async () => {
+  it("returns five sheets: selection, meals, accommodation, settlement, full data", async () => {
     h.findMany.mockResolvedValue(fakeRows());
     h.eventFindMany.mockResolvedValue([]); // no events in scope → empty kitchen sheets
     const { sheets } = await buildRegistrationExportWorkbook({}, ctx, "cs");
 
     expect(sheets.map((s) => s.sheetName)).toEqual([
-      "Data – vše",
       "Data – výběr",
       "Jídlo",
       "Ubytování",
       "Vyúčtování",
+      "Data – vše",
     ]);
     // Kitchen sheets carry their headers even with no event in scope (no "Akce"
     // column — the event name is the sheet title now).
-    expect(sheets[2]!.headers).toEqual(["Den", "Jídlo", "Celkem", "Masitá", "Vegetariánská"]);
+    expect(sheets[1]!.headers).toEqual(["Den", "Jídlo", "Celkem", "Masitá", "Vegetariánská"]);
+    expect(sheets[1]!.rows).toHaveLength(0);
+    expect(sheets[2]!.headers).toEqual(["Noc", "Počet osob"]);
     expect(sheets[2]!.rows).toHaveLength(0);
-    expect(sheets[3]!.headers).toEqual(["Noc", "Počet osob"]);
-    expect(sheets[3]!.rows).toHaveLength(0);
-    expect(sheets[4]!.headers).toEqual([
+    expect(sheets[3]!.headers).toEqual([
       "Den",
       "Přihlášení – osob", "Přihlášení – ubytování (Kč)", "Přihlášení – denní sazba (Kč)",
       "Přihlášení – strava (Kč)", "Přihlášení – celkem (Kč)",
       "Zaplaceno – osob", "Zaplaceno – ubytování (Kč)", "Zaplaceno – denní sazba (Kč)",
       "Zaplaceno – strava (Kč)", "Zaplaceno – celkem (Kč)",
     ]);
-    expect(sheets[4]!.rows).toHaveLength(0);
+    expect(sheets[3]!.rows).toHaveLength(0);
   });
 
   it("selection sheet = the agreed trimmed columns, sliced from the full sheet", async () => {
     h.findMany.mockResolvedValue(fakeRows());
     h.eventFindMany.mockResolvedValue([]);
     const { sheets } = await buildRegistrationExportWorkbook({}, ctx, "cs");
-    const sel = sheets[1]!;
+    const sel = sheets[0]!;
 
     expect(sel.headers).toEqual([
       "Č. registrace", "Stav", "Příjezd", "Čas příjezdu", "Odjezd",
@@ -243,7 +243,7 @@ describe("buildRegistrationExportWorkbook", () => {
     h.findMany.mockResolvedValue(fakeRows());
     h.eventFindMany.mockResolvedValue([]);
     const { sheets } = await buildRegistrationExportWorkbook({}, ctx, "cs");
-    const [main, sel] = [sheets[0]!, sheets[1]!];
+    const [main, sel] = [sheets[4]!, sheets[0]!];
 
     expect(sel.headers.at(-1)).toBe("Účastník 1 — jméno");
     // Every selected header really exists in the full sheet, in the same order.

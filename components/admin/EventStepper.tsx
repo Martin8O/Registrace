@@ -265,7 +265,10 @@ function initialMealPrices(
   for (const meal of MEAL_TYPES) {
     for (const age of ALL_AGES) {
       for (const type of PRICING_TYPES) {
-        base[mealPriceKey(meal, age, type)] = locked ? 0 : DEFAULT_MEAL_PRICE[meal]
+        // Toddlers eat free unless the admin says otherwise: a 0–3 price prefilled
+        // at the adult catalogue price was easy to overlook and bill.
+        base[mealPriceKey(meal, age, type)] =
+          locked || age === 'AGE_0_3' ? 0 : DEFAULT_MEAL_PRICE[meal]
       }
     }
   }

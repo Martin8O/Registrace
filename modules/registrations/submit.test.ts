@@ -15,7 +15,7 @@ const h = vi.hoisted(() => {
     create: vi.fn(),
     update: vi.fn(),
   };
-  const event = { findFirst: vi.fn(), update: vi.fn() };
+  const event = { findFirst: vi.fn(), findUnique: vi.fn(), update: vi.fn() };
   const center = { findFirst: vi.fn() };
   const participant = { create: vi.fn() };
   const participantMeal = { createMany: vi.fn() };
@@ -39,6 +39,7 @@ vi.mock("@/lib/audit", () => ({ logAuditEvent: vi.fn() }));
 
 import {
   submitRegistration,
+  isEventFull,
   RegistrationCapacityError,
   RegistrationEventNotFoundError,
   RegistrationStayMismatchError,
@@ -492,6 +493,33 @@ describe("submitRegistration — the confirmation email's tiers", () => {
     expect(emailData().participants[0]).toMatchObject({
       pricingType: "SUPPORTED",
       mealPricingType: "SUPPORTED",
+    });
+  });
+});
+
+// The event page shows "fully booked" instead of a form when this says so. It
+// must count exactly what the submit counts, or the page would offer a form the
+// submit refuses (or hide one it would accept).
+describe("isEventFull", () => {
+  it("is false without a cap, true once live registrations reach it", async () => {
+    h.prisma.event.findUnique.mockResolvedValueOnce({ maxRegistrations: null });
+    expect(await isEventFull("e1")).toBe(false);
+
+    h.prisma.event.findUnique.mockResolvedValueOnce({ maxRegistrations: 2 });
+    h.prisma.registration.count.mockResolvedValueOnce(1);
+    expect(await isEventFull("e1")).toBe(false);
+
+    h.prisma.event.findUnique.mockResolvedValueOnce({ maxRegistrations: 2 });
+    h.prisma.registration.count.mockResolvedValueOnce(2);
+    expect(await isEventFull("e1")).toBe(true);
+  });
+
+  it("counts live registrations only — a cancelled one frees its seat", async () => {
+    h.prisma.event.findUnique.mockResolvedValueOnce({ maxRegistrations: 2 });
+    h.prisma.registration.count.mockResolvedValueOnce(0);
+    await isEventFull("e1");
+    expect(h.prisma.registration.count).toHaveBeenLastCalledWith({
+      where: { eventId: "e1", deletedAt: null, status: { in: ["REGISTERED", "PAID"] } },
     });
   });
 });

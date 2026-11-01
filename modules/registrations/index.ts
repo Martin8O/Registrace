@@ -130,6 +130,22 @@ export type SubmitResult = {
 
 const HONEYPOT_SENTINEL = "bot-detected";
 
+// Whether a capped event has no seat left: the same count the submit re-checks
+// inside its transaction (live registrations only — a cancelled one frees its
+// seat). The event page shows a notice instead of a form nobody could submit;
+// people used to fill it all in and learn only on sending.
+export async function isEventFull(eventId: string): Promise<boolean> {
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { maxRegistrations: true },
+  });
+  if (!event || event.maxRegistrations === null) return false;
+  const taken = await prisma.registration.count({
+    where: { eventId, deletedAt: null, status: { in: ["REGISTERED", "PAID"] } },
+  });
+  return taken >= event.maxRegistrations;
+}
+
 export async function submitRegistration(
   input: RegistrationSubmitInput,
   meta: SubmitMeta,
@@ -2109,8 +2125,8 @@ async function scopedEventLabel(
 }
 
 // The full multi-sheet workbook for the (Excel-only) export, always scoped to one
-// event: full data, the trimmed selection, the kitchen meal-prep + accommodation
-// tables and the day-by-day settlement. The event name is the title of every sheet.
+// event: the trimmed selection, the kitchen meal-prep + accommodation tables, the
+// day-by-day settlement and the full data. The event name is the title of every sheet.
 export async function buildRegistrationExportWorkbook(
   filters: RegistrationExportFilters,
   ctx: AdminContext,
@@ -2136,7 +2152,9 @@ export async function buildRegistrationExportWorkbook(
 
   const settlement = await buildSettlementSheet(filters.eventId, ctx, lang);
 
-  const sheets = [main, selection, meals, accommodation, settlement];
+  // The order the team reaches for them: the on-site selection first, the full
+  // data last (it is the widest and the least often opened).
+  const sheets = [selection, meals, accommodation, settlement, main];
   for (const sheet of sheets) sheet.title = title;
   return { sheets };
 }

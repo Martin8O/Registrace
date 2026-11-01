@@ -60,7 +60,9 @@
       "required": "This field is required",
       "mealType": "Choose a meal type",
       "submit": "The registration could not be submitted. Please try again.",
-      "capacity": "The event is already at full capacity."
+      "capacity": "The event is already at full capacity.",
+      "center": "Choose your centre",
+      "rateLimited": "Too many registrations have come from this connection in a short time. Please try again later (within an hour at most)."
     },
     "participationModal": {
       "title": "Participation and night price — participant {number}",
@@ -91,7 +93,8 @@
       "rights_body": "You have the right to access your data, to rectification, erasure, restriction of processing, portability, and the right to object (Art. 15–21 GDPR). Send your requests to info@bdc.cz.",
       "close": "Close"
     },
-    "add_another_participant": "Add another participant"
+    "add_another_participant": "Add another participant",
+    "center_placeholder": "— choose your centre —"
   },
   "meta": {
     "siteName": "DWB Event Registration",
@@ -144,7 +147,9 @@
       "eveningArrivalDiscount": "Evening arrival discount (15+)",
       "earlyDepartureDiscount": "Early departure discount (15+)"
     },
-    "registrationFormPlaceholder": "Registration form — coming next"
+    "registrationFormPlaceholder": "Registration form — coming next",
+    "full": "This event is fully booked.",
+    "fullNote": "No further registrations can be made. If a place frees up, the form will appear here again."
   },
   "admin": {
     "brand": "Administration",
@@ -437,7 +442,7 @@
         "include": "Include again",
         "excluded": "Not offered",
         "priceListTitle": "Meal price list",
-        "priceListNote": "These prices apply to the whole event — each day only decides whether a meal is served. Every category starts at the same price; lower it where a different one should apply (children, or the supported tier).",
+        "priceListNote": "These prices apply to the whole event — each day only decides whether a meal is served. Every category starts at the same price, except ages 0–3, which start at 0; lower it where a different one should apply (older children, or the supported tier).",
         "availabilityTitle": "Availability per day"
       },
       "preview": {

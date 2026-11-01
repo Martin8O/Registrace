@@ -270,7 +270,9 @@ export async function getPublishedEvents(now: Date = new Date()): Promise<Publis
 const eventDetailInclude = {
   center: true,
   dates: { orderBy: { sortOrder: "asc" } },
-  meals: true,
+  // Enum order = breakfast, lunch, dinner; unordered rows once listed a day's
+  // meals as lunch, dinner, breakfast.
+  meals: { orderBy: { mealType: "asc" } },
   pricingRules: true,
   mealPricingRules: true,
 } satisfies Prisma.EventInclude;

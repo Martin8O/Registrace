@@ -63,13 +63,15 @@ const mealPricingRules = Object.entries(MEAL_PRICES).flatMap(([ageCategory, byTi
 const centers = [{ id: "c1", name_cs: "Těnovice", name_en: "Tenovice" }];
 const ALL = ["STANDARD", "SUPPORTED", "SURPLUS"];
 
-function renderForm(over: { participationPricingTypes?: string[]; mealPricingTypes?: string[] } = {}) {
+function renderForm(
+  over: { participationPricingTypes?: string[]; mealPricingTypes?: string[]; meals?: typeof meals } = {},
+) {
   return render(
     <NextIntlClientProvider locale="cs" messages={cs}>
       <RegistrationForm
         eventId="e1"
         dates={dates}
-        meals={meals}
+        meals={over.meals ?? meals}
         centers={centers}
         pricingRules={pricingRules}
         mealPricingRules={mealPricingRules}
@@ -334,6 +336,7 @@ describe("the panel shown after a successful submit", () => {
     click("participants.0.ageCategory-AGE_15_PLUS");
     click("participants.0.mealType-MEAT");
     fireEvent.change(document.getElementById("fullName-0")!, { target: { value: "Jan Novák" } });
+    fireEvent.change(document.getElementById("centerId")!, { target: { value: "c1" } });
     fireEvent.change(document.getElementById("email")!, { target: { value: "jan@example.cz" } });
     fireEvent.click(document.querySelector('input[name="gdprConsent"]')!);
 
@@ -387,11 +390,62 @@ describe("the panel shown after a successful submit", () => {
     click("participants.0.ageCategory-AGE_15_PLUS");
     click("participants.0.mealType-MEAT");
     fireEvent.change(document.getElementById("fullName-0")!, { target: { value: "Jan Novák" } });
+    fireEvent.change(document.getElementById("centerId")!, { target: { value: "c1" } });
     fireEvent.change(document.getElementById("email")!, { target: { value: "jan@example.cz" } });
     fireEvent.click(document.querySelector('input[name="gdprConsent"]')!);
     fireEvent.click(screen.getByRole("button", { name: cs.form.register }));
 
     await waitFor(() => expect(screen.getByText(cs.form.registration_success)).toBeTruthy());
     expect(screen.queryByText(cs.form.success_number_label)).not.toBeTruthy();
+  });
+});
+
+// ─── M57: the home centre, the submit limit, the order of a day's meals ───────
+
+describe("the home centre", () => {
+  // The first centre in the list used to be pre-selected, so everyone who never
+  // touched the picker was stored as coming from it.
+  it("starts unselected and is required", async () => {
+    renderForm();
+    expect((document.getElementById("centerId") as HTMLSelectElement).value).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: cs.form.register }));
+    await waitFor(() => expect(screen.getByText(cs.form.errors.center)).toBeTruthy());
+  });
+});
+
+describe("a submit refused by the rate limit", () => {
+  it("says so instead of asking to try again at once", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((url: string) =>
+      String(url).includes("submit")
+        ? Promise.resolve({ ok: false, status: 429, json: async () => ({}) })
+        : Promise.resolve({ ok: true, json: async () => ({ participants: [], totalPrice: 0 }) }),
+    ));
+    renderForm();
+    click("arrivalDateId-d1");
+    click("departureDateId-d3");
+    fireEvent.change(document.getElementById("fullName-0")!, { target: { value: "Jan Novák" } });
+    fireEvent.change(document.getElementById("centerId")!, { target: { value: "c1" } });
+    fireEvent.change(document.getElementById("email")!, { target: { value: "jan@example.cz" } });
+    fireEvent.click(document.querySelector('input[name="gdprConsent"]')!);
+    fireEvent.click(screen.getByRole("button", { name: cs.form.register }));
+    await waitFor(() => expect(screen.getByText(cs.form.errors.rateLimited)).toBeTruthy());
+  });
+});
+
+describe("a day's meals", () => {
+  // Meal rows arrive in whatever order the database returns them; a Sunday once
+  // read lunch, dinner, breakfast.
+  it("are listed breakfast, lunch, dinner whatever order they arrive in", () => {
+    renderForm({
+      meals: [
+        { id: "m_d3", eventDateId: "d3", mealType: "DINNER" as const, price: 120, isClosed: false },
+        { id: "m_b3", eventDateId: "d3", mealType: "BREAKFAST" as const, price: 80, isClosed: false },
+        { id: "m_l3", eventDateId: "d3", mealType: "LUNCH" as const, price: 120, isClosed: false },
+      ],
+    });
+    click("arrivalDateId-d3");
+    click("departureDateId-d3");
+    const order = [...document.querySelectorAll('input[id^="meal-0-"]')].map((e) => e.id);
+    expect(order).toEqual(["meal-0-m_b3", "meal-0-m_l3", "meal-0-m_d3"]);
   });
 });

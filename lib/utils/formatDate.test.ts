@@ -32,4 +32,8 @@ describe("formatDateRangeShort", () => {
     expect(formatDateRangeShort("2026-09-18", "2026-09-20")).toBe("18.9.–20.9.");
     expect(formatDateRangeShort("2026-01-05", "2026-01-07")).toBe("5.1.–7.1.");
   });
+
+  it("prints a one-day event as its single date", () => {
+    expect(formatDateRangeShort("2026-11-07", "2026-11-07")).toBe("7.11.");
+  });
 });

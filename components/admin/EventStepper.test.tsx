@@ -497,3 +497,17 @@ describe("declining the publish question", () => {
     expect(document.querySelector<HTMLSelectElement>('select[name="status"]')!.value).toBe("DRAFT");
   });
 });
+
+// A toddler's meal prefilled at the adult catalogue price was easy to overlook
+// and bill; the 0–3 rows of a new event's meal price list start at 0.
+describe("a new event's meal price list", () => {
+  it("starts ages 0–3 at 0 and everyone else at the catalogue price", () => {
+    renderWizard();
+    goToStep(F.steps.meals);
+    const prices = [...document.querySelector("section")!.querySelectorAll<HTMLInputElement>('input[type="number"]')].map((e) => Number(e.value));
+    // 4 ages × 3 tiers, breakfast / lunch / dinner each, ages in order 0–3 first.
+    expect(prices.slice(0, 9)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    expect(prices.slice(9, 12)).toEqual([80, 120, 120]);
+    expect(prices.slice(27, 30)).toEqual([80, 120, 120]);
+  });
+});
