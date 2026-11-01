@@ -107,3 +107,37 @@ describe("event pricing tier sets", () => {
     ).toBe(false);
   });
 });
+
+// The event's contact phone is shown on the public page; free text such as
+// "vladikuv telefon" used to be stored as if it were a number.
+describe("event contact phone", () => {
+  const withPhone = (contactPhone: string) =>
+    eventCreateWithRelationsSchema.safeParse({ ...validCreate, contactPhone }).success;
+
+  it("accepts the shapes live events use, and none at all", () => {
+    expect(withPhone("+420 724 051 765")).toBe(true);
+    expect(withPhone("777711083")).toBe(true);
+    expect(withPhone("")).toBe(true);
+    expect(eventCreateWithRelationsSchema.safeParse(validCreate).success).toBe(true);
+  });
+
+  it("rejects letters, other symbols and a number too short to dial", () => {
+    expect(withPhone("vladikuv telefon")).toBe(false);
+    expect(withPhone("724-051-765")).toBe(false);
+    expect(withPhone("+420 72x 051 765")).toBe(false);
+    expect(withPhone("12345")).toBe(false);
+    expect(withPhone("420+724051765")).toBe(false);
+  });
+
+  it("holds on an update too", () => {
+    expect(eventUpdateSchema.safeParse({ contactPhone: "vladikuv telefon" }).success).toBe(false);
+    expect(eventUpdateSchema.safeParse({ contactPhone: "+420 724 051 765" }).success).toBe(true);
+  });
+});
+
+describe("event contact phone, as pasted", () => {
+  // A number copied from a web page or a document carries non-breaking spaces.
+  it("accepts non-breaking spaces between the digits", () => {
+    expect(eventUpdateSchema.safeParse({ contactPhone: "+420\u00a0724\u00a0051\u00a0765" }).success).toBe(true);
+  });
+});

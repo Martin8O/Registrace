@@ -191,7 +191,7 @@ describe("buildRegistrationExport — ownership scoping (cross-center IDOR regre
 });
 
 describe("buildRegistrationExportWorkbook", () => {
-  it("returns four sheets: full data, selection, meals, accommodation", async () => {
+  it("returns five sheets: full data, selection, meals, accommodation, settlement", async () => {
     h.findMany.mockResolvedValue(fakeRows());
     h.eventFindMany.mockResolvedValue([]); // no events in scope → empty kitchen sheets
     const { sheets } = await buildRegistrationExportWorkbook({}, ctx, "cs");
@@ -201,6 +201,7 @@ describe("buildRegistrationExportWorkbook", () => {
       "Data – výběr",
       "Jídlo",
       "Ubytování",
+      "Vyúčtování",
     ]);
     // Kitchen sheets carry their headers even with no event in scope (no "Akce"
     // column — the event name is the sheet title now).
@@ -208,6 +209,14 @@ describe("buildRegistrationExportWorkbook", () => {
     expect(sheets[2]!.rows).toHaveLength(0);
     expect(sheets[3]!.headers).toEqual(["Noc", "Počet osob"]);
     expect(sheets[3]!.rows).toHaveLength(0);
+    expect(sheets[4]!.headers).toEqual([
+      "Den",
+      "Přihlášení – osob", "Přihlášení – ubytování (Kč)", "Přihlášení – denní sazba (Kč)",
+      "Přihlášení – strava (Kč)", "Přihlášení – celkem (Kč)",
+      "Zaplaceno – osob", "Zaplaceno – ubytování (Kč)", "Zaplaceno – denní sazba (Kč)",
+      "Zaplaceno – strava (Kč)", "Zaplaceno – celkem (Kč)",
+    ]);
+    expect(sheets[4]!.rows).toHaveLength(0);
   });
 
   it("selection sheet = the agreed trimmed columns, sliced from the full sheet", async () => {
@@ -269,12 +278,15 @@ describe("buildRegistrationExportWorkbook — unknown / out-of-scope event", () 
     expect(h.findMany).not.toHaveBeenCalled();
   });
 
-  it("an in-scope event still builds all four sheets, titled with its label", async () => {
+  it("an in-scope event still builds all five sheets, titled with its label", async () => {
     h.eventFindFirst.mockResolvedValue({
       id: "e1",
       title_cs: "Letní kurz",
       title_en: "Summer course",
       center: { name_cs: "Praha", name_en: "Prague" },
+      dates: [],
+      pricingRules: [],
+      registrations: [],
     });
     h.findMany.mockResolvedValue(fakeRows());
     h.eventDateFindMany.mockResolvedValue([]);
@@ -282,7 +294,110 @@ describe("buildRegistrationExportWorkbook — unknown / out-of-scope event", () 
     h.participantMealFindMany.mockResolvedValue([]);
 
     const { sheets } = await buildRegistrationExportWorkbook({ eventId: "e1" }, ctx, "cs");
-    expect(sheets).toHaveLength(4);
+    expect(sheets).toHaveLength(5);
     expect(sheets.every((s) => s.title === "Praha — Letní kurz")).toBe(true);
+  });
+});
+
+// "Vyúčtování": the event's stored money spread over its days, every active
+// registration beside the paid ones. Hand-computed below; the sheet's totals must
+// equal the stored prices to the crown.
+describe("the settlement sheet", () => {
+  const rule = (ageCategory: string, pricingType: string, dailyRate: number, nightRate: number) => ({
+    ageCategory, pricingType, dailyRate, nightRate,
+    morningArrivalDiscount: 0, afternoonArrivalDiscount: 50, eveningArrivalDiscount: 100,
+    earlyDepartureDiscount: 80,
+  });
+  const meal = (price: number, eventDateId: string) => ({ price, eventMeal: { eventDateId } });
+  const date = (id: string, sortOrder: number, label: string) => ({
+    id, sortOrder, label_cs: label, label_en: label, date: new Date(`2026-11-0${sortOrder + 6}T00:00:00Z`),
+  });
+
+  const EVENT = {
+    id: "e1",
+    title_cs: "Letní kurz",
+    title_en: "Summer course",
+    center: { name_cs: "Praha", name_en: "Prague" },
+    dates: [date("fri", 0, "Pá"), date("sat", 1, "So"), date("sun", 2, "Ne")],
+    pricingRules: [rule("AGE_15_PLUS", "STANDARD", 100, 200), rule("AGE_15_PLUS", "SURPLUS", 150, 300)],
+    registrations: [
+      {
+        // PAID, beds, evening arrival Fri → Sun. Adult standard: day 100×3 − 100 + nights 200×2 = 600.
+        // Child with no rule: stay 0, one meal.
+        status: "PAID", arrivalDateId: "fri", arrivalTime: "EVENING", departureDateId: "sun",
+        earlyDeparture: "NONE", hasAccommodation: true,
+        participants: [
+          { ageCategory: "AGE_15_PLUS", pricingType: "STANDARD", participationPrice: 600, mealPrice: 320,
+            meals: [meal(120, "fri"), meal(80, "sat"), meal(120, "sat")] },
+          { ageCategory: "AGE_4_7", pricingType: "STANDARD", participationPrice: 0, mealPrice: 60,
+            meals: [meal(60, "sat")] },
+        ],
+      },
+      {
+        // REGISTERED, no beds, Sat morning → Sun after breakfast. Surplus: 150×2 − 80 = 220.
+        status: "REGISTERED", arrivalDateId: "sat", arrivalTime: "MORNING", departureDateId: "sun",
+        earlyDeparture: "AFTER_BREAKFAST", hasAccommodation: false,
+        participants: [
+          { ageCategory: "AGE_15_PLUS", pricingType: "SURPLUS", participationPrice: 220, mealPrice: 90,
+            meals: [meal(90, "sun")] },
+        ],
+      },
+    ],
+  };
+
+  async function settlement() {
+    h.eventFindFirst.mockResolvedValue(EVENT);
+    h.findMany.mockResolvedValue([]);
+    h.eventDateFindMany.mockResolvedValue([]);
+    h.eventMealFindMany.mockResolvedValue([]);
+    h.participantMealFindMany.mockResolvedValue([]);
+    const { sheets } = await buildRegistrationExportWorkbook({ eventId: "e1" }, ctx, "cs");
+    return sheets.find((x) => x.sheetName === "Vyúčtování")!;
+  }
+
+  it("splits each day into people, beds, day rate and meals — all, then paid only", async () => {
+    const { rows } = await settlement();
+    //            people acc  day  meals sum | paid: people acc day meals sum
+    expect(rows).toEqual([
+      ["Pá", 2, 200, 0, 120, 320, 2, 200, 0, 120, 320],
+      ["So", 3, 200, 250, 260, 710, 2, 200, 100, 260, 560],
+      ["Ne", 3, 0, 170, 90, 260, 2, 0, 100, 0, 100],
+      ["Celkem", 3, 400, 420, 470, 1290, 2, 400, 200, 380, 980],
+    ]);
+  });
+
+  it("adds up to the stored prices exactly", async () => {
+    const { rows } = await settlement();
+    const stored = EVENT.registrations.flatMap((r) => r.participants)
+      .reduce((s, p) => s + p.participationPrice + p.mealPrice, 0);
+    expect(rows.at(-1)![5]).toBe(stored);
+  });
+
+  // A stay the engine floored at 0 (or any stored amount the split does not
+  // reproduce) still has to land in the sheet, or its totals would drift from
+  // what was charged.
+  it("books a stored stay price the split does not reproduce on the arrival day", async () => {
+    const reg = EVENT.registrations[1]!;
+    const original = reg.participants[0]!.participationPrice;
+    reg.participants[0]!.participationPrice = 250; // 30 more than the rules give
+    try {
+      const { rows } = await settlement();
+      expect(rows[1]![3]).toBe(250 + 30); // Saturday's day rate, active group
+      expect(rows.at(-1)![3]).toBe(420 + 30);
+    } finally {
+      reg.participants[0]!.participationPrice = original;
+    }
+  });
+
+  it("squares a stored meal price its meal rows do not add up to on the arrival day", async () => {
+    const p = EVENT.registrations[1]!.participants[0]!;
+    p.mealPrice += 10;
+    try {
+      const { rows } = await settlement();
+      expect(rows[1]![4]).toBe(260 + 10); // Saturday's meals, active group
+      expect(rows.at(-1)![5]).toBe(1290 + 10);
+    } finally {
+      p.mealPrice -= 10;
+    }
   });
 });

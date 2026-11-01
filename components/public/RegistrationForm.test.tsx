@@ -233,6 +233,18 @@ describe("the stay a form arrives with", () => {
     expect(document.getElementById("meal-0-m_l2")).toBeTruthy();
   });
 
+  // An unselected diet blocked the submit and people hunted for the radio they
+  // had missed — every participant, added ones included, now starts on meat.
+  it("pre-selects the meat diet for every participant, added ones too", () => {
+    renderForm();
+    expect(checked("participants.0.mealType")).toBe("MEAT");
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(cs.form.add_another_participant) }));
+    expect(checked("participants.1.mealType")).toBe("MEAT");
+    click("participants.1.mealType-VEGETARIAN");
+    expect(checked("participants.1.mealType")).toBe("VEGETARIAN");
+    expect(checked("participants.0.mealType")).toBe("MEAT");
+  });
+
   it("still lets the registrant say they are not sleeping there", () => {
     renderForm();
     click("accommodation-no");

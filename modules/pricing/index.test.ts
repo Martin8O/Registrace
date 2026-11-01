@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calculatePricing, type PricingInput, type PricingParticipantInput } from "./index";
+import { calculatePricing, participationByDay, type PricingInput, type PricingParticipantInput } from "./index";
 
 // ─── Fixture: a 3-day event (Fri/Sat/Sun) ─────────────────────────────────────
 // Discounts on the canonical STANDARD rule: morning = 0 (the "neutral" arrival —
@@ -391,5 +391,44 @@ describe("an event with no meal price list falls back to the flat price", () => 
         mealPricingRules: rules as never,
       })?.mealPrice,
     ).toBe(80);
+  });
+});
+
+// ─── The stay price day by day (the export's settlement sheet) ────────────────
+// The split must be the engine's own arithmetic, only spread over days: for every
+// stay shape it has to add up to exactly what calculatePricing charges.
+describe("participationByDay", () => {
+  it("puts discounts on the arrival / departure day and nights on all days but the last", () => {
+    const split = participationByDay(adult("STANDARD"), input([], {
+      arrivalTime: "EVENING",
+      earlyDeparture: "AFTER_BREAKFAST",
+      hasAccommodation: true,
+    }));
+    expect(split).toEqual([
+      { dateId: "d_fri", dayRate: 0, night: 50 },
+      { dateId: "d_sat", dayRate: 100, night: 50 },
+      { dateId: "d_sun", dayRate: 20, night: 0 },
+    ]);
+  });
+
+  it("adds up to the engine's price for every stay shape and tier", () => {
+    for (const pricingType of ["STANDARD", "SUPPORTED", "SURPLUS"])
+      for (const arrivalDateId of ["d_fri", "d_sat", "d_sun"])
+        for (const departureDateId of ["d_fri", "d_sat", "d_sun"])
+          for (const arrivalTime of ["MORNING", "AFTERNOON", "EVENING"])
+            for (const earlyDeparture of ["NONE", "AFTER_BREAKFAST"])
+              for (const hasAccommodation of [true, false]) {
+                const o = { arrivalDateId, departureDateId, arrivalTime, earlyDeparture, hasAccommodation };
+                const charged = one(adult(pricingType), o)!.participationPrice;
+                const sum = participationByDay(adult(pricingType), input([], o))
+                  .reduce((s, d) => s + d.dayRate + d.night, 0);
+                // The engine floors a negative stay at 0; the split does not.
+                expect(charged).toBe(Math.max(0, sum));
+              }
+  });
+
+  it("is empty for a person no rule prices, or a stay that runs backwards", () => {
+    expect(participationByDay({ ageCategory: "AGE_0_3", pricingType: "STANDARD" }, input([]))).toEqual([]);
+    expect(participationByDay(adult(), input([], { arrivalDateId: "d_sun", departureDateId: "d_fri" }))).toEqual([]);
   });
 });

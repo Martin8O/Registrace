@@ -31,6 +31,8 @@ export type ExportTable = {
   title?: string;
   headers: string[];
   rows: (string | number)[][];
+  // The last row is a total (bold).
+  totalRow?: boolean;
 };
 
 function addSheet(wb: ExcelJS.Workbook, table: ExportTable): void {
@@ -48,6 +50,7 @@ function addSheet(wb: ExcelJS.Workbook, table: ExportTable): void {
   ws.views = [{ state: "frozen", ySplit: headerRowIdx }];
 
   for (const row of table.rows) ws.addRow(row.map(neutralize));
+  if (table.totalRow && table.rows.length > 0) ws.lastRow!.font = { bold: true };
 
   // Width ≈ longest cell in the column, clamped to a readable range.
   ws.columns.forEach((col, i) => {

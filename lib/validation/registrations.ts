@@ -28,8 +28,8 @@ const calculateParticipantSchema = z.object({
 
 const submitParticipantSchema = calculateParticipantSchema.extend({
   fullName: z.string().min(2).max(100),
-  // Required diet choice ("musí si zvolit jedno") — meat or vegetarian. Price is
-  // identical for both, so it stays out of the calculate-price schema.
+  // Required diet — meat or vegetarian (the form starts every person on meat).
+  // Price is identical for both, so it stays out of the calculate-price schema.
   mealType: z.enum(mealCategoryValues),
 });
 

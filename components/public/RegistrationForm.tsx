@@ -29,11 +29,12 @@ import type {
   PricingRuleDTO,
 } from '@/lib/types'
 
-// The working form type loosens two fields the user must actively choose so they
-// can start UNSELECTED, while the zodResolver still enforces them on submit:
+// The working form type loosens two fields so they can be empty in the working
+// state, while the zodResolver still enforces them on submit:
 //  - gdprConsent: `z.literal(true)` in the schema, but the checkbox starts unchecked.
-//  - participant.mealType: a required enum, but the diet radios start unselected
-//    ("musí si zvolit jedno"). Everything else mirrors the schema's inferred type.
+//  - participant.mealType: a required enum. It starts on MEAT (see makeParticipant),
+//    but the type stays optional so a cleared value is caught by the resolver
+//    rather than assumed. Everything else mirrors the schema's inferred type.
 type RegistrationParticipantValue = Omit<
   RegistrationSubmitInput['participants'][number],
   'mealType'
@@ -110,7 +111,8 @@ const mealLabelKey: Record<string, string> = {
 }
 
 function makeParticipant(): RegistrationFormValues['participants'][number] {
-  // mealType starts undefined — the registrant must actively choose meat/vege.
+  // The diet starts on MEAT: an unselected diet blocked the submit, and people
+  // hunted for the one radio they had missed. Vegetarians switch it with a click.
   // Both tiers start STANDARD: it is every event's mandatory tier (invariant 22),
   // so it is the one default that is always a valid choice, and it is what gets
   // submitted for a half whose selector is not rendered at all.
@@ -119,7 +121,7 @@ function makeParticipant(): RegistrationFormValues['participants'][number] {
     ageCategory: 'AGE_15_PLUS',
     pricingType: 'STANDARD',
     mealPricingType: 'STANDARD',
-    mealType: undefined,
+    mealType: 'MEAT',
     mealIds: [],
   }
 }
@@ -316,18 +318,6 @@ export default function RegistrationForm({
       }
     })
   }, [availableMealIds, getValues, setValue])
-
-  // Past the meal deadline the diet choice is blocked (the selector is hidden).
-  // mealType is schema-required, so fill a harmless placeholder (it's irrelevant —
-  // no meals can be ordered) to keep the form valid. fields.length re-runs it for
-  // newly added participants.
-  useEffect(() => {
-    if (!mealsClosed) return
-    const parts = getValues('participants')
-    parts.forEach((p, i) => {
-      if (!p.mealType) setValue(`participants.${i}.mealType`, 'MEAT', { shouldDirty: false })
-    })
-  }, [mealsClosed, fields.length, getValues, setValue])
 
   // ─── Debounced server price call (presentation only — no client math) ───
   const allValues = watch()

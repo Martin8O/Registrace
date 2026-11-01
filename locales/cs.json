@@ -352,6 +352,10 @@
       "editLockedNote": "Tato akce už je zveřejněná nebo má registrace, proto lze měnit jen základní údaje, kontakty, kapacitu, stav a uzávěrku přihlašování jídel. Centrum, termín, ceník a jídla jsou uzamčené. Dokud se nikdo nepřihlásil, odemknete je vrácením akce do stavu Koncept.",
       "validationError": "Opravte prosím označená pole.",
       "errorsTitle": "Formulář obsahuje chyby:",
+      "draftRestored": "Vrátili jsme vám rozepsanou akci (naposledy upraveno {time}). Pokračujte, kde jste skončili.",
+      "draftDiscard": "Začít načisto",
+      "draftDiscardConfirm": "Zahodit rozepsanou akci a začít s prázdným formulářem?",
+      "leaveWarning": "Akce ještě není uložená. Opravdu odejít?",
       "publishConfirmTitle": "Publikovat akci?",
       "publishConfirmBody": "Akce bude nastavena jako publikovaná a viditelná pro veřejnost. Chcete pokračovat?",
       "publishConfirm": "Ano, publikovat",
@@ -450,6 +454,8 @@
       },
       "errors": {
         "required": "Povinné pole",
+        "phone": "Jen číslice a mezery, případně + na začátku (alespoň 9 číslic)",
+        "sessionExpired": "Přihlášení vypršelo, akce se neuložila. Přihlaste se v novém okně a pak zde klikněte znovu — vyplněné údaje zůstávají.",
         "email": "Neplatný e-mail",
         "endDate": "Datum konce nesmí být dřív než datum začátku",
         "startInPast": "Datum začátku nemůže být v minulosti",
@@ -701,7 +707,7 @@
           "title": "Jak založím akci",
           "blocks": [
             {
-              "p": "<k>Akce</k> → <k>Nová akce</k>. Průvodce má sedm kroků, mezi kroky se dá vracet a <b>nic se neuloží dřív, než dojdeš na konec</b>. Průvodce proto neopouštěj rozdělaný: kliknutí jinam v menu, přepnutí CZ/EN nebo zavření okna rozpracovanou akci <b>bez varování zahodí</b>."
+              "p": "<k>Akce</k> → <k>Nová akce</k>. Průvodce má sedm kroků, mezi kroky se dá vracet a <b>nic se neuloží dřív, než dojdeš na konec</b>. Rozepsanou <b>novou</b> akci si ale pamatuje tento prohlížeč: když průvodce omylem opustíš (kliknutí jinam v menu, přepnutí CZ/EN, zavření okna), po návratu do <k>Nová akce</k> ji najdeš vyplněnou, dokud ji neuložíš, neklikneš na <i>Začít načisto</i> nebo se neodhlásíš. Při odchodu z neuložené akce se průvodce navíc zeptá, jestli opravdu odejít; u úpravy existující akce je to jediná pojistka, ta se nepamatuje."
             },
             {
               "steps": [
@@ -1038,7 +1044,7 @@
               }
             },
             {
-              "p": "Zapnutý filtr (stav, hledání) se v exportu z Detailů projeví <b>jen ve dvou listech s daty</b>. Jsou v nich i zrušené registrace, poznáš je podle sloupce se stavem. Listy <i>Jídlo</i> a <i>Ubytování</i> jsou vždy za celou akci a bez zrušených."
+              "p": "Zapnutý filtr (stav, hledání) se v exportu z Detailů projeví <b>jen ve dvou listech s daty</b>. Jsou v nich i zrušené registrace, poznáš je podle sloupce se stavem. Listy <i>Jídlo</i>, <i>Ubytování</i> a <i>Vyúčtování</i> jsou vždy za celou akci a bez zrušených."
             },
             {
               "small": "Export se zapisuje do auditu: kdo a kdy ho stáhl."
@@ -1144,8 +1150,8 @@
       "export": {
         "topic": "export",
         "body": [
-          "Stáhne sešit se čtyřmi listy: <b>Data – vše</b> (kompletní registrace), <b>Data – výběr</b> (zkrácené na místo), <b>Jídlo</b> (počty po dnech, masitá / vege) a <b>Ubytování</b> (osoby po nocích).",
-          "Vždy jen za tuhle akci. Zapnutý filtr zúží jen dva listy s daty; <b>Jídlo</b> a <b>Ubytování</b> jsou vždy za celou akci. Stažení se <b>zapíše do auditu</b>."
+          "Stáhne sešit s pěti listy: <b>Data – vše</b> (kompletní registrace), <b>Data – výběr</b> (zkrácené na místo), <b>Jídlo</b> (počty po dnech, masitá / vege), <b>Ubytování</b> (osoby po nocích) a <b>Vyúčtování</b> (po dnech osoby a částky za ubytování, denní sazbu a stravu — vedle sebe všichni přihlášení a jen ti označení jako zaplacení).",
+          "Vždy jen za tuhle akci. Zapnutý filtr zúží jen dva listy s daty; <b>Jídlo</b>, <b>Ubytování</b> a <b>Vyúčtování</b> jsou vždy za celou akci. Stažení se <b>zapíše do auditu</b>."
         ],
         "more": {
           "anchor": "seznam",

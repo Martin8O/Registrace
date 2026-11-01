@@ -6,7 +6,7 @@
 // non-blocking and never rolls anything back).
 
 import { prisma } from "@/lib/db";
-import { calculatePricing } from "@/modules/pricing";
+import { calculatePricing, participationByDay } from "@/modules/pricing";
 import { resolveMealPrice, effectiveMealPricingType } from "@/lib/utils/mealPrice";
 import { getAvailableMealIds } from "@/lib/utils/mealAvailability";
 import { checkStayOrder, STAY_RULE_MESSAGES, type StayRuleViolation } from "@/lib/utils/stayRules";
@@ -1668,6 +1668,28 @@ const EXPORT_SHEETS: Record<ExportLang, {
   },
 };
 
+// The settlement sheet ("Vyúčtování"): per event day, people present and the
+// money that day stands for — accommodation, day rate, meals — once for every
+// active registration and once for the paid ones only, side by side.
+const SETTLEMENT_LABELS: Record<ExportLang, {
+  sheet: string; day: string; total: string;
+  active: string; paid: string;
+  people: string; accommodation: string; dayRate: string; meals: string; sum: string;
+}> = {
+  cs: {
+    sheet: "Vyúčtování", day: "Den", total: "Celkem",
+    active: "Přihlášení", paid: "Zaplaceno",
+    people: "osob", accommodation: "ubytování (Kč)", dayRate: "denní sazba (Kč)",
+    meals: "strava (Kč)", sum: "celkem (Kč)",
+  },
+  en: {
+    sheet: "Settlement", day: "Day", total: "Total",
+    active: "Registered", paid: "Paid",
+    people: "people", accommodation: "accommodation (CZK)", dayRate: "day rate (CZK)",
+    meals: "meals (CZK)", sum: "total (CZK)",
+  },
+};
+
 const MEAL_TYPE_LABELS: Record<ExportLang, Record<string, string>> = {
   cs: { BREAKFAST: "Snídaně", LUNCH: "Oběd", DINNER: "Večeře" },
   en: { BREAKFAST: "Breakfast", LUNCH: "Lunch", DINNER: "Dinner" },
@@ -1936,6 +1958,136 @@ async function buildMealAndAccommodationSheets(
   };
 }
 
+// "Vyúčtování": what the event's money is, day by day. Two groups of columns side
+// by side — every active registration (REGISTERED + PAID: what should come in)
+// and the PAID ones only (what the team has marked as received) — each with the
+// people present that day and the accommodation / day-rate / meal amounts that
+// day stands for. Cancelled registrations and removed participants are left out,
+// as on the kitchen and bed sheets.
+//
+// Amounts are the STORED ones (invariant 4: the stored price is what was
+// charged). Meals are each meal row's stored price on its own day. The stay
+// price is stored as one number per person, so it is spread over the days by
+// the engine's own arithmetic (participationByDay); should that ever disagree
+// with the stored amount — the engine floors a stay whose discounts exceed it at
+// 0 — the difference is booked on the arrival day's day rate. Likewise a stored
+// meal price its meal rows do not add up to is squared on the arrival day's
+// meals. Either way the sheet's totals equal the stored prices.
+async function buildSettlementSheet(
+  eventId: string | undefined,
+  ctx: AdminContext,
+  lang: ExportLang,
+): Promise<ExportTable> {
+  const L = SETTLEMENT_LABELS[lang];
+  const groups = [L.active, L.paid];
+  const headers = [
+    L.day,
+    ...groups.flatMap((g) =>
+      [L.people, L.accommodation, L.dayRate, L.meals, L.sum].map((c) => `${g} – ${c}`),
+    ),
+  ];
+  const event = eventId
+    ? await prisma.event.findFirst({
+        where: { id: eventId, deletedAt: null, ...ownEventFilter(ctx) },
+        select: {
+          dates: { orderBy: { sortOrder: "asc" } },
+          pricingRules: true,
+          registrations: {
+            where: { deletedAt: null, status: { in: ["REGISTERED", "PAID"] } },
+            select: {
+              status: true,
+              arrivalDateId: true,
+              arrivalTime: true,
+              departureDateId: true,
+              earlyDeparture: true,
+              hasAccommodation: true,
+              participants: {
+                where: { deletedAt: null },
+                select: {
+                  ageCategory: true,
+                  pricingType: true,
+                  participationPrice: true,
+                  mealPrice: true,
+                  meals: { select: { price: true, eventMeal: { select: { eventDateId: true } } } },
+                },
+              },
+            },
+          },
+        },
+      })
+    : null;
+  if (!event) return { sheetName: L.sheet, headers, rows: [] };
+
+  const eventDates = event.dates.map((d) => ({
+    id: d.id,
+    date: d.date.toISOString().slice(0, 10),
+    sortOrder: d.sortOrder,
+  }));
+  const sortOf = new Map(eventDates.map((d) => [d.id, d.sortOrder]));
+  type Day = { people: number; accommodation: number; dayRate: number; meals: number };
+  const blank = (): Day => ({ people: 0, accommodation: 0, dayRate: 0, meals: 0 });
+  // [group][dateId] — group 0 = every active registration, 1 = paid only.
+  const sums = [new Map<string, Day>(), new Map<string, Day>()];
+  const headcount = [0, 0];
+  const add = (group: number, dateId: string, patch: Partial<Day>) => {
+    const day = sums[group]!.get(dateId) ?? blank();
+    for (const [k, v] of Object.entries(patch) as [keyof Day, number][]) day[k] += v;
+    sums[group]!.set(dateId, day);
+  };
+
+  for (const r of event.registrations) {
+    const inGroups = r.status === "PAID" ? [0, 1] : [0];
+    const from = sortOf.get(r.arrivalDateId);
+    const to = sortOf.get(r.departureDateId);
+    for (const p of r.participants) {
+      const split = participationByDay(p, {
+        pricingRules: event.pricingRules,
+        eventDates,
+        arrivalDateId: r.arrivalDateId,
+        arrivalTime: r.arrivalTime,
+        departureDateId: r.departureDateId,
+        earlyDeparture: r.earlyDeparture,
+        hasAccommodation: r.hasAccommodation,
+      });
+      const drift = p.participationPrice - split.reduce((s, d) => s + d.dayRate + d.night, 0);
+      const mealDrift = p.mealPrice - p.meals.reduce((s, m) => s + m.price, 0);
+      for (const g of inGroups) {
+        headcount[g]! += 1;
+        for (const d of eventDates) {
+          if (from !== undefined && to !== undefined && d.sortOrder >= from && d.sortOrder <= to) {
+            add(g, d.id, { people: 1 });
+          }
+        }
+        for (const d of split) add(g, d.dateId, { accommodation: d.night, dayRate: d.dayRate });
+        if (drift !== 0) add(g, r.arrivalDateId, { dayRate: drift });
+        for (const m of p.meals) add(g, m.eventMeal.eventDateId, { meals: m.price });
+        if (mealDrift !== 0) add(g, r.arrivalDateId, { meals: mealDrift });
+      }
+    }
+  }
+
+  const cells = (d: Day) => [d.people, d.accommodation, d.dayRate, d.meals, d.accommodation + d.dayRate + d.meals];
+  const rows: (string | number)[][] = event.dates.map((d) => [
+    lang === "cs" ? d.label_cs : d.label_en,
+    ...[0, 1].flatMap((g) => cells(sums[g]!.get(d.id) ?? blank())),
+  ]);
+  // The total row's "people" is the number of people, not a sum of person-days.
+  rows.push([
+    L.total,
+    ...[0, 1].flatMap((g) => {
+      const t = blank();
+      for (const day of sums[g]!.values()) {
+        t.accommodation += day.accommodation;
+        t.dayRate += day.dayRate;
+        t.meals += day.meals;
+      }
+      t.people = headcount[g]!;
+      return cells(t);
+    }),
+  ]);
+  return { sheetName: L.sheet, headers, rows, totalRow: true };
+}
+
 // The event's "Centre — Title" label, ownership-scoped, for the per-event sheet
 // titles. Undefined if the event isn't found / not owned.
 async function scopedEventLabel(
@@ -1957,8 +2109,8 @@ async function scopedEventLabel(
 }
 
 // The full multi-sheet workbook for the (Excel-only) export, always scoped to one
-// event: full data, the trimmed selection, and the kitchen meal-prep +
-// accommodation tables. The event name is the title of every sheet.
+// event: full data, the trimmed selection, the kitchen meal-prep + accommodation
+// tables and the day-by-day settlement. The event name is the title of every sheet.
 export async function buildRegistrationExportWorkbook(
   filters: RegistrationExportFilters,
   ctx: AdminContext,
@@ -1982,7 +2134,9 @@ export async function buildRegistrationExportWorkbook(
     lang,
   );
 
-  const sheets = [main, selection, meals, accommodation];
+  const settlement = await buildSettlementSheet(filters.eventId, ctx, lang);
+
+  const sheets = [main, selection, meals, accommodation, settlement];
   for (const sheet of sheets) sheet.title = title;
   return { sheets };
 }

@@ -23,6 +23,7 @@ import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import cs from "@/locales/cs.json";
 import EventStepper from "./EventStepper";
+import { confirmLeave } from "@/lib/utils/unsavedGuard";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
@@ -122,6 +123,8 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  // A create-mode test that types leaves a stored draft the next one would restore.
+  window.localStorage.clear();
 });
 
 describe("the description field", () => {
@@ -371,5 +374,126 @@ describe("an event that is over, opened read-only", () => {
     renderWizard({ mode: "edit", status: "ARCHIVED", readOnly: true });
     expect(replaceState).not.toHaveBeenCalled();
     replaceState.mockRestore();
+  });
+});
+
+// A first publish once ended with no confirmation, no message and an empty form:
+// the request never reached the database, and nothing on screen said why. These
+// pin the three things that would have kept the work and explained the failure.
+describe("a save that does not go through", () => {
+  it("explains a refusal on the step the wizard jumps to, not only on the last one", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 403, json: async () => ({}) }));
+    renderWizard({ mode: "edit", status: "PUBLISHED" });
+    goToStep(F.steps.save);
+    fireEvent.click(buttonNamed(F.saveChanges)!);
+    await waitFor(() => expect(document.body.textContent).toContain(F.errors.forbidden));
+    // Landed on step 1 (its description textarea is rendered), message still visible.
+    expect(textareaFor("description_cs")).toBeTruthy();
+  });
+
+  it("says the sign-in expired and keeps what was typed", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) }));
+    renderWizard({ mode: "edit", status: "PUBLISHED" });
+    goToStep(F.steps.save);
+    fireEvent.click(buttonNamed(F.saveChanges)!);
+    await waitFor(() => expect(document.body.textContent).toContain(F.errors.sessionExpired));
+    goToStep(F.steps.basic);
+    expect(document.querySelector<HTMLInputElement>('input[name="title_cs"]')!.value).toBe("Kolíňáci v Těnovicích");
+  });
+});
+
+describe("the contact phone", () => {
+  it("is refused as soon as the field is left when it is not a number", async () => {
+    renderWizard();
+    const phone = document.querySelector<HTMLInputElement>('input[name="contactPhone"]')!;
+    fireEvent.change(phone, { target: { value: "vladikuv telefon" } });
+    fireEvent.blur(phone);
+    await waitFor(() => expect(document.body.textContent).toContain(F.errors.phone));
+    fireEvent.change(phone, { target: { value: "+420 724 051 765" } });
+    await waitFor(() => expect(document.body.textContent).not.toContain(F.errors.phone));
+  });
+});
+
+describe("a new event's unsaved work", () => {
+  const titleInput = () => document.querySelector<HTMLInputElement>('input[name="title_cs"]')!;
+
+  it("comes back when the wizard is opened again", async () => {
+    renderWizard();
+    fireEvent.change(titleInput(), { target: { value: "Letní kurz" } });
+    await waitFor(() => expect(window.localStorage.length).toBe(1));
+    cleanup();
+
+    renderWizard();
+    await waitFor(() => expect(titleInput().value).toBe("Letní kurz"));
+    expect(document.body.textContent).toContain(F.draftDiscard);
+  });
+
+  it("can be thrown away to start afresh", async () => {
+    vi.stubGlobal("confirm", vi.fn().mockReturnValue(true));
+    renderWizard();
+    fireEvent.change(titleInput(), { target: { value: "Letní kurz" } });
+    await waitFor(() => expect(window.localStorage.length).toBe(1));
+    cleanup();
+
+    renderWizard();
+    await waitFor(() => expect(titleInput().value).toBe("Letní kurz"));
+    fireEvent.click(buttonNamed(F.draftDiscard)!);
+    await waitFor(() => expect(titleInput().value).toBe(""));
+    expect(window.localStorage.length).toBe(0);
+    expect(document.body.textContent).not.toContain(F.draftDiscard);
+  });
+
+  // Left behind, the saved event would reopen under "Nová akce" and one more save
+  // would create it twice.
+  it("is gone once the event is saved, and leaving no longer asks", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 201, json: async () => ({ id: "e9" }) }));
+    renderWizard();
+    fireEvent.change(titleInput(), { target: { value: "Letní kurz" } });
+    await waitFor(() => expect(window.localStorage.length).toBe(1));
+    // Unsaved work: the guard is armed (and the admin answers "stay").
+    vi.stubGlobal("confirm", vi.fn().mockReturnValue(false));
+    expect(confirmLeave()).toBe(false);
+    const set = (name: string, value: string) =>
+      fireEvent.change(document.querySelector<HTMLInputElement | HTMLSelectElement>(`[name="${name}"]`)!, { target: { value } });
+    set("centerId", "c1");
+    set("title_en", "Summer course");
+    goToStep(F.steps.schedule);
+    set("startDate", "2099-07-10");
+    set("endDate", "2099-07-12");
+    goToStep(F.steps.save);
+    fireEvent.click(buttonNamed(F.save)!);
+    await waitFor(() => expect(dialogShows(F.success.savedTitle)).toBe(true));
+    expect(window.localStorage.length).toBe(0);
+    expect(confirmLeave()).toBe(true);
+  });
+
+  it("leaves nothing to ask about on a wizard nobody has touched", () => {
+    renderWizard();
+    expect(confirmLeave()).toBe(true);
+    expect(window.localStorage.length).toBe(0);
+  });
+
+  it("is not kept for an existing event — that one is on the server", async () => {
+    renderWizard({ mode: "edit", status: "DRAFT" });
+    fireEvent.change(titleInput(), { target: { value: "Jiný název" } });
+    await new Promise((r) => setTimeout(r, 400));
+    expect(window.localStorage.length).toBe(0);
+  });
+});
+
+// "Save and publish" sets the status before it asks. Saying no to the question
+// must put the admin's own choice back — otherwise the next plain save (and the
+// stored draft) would carry a publish they declined.
+describe("declining the publish question", () => {
+  it("puts back the status the admin had chosen", () => {
+    renderWizard({ mode: "edit", status: "DRAFT" });
+    goToStep(F.steps.save);
+    fireEvent.click(buttonNamed(F.saveAndPublish)!);
+    expect(dialogShows(F.publishConfirmTitle)).toBe(true);
+    // The dialog's own "Zpět" — the step navigation has one with the same label.
+    const back = [...document.querySelectorAll("button")].filter((b) => b.textContent?.trim() === F.publishCancel);
+    fireEvent.click(back.at(-1)!);
+    goToStep(F.steps.settings);
+    expect(document.querySelector<HTMLSelectElement>('select[name="status"]')!.value).toBe("DRAFT");
   });
 });

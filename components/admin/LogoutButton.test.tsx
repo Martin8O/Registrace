@@ -43,6 +43,16 @@ describe("LogoutButton", () => {
     expect(h.signOut).toHaveBeenCalledTimes(1);
   });
 
+  // The new-event wizard keeps a half-typed event in this browser; the next admin
+  // signing in on the same computer must not open it.
+  it("drops a half-typed new event kept in this browser", async () => {
+    window.localStorage.setItem("registrace:new-event-draft:v1", "{}");
+    logout();
+    click();
+    await waitFor(() => expect(h.push).toHaveBeenCalledWith("/cs/admin/login"));
+    expect(window.localStorage.getItem("registrace:new-event-draft:v1")).toBeNull();
+  });
+
   it("asks first when a screen holds unsaved changes — and keeps the session when told to stay", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     setUnsavedGuard("Máte neuložené změny. Opravdu odejít?");

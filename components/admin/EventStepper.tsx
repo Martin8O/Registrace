@@ -1,12 +1,18 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm, type FieldErrors, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useLocale, useTranslations } from 'next-intl'
 import { eventCreateSchema, type EventCreateInput } from '@/lib/validation'
 import HelpHint, { type HelpHintTopic } from '@/components/admin/HelpHint'
+import { useLeaveGuard } from '@/lib/utils/unsavedGuard'
+import {
+  clearNewEventDraft,
+  readNewEventDraft,
+  writeNewEventDraft,
+} from '@/lib/utils/newEventDraft'
 import type {
   EventDateDTO,
   EventMealDTO,
@@ -334,9 +340,23 @@ export default function EventStepper({
     readOnly ? REVIEW_STEP : Math.min(Math.max(0, initialStep), STEP_KEYS.length - 1),
   )
   const [publishModal, setPublishModal] = useState(false)
+  // "Save and publish" sets the status before asking. Cancelling the question
+  // puts back the status the admin had chosen, so a declined publish is not
+  // carried into the next save (nor into the stored draft).
+  const [statusBeforePublish, setStatusBeforePublish] = useState<EventFormValues['status'] | null>(null)
   const [successKind, setSuccessKind] = useState<'published' | 'saved' | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  // The error summary used to live on the last step only, while a refused save
+  // jumps to the step holding the problem — so the admin landed on step 1 with
+  // nothing on screen saying why. After a save attempt it shows above every step.
+  const [saveAttempted, setSaveAttempted] = useState(false)
+  // When the create wizard brought back work from this browser (lib/utils/newEventDraft).
+  const [restoredAt, setRestoredAt] = useState<string | null>(null)
+  const keepsDraft = !isEdit && !readOnly
+  // Nothing is written before the stored draft has been read, or the pristine
+  // form would overwrite the very work it is about to restore.
+  const [draftChecked, setDraftChecked] = useState(!keepsDraft)
 
   // Keep the active step in the URL (?step=) without a navigation, so the
   // language switcher (which re-navigates and remounts this island) can restore
@@ -380,8 +400,12 @@ export default function EventStepper({
     getValues,
     setValue,
     trigger,
+    reset,
     formState: { errors },
   } = useForm<EventFormValues, unknown, EventCreateInput>({
+    // A bad e-mail or phone is reported as soon as the field is left, not only
+    // when the last step tries to save.
+    mode: 'onTouched',
     resolver: zodResolver(eventCreateSchema) as unknown as Resolver<
       EventFormValues,
       unknown,
@@ -474,6 +498,7 @@ export default function EventStepper({
     const err = errors[name]
     if (!err) return null
     if (name === 'contactEmail') return t('eventForm.errors.email')
+    if (name === 'contactPhone') return t('eventForm.errors.phone')
     if (name === 'endDate')
       return err.type === 'custom'
         ? t('eventForm.errors.endDate')
@@ -596,7 +621,14 @@ export default function EventStepper({
         // reserved for an event that has just BECOME public; one that already was
         // has only been saved, and saying otherwise made a description edit read
         // like it had done something to the event's visibility.
+        if (keepsDraft) clearNewEventDraft()
         setSuccessKind(data.status === 'PUBLISHED' && !alreadyPublished ? 'published' : 'saved')
+        return
+      }
+      if (res.status === 401) {
+        // Signed out while the form was open (an expired session). The typed
+        // work is still here — and, for a new event, kept in this browser too.
+        setSubmitError(t('eventForm.errors.sessionExpired'))
         return
       }
       if (res.status === 409) {
@@ -635,7 +667,12 @@ export default function EventStepper({
   // only going public — asks for confirmation first: on an event that is already
   // published there is nothing to warn about, so the save just happens.
   function attemptSave(forcePublish: boolean) {
-    if (forcePublish) setValue('status', 'PUBLISHED')
+    setSaveAttempted(true)
+    setSubmitError(null)
+    if (forcePublish) {
+      setStatusBeforePublish(getValues('status'))
+      setValue('status', 'PUBLISHED')
+    }
     // The start-date-in-the-past guard applies whenever the dates are editable
     // (create or a fully-editable draft); a locked event may already have started.
     if (!relationsLocked && getValues('startDate') && getValues('startDate') < todayISO()) {
@@ -649,8 +686,14 @@ export default function EventStepper({
       void handleSubmit(onValid, onInvalid)()
     }
   }
+  function cancelPublish() {
+    setPublishModal(false)
+    if (statusBeforePublish) setValue('status', statusBeforePublish)
+    setStatusBeforePublish(null)
+  }
   function confirmPublish() {
     setPublishModal(false)
+    setStatusBeforePublish(null)
     void handleSubmit(onValid, onInvalid)()
   }
 
@@ -673,6 +716,85 @@ export default function EventStepper({
 
   const values = watch()
   const selectedCenter = sortedCenters.find((c) => c.id === values.centerId)
+
+  // Everything the admin can type, as one string: stored as the create draft and
+  // compared with how the wizard opened (unsaved work → ask before leaving). For
+  // the comparison an empty field reads the same whether it holds '' or nothing:
+  // registering the e-mail field turns its '' into undefined right after the
+  // first render, which must not count as a change nobody made.
+  const wizardState = { values, pricingRules, mealPrices, mealExcluded, participationTiers, mealTiers }
+  const snapshot = JSON.stringify(wizardState)
+  const comparable = JSON.stringify(wizardState, (_key, v: unknown) => (v === '' ? undefined : v))
+  const [pristineSnapshot] = useState(snapshot)
+  const [pristineComparable] = useState(comparable)
+  const dirty = comparable !== pristineComparable
+
+  function applySnapshot(data: string) {
+    const d = JSON.parse(data) as {
+      values: EventFormValues
+      pricingRules: Record<string, PricingRow>
+      mealPrices: Record<string, number>
+      mealExcluded: Record<string, boolean>
+      participationTiers: TierFlags
+      mealTiers: TierFlags
+    }
+    reset(d.values)
+    setPricingRules(d.pricingRules)
+    setMealPrices(d.mealPrices)
+    setMealExcluded(d.mealExcluded)
+    setParticipationTiers(d.participationTiers)
+    setMealTiers(d.mealTiers)
+  }
+
+  // Bring back a stored new-event draft once, after hydration (storage is
+  // browser-only).
+  useEffect(() => {
+    if (!keepsDraft) return
+    const stored = readNewEventDraft()
+    if (stored) {
+      try {
+        applySnapshot(stored.data)
+        ownsDraft.current = true
+        setStep(Math.min(Math.max(0, stored.step), STEP_KEYS.length - 1))
+        setRestoredAt(stored.savedAt)
+      } catch {
+        clearNewEventDraft()
+      }
+    }
+    setDraftChecked(true)
+    // Once, on mount: the stored draft is read exactly when the wizard opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Only a draft this wizard restored or wrote is its own to clear: a second tab
+  // opened untouched must not wipe the one the first tab is filling in.
+  const ownsDraft = useRef(false)
+  useEffect(() => {
+    if (!keepsDraft || !draftChecked || successKind) return
+    if (!dirty) {
+      if (ownsDraft.current) clearNewEventDraft()
+      return
+    }
+    const id = window.setTimeout(() => {
+      ownsDraft.current = true
+      writeNewEventDraft({ savedAt: new Date().toISOString(), step, data: snapshot })
+    }, 300)
+    return () => window.clearTimeout(id)
+  }, [keepsDraft, draftChecked, successKind, dirty, snapshot, step])
+
+  function startAfresh() {
+    if (!window.confirm(t('eventForm.draftDiscardConfirm'))) return
+    clearNewEventDraft()
+    applySnapshot(pristineSnapshot)
+    setRestoredAt(null)
+    setSaveAttempted(false)
+    setSubmitError(null)
+    setStep(0)
+  }
+
+  useLeaveGuard(!readOnly && dirty && !successKind, t('eventForm.leaveWarning'))
+
+  const showSaveProblems = saveAttempted && (Object.keys(errors).length > 0 || submitError !== null)
 
   return (
     <div className="space-y-6">
@@ -698,6 +820,45 @@ export default function EventStepper({
           ))}
         </div>
       </div>}
+
+      {restoredAt && (
+        <div className="flex flex-col gap-3 rounded-lg border border-primary-500/40 bg-primary-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-neutral-700">
+            {t('eventForm.draftRestored', {
+              time: new Date(restoredAt).toLocaleString(locale === 'cs' ? 'cs-CZ' : 'en-GB', {
+                timeZone: 'Europe/Prague',
+                day: 'numeric',
+                month: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+            })}
+          </p>
+          <button type="button" onClick={startAfresh} className="btn-secondary shrink-0">
+            {t('eventForm.draftDiscard')}
+          </button>
+        </div>
+      )}
+
+      {showSaveProblems && (
+        <div className="rounded-lg border border-danger-500/40 bg-danger-50 p-4" role="alert">
+          {submitError && <p className="text-sm font-semibold text-danger-700">{submitError}</p>}
+          {Object.keys(errors).length > 0 && (
+            <>
+              <p className={`text-sm font-semibold text-danger-700 ${submitError ? 'mt-2' : ''}`}>
+                {t('eventForm.errorsTitle')}
+              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-danger-600">
+                {Object.keys(errors).map((k) => (
+                  <li key={k}>
+                    {t(`eventForm.fields.${k}`)}: {fieldError(k as keyof EventFormValues)}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
 
       {/* ── Step 1 · Basic info ── */}
       {step === 0 && (
@@ -749,8 +910,16 @@ export default function EventStepper({
             <TextField label={t('eventForm.fields.contactName')} hint="contact">
               <input className="bdc-input" {...register('contactName')} />
             </TextField>
-            <TextField label={t('eventForm.fields.contactPhone')}>
-              <input className="bdc-input" {...register('contactPhone')} />
+            <TextField
+              label={t('eventForm.fields.contactPhone')}
+              error={fieldError('contactPhone')}
+            >
+              <input
+                type="tel"
+                inputMode="tel"
+                className="bdc-input"
+                {...register('contactPhone')}
+              />
             </TextField>
             <TextField
               label={t('eventForm.fields.contactEmail')}
@@ -1282,25 +1451,6 @@ export default function EventStepper({
       {step === 6 && (
         <section className="section-card space-y-4">
           <StepHeading>{t('eventForm.steps.save')}</StepHeading>
-          {Object.keys(errors).length > 0 && (
-            <div className="rounded-lg border border-danger-500/40 bg-danger-50 p-4">
-              <p className="text-sm font-semibold text-danger-700">
-                {t('eventForm.errorsTitle')}
-              </p>
-              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-danger-600">
-                {Object.keys(errors).map((k) => (
-                  <li key={k}>
-                    {t(`eventForm.fields.${k}`)}: {fieldError(k as keyof EventFormValues)}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {submitError && (
-            <div className="rounded-lg border border-danger-500/40 bg-danger-50 p-4">
-              <p className="text-sm font-semibold text-danger-700">{submitError}</p>
-            </div>
-          )}
           {/* An already-published event gets ONE button. The two differ only in
               that "save and publish" FORCES status=PUBLISHED — which on a public
               event is either a no-op or, worse, silently undoes a status the
@@ -1352,7 +1502,7 @@ export default function EventStepper({
       {publishModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/60 p-4 backdrop-blur-sm"
-          onClick={() => setPublishModal(false)}
+          onClick={cancelPublish}
         >
           <div
             className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
@@ -1366,7 +1516,7 @@ export default function EventStepper({
             <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
-                onClick={() => setPublishModal(false)}
+                onClick={cancelPublish}
                 className="btn-secondary"
               >
                 {t('eventForm.publishCancel')}

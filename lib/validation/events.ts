@@ -22,6 +22,11 @@ const pricingTypeSetSchema = z
 // ─── Base shape ───────────────────────────────────────────────────────────────
 
 // String length caps (P8 item 7) — bound every free-text/id input.
+export function isPhoneOrEmpty(value: string): boolean {
+  const v = value.trim();
+  return v === "" || (/^\+?[0-9\s]+$/.test(v) && v.replace(/\D/g, "").length >= 9);
+}
+
 const eventFields = {
   centerId: z.string().min(1).max(64),
   title_cs: z.string().min(1).max(200),
@@ -31,7 +36,11 @@ const eventFields = {
   description_cs: z.string().max(5000).optional(),
   description_en: z.string().max(5000).optional(),
   contactName: z.string().max(200).optional(),
-  contactPhone: z.string().max(50).optional(),
+  // Shown on the public page and dialled from it, so it must be a number: an
+  // optional leading "+", then digits in any spacing (a number pasted from a web
+  // page carries non-breaking spaces), at least 9 of them. Empty
+  // means "no phone". Free text (a name instead of a number) used to pass.
+  contactPhone: z.string().max(50).refine(isPhoneOrEmpty, { message: "phone" }).optional(),
   contactEmail: z.string().email().max(254).optional(),
   status: z.enum(eventStatusValues),
   maxRegistrations: z.number().int().positive().optional(),

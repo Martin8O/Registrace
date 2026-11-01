@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { createClient } from '@/lib/supabase/client'
 import { confirmLeave } from '@/lib/utils/unsavedGuard'
+import { clearNewEventDraft } from '@/lib/utils/newEventDraft'
 
 // Real Supabase logout: signOut() clears the auth cookies, then we redirect to
 // the localized login and refresh so the proxy guard re-runs server-side.
@@ -17,6 +18,8 @@ export default function LogoutButton({ className = '' }: { className?: string })
     if (!confirmLeave()) return
     const supabase = createClient()
     await supabase.auth.signOut()
+    // A half-typed new event is this admin's, not the next one's on this computer.
+    clearNewEventDraft()
     router.push(`/${locale}/admin/login`)
     router.refresh()
   }

@@ -202,3 +202,57 @@ export function calculatePricing(input: PricingInput): PricingResult {
     totalPrice: participants.reduce((sum, p) => sum + p.subtotal, 0),
   };
 }
+
+// ─── The stay price, day by day (the export's settlement sheet) ───────────────
+// participationPriceFor's arithmetic spread over the event days the stay covers,
+// so a settlement can show how much of the money falls on which day:
+//   • the day rate on every day of the stay, less the arrival discount on the
+//     arrival day and the early-departure discount on the departure day;
+//   • the night rate on every day followed by a night on site — every day of the
+//     stay but the last, and only with accommodation.
+// The shares add up to participationPriceFor exactly, except where that floors a
+// negative price at 0 (discounts larger than the stay); the all-shapes test in
+// index.test.ts holds the two together. They are deliberately not one function:
+// the price counts days by the distance between the two sortOrders, the split
+// walks the event days that exist, and the two differ only on an event whose
+// day numbering has gaps — none does, but the price must not move to find out.
+// A caller settling stored registrations reconciles against the stored price,
+// which is the authority.
+export type StayDayShare = { dateId: string; dayRate: number; night: number };
+
+export function participationByDay(
+  participant: Pick<PricingParticipantInput, "ageCategory" | "pricingType">,
+  input: Omit<PricingInput, "participants" | "meals" | "mealPricingRules">,
+): StayDayShare[] {
+  const pricingType = participant.pricingType ?? "STANDARD";
+  const rule = input.pricingRules.find(
+    (r) => r.ageCategory === participant.ageCategory && r.pricingType === pricingType,
+  );
+  const order = new Map(input.eventDates.map((d) => [d.id, d.sortOrder]));
+  const a = order.get(input.arrivalDateId);
+  const d = order.get(input.departureDateId);
+  if (!rule || a === undefined || d === undefined || d < a) return [];
+
+  const arrivalDiscount =
+    input.arrivalTime === "MORNING"
+      ? rule.morningArrivalDiscount
+      : input.arrivalTime === "AFTERNOON"
+        ? rule.afternoonArrivalDiscount
+        : input.arrivalTime === "EVENING"
+          ? rule.eveningArrivalDiscount
+          : 0;
+  const departureDiscount =
+    input.earlyDeparture === "AFTER_BREAKFAST" ? rule.earlyDepartureDiscount : 0;
+
+  return [...input.eventDates]
+    .filter((day) => day.sortOrder >= a && day.sortOrder <= d)
+    .sort((x, y) => x.sortOrder - y.sortOrder)
+    .map((day) => ({
+      dateId: day.id,
+      dayRate:
+        rule.dailyRate -
+        (day.sortOrder === a ? arrivalDiscount : 0) -
+        (day.sortOrder === d ? departureDiscount : 0),
+      night: input.hasAccommodation && day.sortOrder < d ? rule.nightRate : 0,
+    }));
+}

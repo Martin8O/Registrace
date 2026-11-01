@@ -8,7 +8,7 @@ import HelpHint from '@/components/admin/HelpHint'
 import { getAvailableMealIds, type ArrivalTime, type EarlyDeparture } from '@/lib/utils/mealAvailability'
 import { resolveMealPrice } from '@/lib/utils/mealPrice'
 import { checkStayOrder } from '@/lib/utils/stayRules'
-import { setUnsavedGuard } from '@/lib/utils/unsavedGuard'
+import { useLeaveGuard } from '@/lib/utils/unsavedGuard'
 import { useDebounce } from '@/lib/utils/useDebounce'
 import { registrationFullUpdateSchema } from '@/lib/validation'
 import type { EventDateDTO, EventMealDTO, MealPricingRuleDTO } from '@/lib/types'
@@ -491,38 +491,7 @@ function EditorBody({
   // gone through: until the refresh remounts this body the draft still differs
   // from the data it was opened with, and a link clicked in that gap would be
   // asked about changes that are already saved.
-  useEffect(() => {
-    if (!dirty || saved) return
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault()
-      e.returnValue = ''
-    }
-    // Next's <Link> navigates client-side, so closing the tab is the only exit
-    // beforeunload covers. Every in-app LINK (header, sidebar, the event link) is
-    // caught here, in the capture phase, before Next's own click handler runs.
-    // The two exits that are buttons calling router.push — the language switch
-    // and the logout — cannot be seen from here; they ask through the shared
-    // guard instead. The browser's Back button is covered by neither.
-    const leaveMessage = t('registrationDetail.leaveWarning')
-    const onClick = (e: MouseEvent) => {
-      // A click that opens another tab or window leaves this screen where it is.
-      if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return
-      const a = (e.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null
-      if (!a || a.target === '_blank' || a.origin !== window.location.origin) return
-      if (!window.confirm(leaveMessage)) {
-        e.preventDefault()
-        e.stopPropagation()
-      }
-    }
-    setUnsavedGuard(leaveMessage)
-    window.addEventListener('beforeunload', onBeforeUnload)
-    document.addEventListener('click', onClick, true)
-    return () => {
-      setUnsavedGuard(null)
-      window.removeEventListener('beforeunload', onBeforeUnload)
-      document.removeEventListener('click', onClick, true)
-    }
-  }, [dirty, saved, t])
+  useLeaveGuard(dirty && !saved, t('registrationDetail.leaveWarning'))
 
   // ─── Save / resend ───
   const personName = (index: number | undefined) => {
