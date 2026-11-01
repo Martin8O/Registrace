@@ -427,7 +427,9 @@
         "ageCategory": "Age category",
         "pricingType": "Price type",
         "childNote": "Child categories are usually 0, but you can set your own daily and night rate – the calculation always follows the price list exactly. Arrival/departure discounts do not apply to children.",
-        "discountsLabel": "Discounts"
+        "discountsLabel": "Discounts",
+        "discountAboveDayRate": "Note, a discount exceeds the daily rate ({rate} CZK): {fields}. The arrival or departure day will come out negative and a short stay free. If that is not intended, lower the discount.",
+        "discountAboveDayRateSummary": "Note: in {rows} a discount exceeds the daily rate. You can save, but check the Pricing step."
       },
       "settings": {
         "mealDeadlineNote": "After this time, meals can no longer be ordered for the event (participation and accommodation stay open). Optional — with no deadline (empty field) meal registration has no time limit. The time is Czech local time (SELČ/SEČ handled automatically).",

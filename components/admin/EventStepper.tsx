@@ -117,6 +117,18 @@ const PRICING15_FIELDS: (keyof PricingRow)[] = [
 // 15+-only concept — mirrors the real BDC price list). Both default to 0 but are
 // admin-editable so the engine charges exactly what the price list says.
 const CHILD_FIELDS: (keyof PricingRow)[] = ['dailyRate', 'nightRate']
+const DISCOUNT_FIELDS: (keyof PricingRow)[] = [
+  'morningArrivalDiscount',
+  'afternoonArrivalDiscount',
+  'eveningArrivalDiscount',
+  'earlyDepartureDiscount',
+]
+// A discount larger than the day rate makes that day come out negative in the
+// settlement, and a short stay drop to 0 (the engine floors it). Allowed — an
+// admin may mean it — but warned about, because a live event carried exactly
+// that by mistake (supported 30 a day, evening arrival discount 100).
+const discountsAboveDayRate = (row: PricingRow): (keyof PricingRow)[] =>
+  DISCOUNT_FIELDS.filter((f) => row[f] > row.dailyRate)
 const fieldsForAge = (age: string): (keyof PricingRow)[] =>
   age === 'AGE_15_PLUS' ? PRICING15_FIELDS : CHILD_FIELDS
 
@@ -797,6 +809,13 @@ export default function EventStepper({
 
   useLeaveGuard(!readOnly && dirty && !successKind, t('eventForm.leaveWarning'))
 
+  // Offered tiers whose discount exceeds the day rate, named for the save step.
+  const rowsWithDiscountAboveDayRate = ALL_AGES.flatMap((age) =>
+    enabledParticipationTiers
+      .filter((type) => discountsAboveDayRate(rule(age, type)).length > 0)
+      .map((type) => `${t(`age.${age}`)} · ${t(`pricingType.${type}`)}`),
+  )
+
   const showSaveProblems = saveAttempted && (Object.keys(errors).length > 0 || submitError !== null)
 
   return (
@@ -1082,6 +1101,16 @@ export default function EventStepper({
                             ),
                           )}
                         </div>
+                        {!relationsLocked && discountsAboveDayRate(rule(age, type)).length > 0 && (
+                          <p className="mt-3 rounded-lg border border-gold-300 bg-gold-50 px-3 py-2 text-sm text-gold-800" role="status">
+                            {t('eventForm.pricing.discountAboveDayRate', {
+                              fields: discountsAboveDayRate(rule(age, type))
+                                .map((f) => t(`eventForm.fields.${f}`))
+                                .join(', '),
+                              rate: rule(age, type).dailyRate,
+                            })}
+                          </p>
+                        )}
                       </div>
                     )
                   })}
@@ -1454,6 +1483,13 @@ export default function EventStepper({
       {step === 6 && (
         <section className="section-card space-y-4">
           <StepHeading>{t('eventForm.steps.save')}</StepHeading>
+          {!relationsLocked && rowsWithDiscountAboveDayRate.length > 0 && (
+            <p className="rounded-lg border border-gold-300 bg-gold-50 px-3 py-2 text-sm text-gold-800" role="status">
+              {t('eventForm.pricing.discountAboveDayRateSummary', {
+                rows: rowsWithDiscountAboveDayRate.join(', '),
+              })}
+            </p>
+          )}
           {/* An already-published event gets ONE button. The two differ only in
               that "save and publish" FORCES status=PUBLISHED — which on a public
               event is either a no-op or, worse, silently undoes a status the

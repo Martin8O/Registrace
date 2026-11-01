@@ -427,7 +427,9 @@
         "ageCategory": "Věková kategorie",
         "pricingType": "Typ ceny",
         "childNote": "U dětských kategorií je sazba obvykle 0, ale můžete zadat vlastní denní sazbu i cenu za noc – výpočet vždy přesně odpovídá zadanému ceníku. Slevy za příjezd/odjezd se na děti nevztahují.",
-        "discountsLabel": "Slevy"
+        "discountsLabel": "Slevy",
+        "discountAboveDayRate": "Pozor, sleva je vyšší než denní sazba ({rate} Kč): {fields}. Den příjezdu či odjezdu tak vyjde záporně a krátký pobyt zdarma. Jestli to není záměr, slevu snižte.",
+        "discountAboveDayRateSummary": "Pozor: u řádků {rows} je některá sleva vyšší než denní sazba. Uložit to jde, ale zkontrolujte krok Ceník."
       },
       "settings": {
         "mealDeadlineNote": "Po tomto termínu už nepůjde u akce objednat jídlo (účast a ubytování zůstávají otevřené). Nepovinné — bez termínu (prázdné pole) je registrace na jídlo bez časového omezení. Čas je v českém čase (automaticky SELČ/SEČ).",
@@ -1109,7 +1111,8 @@
         "topic": "slevy",
         "body": [
           "Pevné částky, které se od ceny <b>odečtou</b>. Platí pro tu hladinu, u které stojí, a jen pro dospělé (15+). Děti slevy nemají.",
-          "<b>Půldny se řeší jen slevami.</b> Poloviční denní sazba v aplikaci neexistuje: kdo přijede během dne, platí celý den a odečte se mu sleva."
+          "<b>Půldny se řeší jen slevami.</b> Poloviční denní sazba v aplikaci neexistuje: kdo přijede během dne, platí celý den a odečte se mu sleva.",
+            "Sleva by neměla být vyšší než denní sazba té hladiny: den příjezdu či odjezdu by vyšel záporně a krátký pobyt zdarma. Průvodce na to upozorní, uložit to ale nechá."
         ],
         "more": {
           "anchor": "ceny",

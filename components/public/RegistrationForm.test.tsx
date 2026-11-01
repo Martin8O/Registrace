@@ -64,13 +64,13 @@ const centers = [{ id: "c1", name_cs: "Těnovice", name_en: "Tenovice" }];
 const ALL = ["STANDARD", "SUPPORTED", "SURPLUS"];
 
 function renderForm(
-  over: { participationPricingTypes?: string[]; mealPricingTypes?: string[]; meals?: typeof meals } = {},
+  over: { participationPricingTypes?: string[]; mealPricingTypes?: string[]; meals?: typeof meals; dates?: typeof dates } = {},
 ) {
   return render(
     <NextIntlClientProvider locale="cs" messages={cs}>
       <RegistrationForm
         eventId="e1"
-        dates={dates}
+        dates={over.dates ?? dates}
         meals={over.meals ?? meals}
         centers={centers}
         pricingRules={pricingRules}
@@ -447,5 +447,27 @@ describe("a day's meals", () => {
     click("departureDateId-d3");
     const order = [...document.querySelectorAll('input[id^="meal-0-"]')].map((e) => e.id);
     expect(order).toEqual(["meal-0-m_b3", "meal-0-m_l3", "meal-0-m_d3"]);
+  });
+});
+
+describe("a one-day event", () => {
+  // No night on site, so the accommodation question is not asked — and an
+  // untouched form must not arrive meaning "a bed".
+  it("does not ask about accommodation and sends no bed", async () => {
+    renderForm({ dates: [dates[0]!] });
+    expect(document.getElementById("accommodation-yes")).toBeNull();
+    click("arrivalDateId-d1");
+    click("departureDateId-d1");
+    await waitFor(() => {
+      const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.filter((c: unknown[]) =>
+        String(c[0]).includes("calculate-price"),
+      );
+      expect(JSON.parse((calls.at(-1)![1] as { body: string }).body).hasAccommodation).toBe(false);
+    });
+  });
+
+  it("still asks on an event of more than one day", () => {
+    renderForm();
+    expect(document.getElementById("accommodation-yes")).toBeTruthy();
   });
 });

@@ -184,6 +184,8 @@ export default function RegistrationForm({
     return map
   }, [dates, locale])
 
+  // An event of a single day has no night on site (see hasAccommodation below).
+  const oneDayEvent = dates.length === 1
   const {
     register,
     control,
@@ -216,6 +218,8 @@ export default function RegistrationForm({
       //     so the meal grid starts complete instead of missing its first day.
       //   • earlyDeparture NONE — leave in the evening, i.e. no early departure.
       //   • hasAccommodation true — people register for a residential weekend.
+      //     A one-day event has no night to sleep through, so there the question
+      //     is not asked and the answer is "no bed".
       // The server re-prices all of it regardless (invariants 3–4); a default here
       // changes what is submitted, never what it costs.
       eventId,
@@ -223,7 +227,7 @@ export default function RegistrationForm({
       arrivalTime: 'MORNING',
       departureDateId: '',
       earlyDeparture: 'NONE',
-      hasAccommodation: true,
+      hasAccommodation: !oneDayEvent,
       honeypot: '',
       idempotencyKey: '',
       // No home centre is pre-selected: the first in the list (Brno) used to be
@@ -506,37 +510,39 @@ export default function RegistrationForm({
               }
             />
           </Field>
-          <Field label={t('accommodation')}>
-            <Controller
-              control={control}
-              name="hasAccommodation"
-              render={({ field }) => (
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { value: true, key: 'yes' },
-                    { value: false, key: 'no' },
-                  ].map((opt) => {
-                    const domId = `accommodation-${opt.key}`
-                    return (
-                      <div key={opt.key}>
-                        <input
-                          type="radio"
-                          id={domId}
-                          className="peer sr-only"
-                          checked={field.value === opt.value}
-                          onBlur={field.onBlur}
-                          onChange={() => field.onChange(opt.value)}
-                        />
-                        <label htmlFor={domId} className="pill-label cursor-pointer">
-                          {t(opt.key)}
-                        </label>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            />
-          </Field>
+          {!oneDayEvent && (
+            <Field label={t('accommodation')}>
+              <Controller
+                control={control}
+                name="hasAccommodation"
+                render={({ field }) => (
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { value: true, key: 'yes' },
+                      { value: false, key: 'no' },
+                    ].map((opt) => {
+                      const domId = `accommodation-${opt.key}`
+                      return (
+                        <div key={opt.key}>
+                          <input
+                            type="radio"
+                            id={domId}
+                            className="peer sr-only"
+                            checked={field.value === opt.value}
+                            onBlur={field.onBlur}
+                            onChange={() => field.onChange(opt.value)}
+                          />
+                          <label htmlFor={domId} className="pill-label cursor-pointer">
+                            {t(opt.key)}
+                          </label>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              />
+            </Field>
+          )}
         </div>
       </section>
 

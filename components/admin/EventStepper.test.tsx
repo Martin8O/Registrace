@@ -511,3 +511,28 @@ describe("a new event's meal price list", () => {
     expect(prices.slice(27, 30)).toEqual([80, 120, 120]);
   });
 });
+
+// A live event once carried a supported day rate of 30 with a 100 evening
+// arrival discount, by mistake. It stays allowed, but it is pointed out.
+describe("a discount larger than the day rate", () => {
+  const pricingInputs = () => [...document.querySelector("section")!.querySelectorAll<HTMLInputElement>('input[type="number"]')];
+  const warning = () => document.body.textContent?.includes("sleva je vyšší než denní sazba") ?? false;
+
+  it("is pointed out on the pricing step and again before saving", async () => {
+    renderWizard();
+    goToStep(F.steps.pricing);
+    expect(warning()).toBe(false);
+    // 15+ standard: daily rate is the first of its six fields (after 3 child ages × 3 tiers × 2).
+    const [daily] = pricingInputs().slice(18, 24);
+    fireEvent.change(daily!, { target: { value: "40" } }); // evening discount 80 > 40
+    await waitFor(() => expect(warning()).toBe(true));
+    goToStep(F.steps.save);
+    expect(document.body.textContent).toContain("Pozor: u řádků");
+  });
+
+  it("says nothing for the catalogue prices", () => {
+    renderWizard();
+    goToStep(F.steps.save);
+    expect(document.body.textContent).not.toContain("Pozor: u řádků");
+  });
+});
