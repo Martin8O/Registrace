@@ -197,7 +197,8 @@ export async function updateUser(
 // longer sign in) AND the Prisma User row. The DB handles the rest via FK
 // actions: UserCenter rows CASCADE-delete, any events they created have
 // createdBy SET NULL (the events survive, just unowned → SUPER_ADMIN-managed),
-// AuditLog.userId SET NULL. SUPER_ADMIN only; cannot remove yourself.
+// AuditLog.userId SET NULL — each row keeps the author's e-mail (actorEmail), so
+// their changes still name them. SUPER_ADMIN only; cannot remove yourself.
 export async function removeUser(id: string, ctx: AdminContext): Promise<{ id: string }> {
   assertSuperAdmin(ctx);
   if (id === ctx.userId) {

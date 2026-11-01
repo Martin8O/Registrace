@@ -341,6 +341,10 @@ model ParticipantMeal {
 model AuditLog {
   id         String   @id @default(cuid())
   userId     String?  @db.Uuid
+  // The actor's e-mail as it was when the row was written. Removing an admin
+  // deletes their User row and sets userId to null, which left every change they
+  // had made reading as a system write; this keeps their name on it.
+  actorEmail String?
   action     String
   entityType String
   entityId   String

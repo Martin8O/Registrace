@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-541%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-546%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -247,7 +247,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 541 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 546 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -393,7 +393,7 @@ included.
 | **Registration** | The submission: home `centerId`, arrival/departure, `hasAccommodation`, `email`, `gdprConsent`, `totalPrice`, `status`, `idempotencyKey`, `registrationNumber`, `locale`, `ipAddress`. |
 | **Participant** | One person: `ageCategory`, two independent tiers — `pricingType` (stay/accommodation) and `mealPricingType` (meals) — `mealType` (diet), computed prices. |
 | **ParticipantMeal** | `Participant ↔ EventMeal` join with the charged price. |
-| **AuditLog** | Append-only trail: `userId`, `action`, `entityType`, `entityId`, `oldData`/`newData`, `ip`. |
+| **AuditLog** | Append-only trail: `userId` plus the author's `actorEmail` (kept when an admin is removed), `action`, `entityType`, `entityId`, `oldData`/`newData`, `ip`. |
 
 **Enums:** `AgeCategory` · `PricingType` (standard / supported / surplus) · `ArrivalTime` ·
 `EarlyDeparture` · `EventStatus` (draft / published / closed / archived) · `MealType`
@@ -670,7 +670,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **541 Vitest tests** across 38 files, with **no database required**:
+`npm test` runs **546 Vitest tests** across 39 files, with **no database required**:
 
 - **Pricing engine** (51) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -932,6 +932,10 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   exists in Czech only, and English must not grow a half-copy), that every one of the help's
   rich-text strings formats with the tags the page provides, and that each "?" hint exists and
   links only to a recipe that exists.
+- **Audit log authorship** (5) — every row keeps its author's e-mail beside their id, so a change
+  made by an admin who has since been removed (their user row deleted, the id set to null) still
+  names them instead of reading as a system write; a live admin shows their current e-mail, and
+  a genuine system write stays authorless.
 - **RLS guard** (3) — that every model's table has `ENABLE ROW LEVEL SECURITY` in a migration,
   and that no migration defines a policy or forces RLS on the owner. It reads the schema and
   the migration SQL, not the database. It exists because RLS used to be a dashboard setting:

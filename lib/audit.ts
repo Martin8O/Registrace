@@ -4,7 +4,10 @@
 // fail the business operation (same spirit as invariant 6 / email), so errors are
 // logged and swallowed. Call AFTER the business write commits.
 //
-// AuditLog rows are append-only — never mutated or deleted.
+// AuditLog rows are append-only — never mutated or deleted. Each row carries
+// its author's e-mail as well as their id: removing an admin deletes their User
+// row (userId goes null), and without the e-mail every change they made would
+// read as a system write.
 
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma";
@@ -46,9 +49,13 @@ function asJson(value: unknown): Prisma.InputJsonValue | undefined {
 
 export async function logAuditEvent(params: AuditParams): Promise<void> {
   try {
+    const actor = params.userId
+      ? await prisma.user.findUnique({ where: { id: params.userId }, select: { email: true } })
+      : null;
     await prisma.auditLog.create({
       data: {
         userId: params.userId,
+        actorEmail: actor?.email ?? null,
         ip: params.ip ?? null,
         action: params.action,
         entityType: params.entityType,
@@ -80,7 +87,8 @@ export type AuditLogRow = {
   createdAt: string; // UTC ISO (formatted to Europe/Prague in the UI)
 };
 
-// The most recent audit entries, newest first, with the actor email joined.
+// The most recent audit entries, newest first, with the actor email joined —
+// or, for an admin removed since, the e-mail stored on the row.
 // SUPER_ADMIN-only is enforced by the callers (the API route + the page guard);
 // append-only table — this is read-only.
 export async function listAuditLogs(limit = 200): Promise<AuditLogRow[]> {
@@ -95,7 +103,7 @@ export async function listAuditLogs(limit = 200): Promise<AuditLogRow[]> {
     entityType: r.entityType,
     entityId: r.entityId,
     actorId: r.userId,
-    actorEmail: r.user?.email ?? null,
+    actorEmail: r.user?.email ?? r.actorEmail ?? null,
     ip: r.ip,
     oldData: r.oldData,
     newData: r.newData,
