@@ -771,7 +771,10 @@ export default function RegistrationForm({
           <label className="form-label" htmlFor="centerId">
             {t('center')}
           </label>
-          <select id="centerId" className="bdc-input" {...register('centerId')}>
+          {/* defaultValue marks the placeholder selected in the server-rendered
+              page too; without it the browser showed the first centre until the
+              form had loaded. */}
+          <select id="centerId" className="bdc-input" defaultValue="" {...register('centerId')}>
             <option value="" disabled>
               {t('center_placeholder')}
             </option>

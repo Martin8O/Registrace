@@ -13,6 +13,7 @@ import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/re
 import { NextIntlClientProvider } from "next-intl";
 import cs from "@/locales/cs.json";
 import RegistrationForm from "./RegistrationForm";
+import { renderToString } from "react-dom/server";
 
 const dates = [
   { id: "d1", date: "2026-09-11", label_cs: "Pátek 11.9.", label_en: "Fri 11.9.", sortOrder: 0 },
@@ -410,6 +411,30 @@ describe("the home centre", () => {
     expect((document.getElementById("centerId") as HTMLSelectElement).value).toBe("");
     fireEvent.click(screen.getByRole("button", { name: cs.form.register }));
     await waitFor(() => expect(screen.getByText(cs.form.errors.center)).toBeTruthy());
+  });
+
+  // The page arrives as server-rendered HTML before the form loads; a placeholder
+  // not marked selected there made the browser show the first centre meanwhile.
+  it("is unselected in the server-rendered page too, before the form loads", () => {
+    const html = renderToString(
+      <NextIntlClientProvider locale="cs" messages={cs}>
+        <RegistrationForm
+          eventId="e1"
+          dates={dates}
+          meals={meals}
+          centers={centers}
+          pricingRules={pricingRules}
+          mealPricingRules={mealPricingRules}
+          participationPricingTypes={ALL}
+          mealPricingTypes={ALL}
+          mealRegistrationDeadline={null}
+        />
+      </NextIntlClientProvider>,
+    );
+    const select = new DOMParser().parseFromString(html, "text/html").getElementById("centerId") as HTMLSelectElement;
+    expect(select.options[0]!.value).toBe("");
+    expect(select.options[0]!.hasAttribute("selected")).toBe(true);
+    expect(select.value).toBe("");
   });
 });
 
