@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm, type FieldErrors, type Resolver } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -11,7 +11,9 @@ import { useLeaveGuard } from '@/lib/utils/unsavedGuard'
 import {
   clearNewEventDraft,
   readNewEventDraft,
+  matchesShape,
   writeNewEventDraft,
+  type NewEventDraft,
 } from '@/lib/utils/newEventDraft'
 import type {
   EventDateDTO,
@@ -127,10 +129,12 @@ const DISCOUNT_FIELDS: (keyof PricingRow)[] = [
 // settlement, and a short stay drop to 0 (the engine floors it). Allowed — an
 // admin may mean it — but warned about, because a live event carried exactly
 // that by mistake (supported 30 a day, evening arrival discount 100).
-const discountsAboveDayRate = (row: PricingRow): (keyof PricingRow)[] =>
-  DISCOUNT_FIELDS.filter((f) => row[f] > row.dailyRate)
+// Only the discounts the admin can see for that age: a child's row has none on
+// screen and is saved with 0s, so it is never warned about.
 const fieldsForAge = (age: string): (keyof PricingRow)[] =>
   age === 'AGE_15_PLUS' ? PRICING15_FIELDS : CHILD_FIELDS
+const discountsAboveDayRate = (row: PricingRow, age: string): (keyof PricingRow)[] =>
+  DISCOUNT_FIELDS.filter((f) => fieldsForAge(age).includes(f) && row[f] > row.dailyRate)
 
 // Which tiers this event offers, held as TWO INDEPENDENT sets (M40): one for
 // participation/accommodation (step 3), one for meals (step 4). STANDARD is
@@ -313,6 +317,7 @@ export default function EventStepper({
   canUnpublish = true,
   initialStep = 0,
   readOnly = false,
+  draftOwnerId,
 }: {
   centers: CenterOption[]
   mode?: 'create' | 'edit'
@@ -332,6 +337,9 @@ export default function EventStepper({
   // only the review step is rendered — the one place the admin panel shows an
   // event's whole price list, meal days and settings. No steps, no save.
   readOnly?: boolean
+  // The signed-in admin's id. The create wizard keeps unsaved work in this
+  // browser only under it (lib/utils/newEventDraft), and only when it is given.
+  draftOwnerId?: string
 }) {
   const t = useTranslations('admin')
   const locale = useLocale()
@@ -357,7 +365,8 @@ export default function EventStepper({
   const [publishModal, setPublishModal] = useState(false)
   // "Save and publish" sets the status before asking. Cancelling the question
   // puts back the status the admin had chosen, so a declined publish is not
-  // carried into the next save (nor into the stored draft).
+  // carried into the next save (nor into the stored draft). A save the past-start
+  // check stops never gets that far, so it does not touch the status at all.
   const [statusBeforePublish, setStatusBeforePublish] = useState<EventFormValues['status'] | null>(null)
   const [successKind, setSuccessKind] = useState<'published' | 'saved' | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -368,7 +377,7 @@ export default function EventStepper({
   const [saveAttempted, setSaveAttempted] = useState(false)
   // When the create wizard brought back work from this browser (lib/utils/newEventDraft).
   const [restoredAt, setRestoredAt] = useState<string | null>(null)
-  const keepsDraft = !isEdit && !readOnly
+  const keepsDraft = !isEdit && !readOnly && !!draftOwnerId
   // Nothing is written before the stored draft has been read, or the pristine
   // form would overwrite the very work it is about to restore.
   const [draftChecked, setDraftChecked] = useState(!keepsDraft)
@@ -636,7 +645,11 @@ export default function EventStepper({
         // reserved for an event that has just BECOME public; one that already was
         // has only been saved, and saying otherwise made a description edit read
         // like it had done something to the event's visibility.
-        if (keepsDraft) clearNewEventDraft()
+        if (keepsDraft) {
+          // The typing still waiting to be written belongs to the event just saved.
+          pendingDraft.current = null
+          clearNewEventDraft()
+        }
         setSuccessKind(data.status === 'PUBLISHED' && !alreadyPublished ? 'published' : 'saved')
         return
       }
@@ -684,15 +697,15 @@ export default function EventStepper({
   function attemptSave(forcePublish: boolean) {
     setSaveAttempted(true)
     setSubmitError(null)
-    if (forcePublish) {
-      setStatusBeforePublish(getValues('status'))
-      setValue('status', 'PUBLISHED')
-    }
     // The start-date-in-the-past guard applies whenever the dates are editable
     // (create or a fully-editable draft); a locked event may already have started.
     if (!relationsLocked && getValues('startDate') && getValues('startDate') < todayISO()) {
       setStep(1)
       return
+    }
+    if (forcePublish) {
+      setStatusBeforePublish(getValues('status'))
+      setValue('status', 'PUBLISHED')
     }
     const willPublish = forcePublish || getValues('status') === 'PUBLISHED'
     if (willPublish && !alreadyPublished) {
@@ -762,12 +775,32 @@ export default function EventStepper({
   }
 
   // Bring back a stored new-event draft once, after hydration (storage is
-  // browser-only).
+  // browser-only). One of another admin's is discarded unread, and one whose
+  // shape this wizard does not know is discarded too, rather than rendered.
   useEffect(() => {
-    if (!keepsDraft) return
-    const stored = readNewEventDraft()
+    if (!keepsDraft || !draftOwnerId) return
+    const stored = readNewEventDraft(draftOwnerId)
     if (stored) {
       try {
+        // The form drops an emptied optional field from its values (so a key may
+        // be missing) and fills what is missing from its defaults; a field that
+        // IS there must be of its default's kind. Everything else is rendered as
+        // stored and must have the fresh state's shape.
+        const restored = JSON.parse(stored.data) as Record<string, unknown> | null
+        const fresh = JSON.parse(pristineSnapshot) as Record<string, unknown>
+        const freshValues = (fresh.values ?? {}) as Record<string, unknown>
+        const restoredValues = restored?.values as Record<string, unknown> | undefined
+        if (
+          !restored ||
+          !matchesShape(restoredValues, {}) ||
+          // A field present in both must be of the kind the form starts it as.
+          !Object.keys(freshValues).every(
+            (k) => restoredValues![k] === undefined || matchesShape(restoredValues![k], freshValues[k]),
+          ) ||
+          !matchesShape({ ...restored, values: {} }, { ...fresh, values: {} })
+        ) {
+          throw new Error('draft shape')
+        }
         applySnapshot(stored.data)
         ownsDraft.current = true
         setStep(Math.min(Math.max(0, stored.step), STEP_KEYS.length - 1))
@@ -784,18 +817,35 @@ export default function EventStepper({
   // Only a draft this wizard restored or wrote is its own to clear: a second tab
   // opened untouched must not wipe the one the first tab is filling in.
   const ownsDraft = useRef(false)
+  // Typing is written a moment after it stops; what is still waiting is written
+  // at once when the page is closed or the wizard unmounts (the language switch
+  // re-navigates), so the last words typed are not the ones lost.
+  const pendingDraft = useRef<NewEventDraft | null>(null)
+  const flushDraft = useCallback(() => {
+    const draft = pendingDraft.current
+    if (!draft) return
+    pendingDraft.current = null
+    ownsDraft.current = true
+    writeNewEventDraft(draft)
+  }, [])
   useEffect(() => {
-    if (!keepsDraft || !draftChecked || successKind) return
+    pendingDraft.current = null
+    if (!keepsDraft || !draftOwnerId || !draftChecked || successKind) return
     if (!dirty) {
       if (ownsDraft.current) clearNewEventDraft()
       return
     }
-    const id = window.setTimeout(() => {
-      ownsDraft.current = true
-      writeNewEventDraft({ savedAt: new Date().toISOString(), step, data: snapshot })
-    }, 300)
+    pendingDraft.current = { ownerId: draftOwnerId, savedAt: new Date().toISOString(), step, data: snapshot }
+    const id = window.setTimeout(flushDraft, 300)
     return () => window.clearTimeout(id)
-  }, [keepsDraft, draftChecked, successKind, dirty, snapshot, step])
+  }, [keepsDraft, draftOwnerId, draftChecked, successKind, dirty, snapshot, step, flushDraft])
+  useEffect(() => {
+    window.addEventListener('pagehide', flushDraft)
+    return () => {
+      window.removeEventListener('pagehide', flushDraft)
+      flushDraft()
+    }
+  }, [flushDraft])
 
   function startAfresh() {
     if (!window.confirm(t('eventForm.draftDiscardConfirm'))) return
@@ -812,7 +862,7 @@ export default function EventStepper({
   // Offered tiers whose discount exceeds the day rate, named for the save step.
   const rowsWithDiscountAboveDayRate = ALL_AGES.flatMap((age) =>
     enabledParticipationTiers
-      .filter((type) => discountsAboveDayRate(rule(age, type)).length > 0)
+      .filter((type) => discountsAboveDayRate(rule(age, type), age).length > 0)
       .map((type) => `${t(`age.${age}`)} · ${t(`pricingType.${type}`)}`),
   )
 
@@ -1101,13 +1151,14 @@ export default function EventStepper({
                             ),
                           )}
                         </div>
-                        {!relationsLocked && discountsAboveDayRate(rule(age, type)).length > 0 && (
+                        {!relationsLocked && discountsAboveDayRate(rule(age, type), age).length > 0 && (
                           <p className="mt-3 rounded-lg border border-gold-300 bg-gold-50 px-3 py-2 text-sm text-gold-800" role="status">
                             {t('eventForm.pricing.discountAboveDayRate', {
-                              fields: discountsAboveDayRate(rule(age, type))
+                              fields: discountsAboveDayRate(rule(age, type), age)
                                 .map((f) => t(`eventForm.fields.${f}`))
                                 .join(', '),
                               rate: rule(age, type).dailyRate,
+                              count: discountsAboveDayRate(rule(age, type), age).length,
                             })}
                           </p>
                         )}

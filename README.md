@@ -18,7 +18,7 @@ admins manage events, registrations and exports — all scoped by role and centr
 ![Prisma 7](https://img.shields.io/badge/Prisma-7-2D3748?style=flat-square&logo=prisma&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3FCF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Tailwind v4](https://img.shields.io/badge/Tailwind-v4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-550%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-567%20passing-3FA34D?style=flat-square&logo=vitest&logoColor=white)
 ![Deploy](https://img.shields.io/badge/deploy-Vercel-000000?style=flat-square&logo=vercel&logoColor=white)
 
 </div>
@@ -247,7 +247,7 @@ single source of orientation for anyone joining the project.
 | Email | **Resend** | Bilingual, inline-CSS, non-blocking |
 | Export | **exceljs** | XLSX (chosen over the vulnerable `xlsx` package) |
 | Styling | **Tailwind CSS v4** | Design tokens via `@theme` in `globals.css`, no JS config |
-| Tests | **Vitest** (+ v8 coverage) | 550 unit / integration tests |
+| Tests | **Vitest** (+ v8 coverage) | 567 unit / integration tests |
 | Analytics | **Vercel Web Analytics** | Cookieless page analytics; the only third party in the page |
 | Hosting | **Vercel** + own domain (Wedos DNS) | Auto-deploy on push to `main` |
 
@@ -670,7 +670,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 
 ## Testing
 
-`npm test` runs **550 Vitest tests** across 39 files, with **no database required**:
+`npm test` runs **567 Vitest tests** across 40 files, with **no database required**:
 
 - **Pricing engine** (51) — the arithmetic against the hand-derived BDC formula, grouped by
   concern: children on a `0` rule, ages 8–14 on a configured rate, 15+ per tier, discounts
@@ -692,17 +692,17 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
 - **Stay rules** (6) — the three stay-order rules (departure never before arrival; a same-day
   stay never arrives in the evening; leaving after breakfast on the same day needs a morning
   arrival), one shared definition for the public submit and the admin full edit.
-- **Event configuration** (12) — that an event's two tier sets must each be non-empty and contain
+- **Event configuration** (13) — that an event's two tier sets must each be non-empty and contain
   the standard tier, and that neither price list may quote a tier the event does not offer —
-  each list checked against its own set, never the other's. Plus the contact phone: digits and
-  spaces with an optional leading `+`, at least nine digits — free text is refused, a number
+  each list checked against its own set, never the other's. Plus the contact phone: digits with an
+  optional leading `+` and the usual separators (spaces, `-`, `/`, `.`, brackets), nine to fifteen digits — free text is refused, a number
   pasted with non-breaking spaces is not.
 - **Event numbering** (8) — the frozen `YYEEE` prefix a new event's registration numbers carry:
   one past the highest issued for the event's year, so a draft moved to another year cannot make
   the next create re-issue a taken prefix (it used to fail on the unique index on every retry);
   a new year starts at `001`; a collision with a concurrent create is retried once with a fresh
   prefix, and only a unique collision is.
-- **Submit service** (27) — control-flow with a **mocked Prisma** (`vi.mock('@/lib/db')`) while
+- **Submit service** (29) — control-flow with a **mocked Prisma** (`vi.mock('@/lib/db')`) while
   keeping the real engine, so `totalPrice` is asserted end-to-end; plus the two tiers pricing
   the two halves independently, both being persisted, each meal snapshotted at the meal tier's
   price, a tier the event does not offer being refused before anything is written, and both
@@ -713,10 +713,13 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   submit path (and that a same-day morning visit leaving after breakfast is accepted). Two more
   pin the "fully booked" check the event page shows instead of the form: it counts exactly the
   live registrations the submit counts, so the page never offers a form the submit refuses.
-- **Admin full edit** (47) — the registration team's on-site fix of a stored booking: a family
+  Two more pin that a one-day event stores no accommodation whatever the payload claims, while a
+  longer one keeps the registrant's choice.
+- **Admin full edit** (48) — the registration team's on-site fix of a stored booking: a family
   member removed (soft-deleted, the total drops by exactly their price, their meal rows kept for
   the audit), a person added, meals swapped, the stay moved, accommodation and early departure,
-  a child re-booked as an adult — each re-priced by the real engine. The meal tier prices the
+  a child re-booked as an adult — each re-priced by the real engine; a one-day event is saved
+  without accommodation whatever the editor sent. The meal tier prices the
   meals and the stay tier the stay, whichever moves (the fixture stays standard and eats
   supported). Refused before anything is written: a meal outside the new stay, a closed meal,
   another event's meal or day, a broken stay rule, a tier the event does not offer (except one a
@@ -781,7 +784,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   Vercel preview's own url, and rejects everything else: foreign origins, a missing
   Origin + Referer, localhost in production, and — the regression that matters — a `vercel.app`
   origin while running in **production**.
-- **Export & auth** (16 + 4) — the registration-export scoping (including the cross-centre IDOR
+- **Export & auth** (17 + 4) — the registration-export scoping (including the cross-centre IDOR
   regression), the export's two independent tier columns shown **at every age**, and the
   owner-tier auth helpers. Plus two properties of the workbook itself: the “selection” sheet
   picks its columns out of the full sheet **by name**, so its last column is provably participant
@@ -814,7 +817,7 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   letters and non-ASCII symbols must **not** tick a rule, or the checklist would green-light a
   password Supabase rejects), that the checklist and the submit gate can never disagree, and
   that every rule is labelled in both locales.
-- **Component rendering** (27 + 49 + 33 + 5 + 3 + 3) — the two islands that move money, rendered for real in
+- **Component rendering** (27 + 50 + 39 + 5 + 3 + 3) — the two islands that move money, rendered for real in
   jsdom with the actual locale file as messages (so a missing key fails here rather than showing
   a raw key to a registrant). The public form: which tier selector each of the four offer-variants
   renders, meal labels priced from the **meal** tier and repainted by it and by age but never by
@@ -827,7 +830,8 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   (one is required), a rate-limited submit saying so, and a day's meals listed breakfast, lunch,
   dinner whatever order they arrive in; a one-day event not asking about accommodation and
   sending no bed. The
-  admin **full registration editor**: it opens exactly as the registrant submitted it (stay,
+  admin **full registration editor**: it asks nothing about accommodation on a one-day event, and
+  it opens exactly as the registrant submitted it (stay,
   names, ages, diets, ticked meals), shows the stored prices greyed until the server has priced the
   registration once on open — a stored total today's engine disagrees with shows the number the
   save will write — and typing a name never costs a request; a failed price request can be sent
@@ -883,10 +887,13 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   comes back when the wizard is opened again — until it is saved (after which leaving no longer
   asks) or thrown away — while an existing event's is never stored in the browser (a new event's
   meal prices start ages 0–3 at 0; a discount larger than the day rate is pointed out on the
-  pricing step and again before saving, but not refused), and an
+  pricing step and again before saving, but not refused, in the singular or plural it needs), and an
   untouched wizard asks nothing. Declining the publish question puts back the status the admin
-  had chosen; the logout drops a kept new-event draft, so the next admin on the computer does not
-  open it.
+  had chosen, and a publish stopped by a past start date never touches it; the logout drops a kept
+  new-event draft, and one written by another admin (a session that ended without the logout) or
+  from before drafts named their author is discarded unread, so the next admin on the computer
+  does not open it; a draft of a shape the wizard does not know (a missing piece, or a field of
+  another kind) is discarded instead of crashing it, and the last words typed survive the wizard closing at once.
   The help hint: closed until clicked, every paragraph formatted rather than raw tags, a link to
   its recipe that opens in a new tab (a same-tab link would throw away a half-filled wizard), and
   closing on Escape or a click elsewhere.
@@ -930,14 +937,17 @@ Note the naming: the “centres” screen lives at `/admin/centers` and the “a
   decoded, and it puts the locale straight into a redirect — so `/%5Cevil.com/admin/auth/confirm`
   redirected to `/\evil.com/…`, which a browser resolves to another site. An unknown locale now
   falls back to the default one before the one-time token is spent.
+- **New-event draft shape** (4) — the check a restored wizard draft must pass before it is
+  rendered: everything a fresh wizard state has, of the same kind at every depth, with maps that
+  grow as the admin types allowed to carry more; anything else is discarded, not rendered.
 - **Translation files** (3) — that Czech and English carry the same keys (the help excepted: it
   exists in Czech only, and English must not grow a half-copy), that every one of the help's
   rich-text strings formats with the tags the page provides, and that each "?" hint exists and
   links only to a recipe that exists.
-- **Audit log authorship** (5) — every row keeps its author's e-mail beside their id, so a change
+- **Audit log authorship** (6) — every row keeps its author's e-mail beside their id, so a change
   made by an admin who has since been removed (their user row deleted, the id set to null) still
   names them instead of reading as a system write; a live admin shows their current e-mail, and
-  a genuine system write stays authorless.
+  a genuine system write stays authorless; a failed look-up of the e-mail still writes the row.
 - **RLS guard** (3) — that every model's table has `ENABLE ROW LEVEL SECURITY` in a migration,
   and that no migration defines a policy or forces RLS on the owner. It reads the schema and
   the migration SQL, not the database. It exists because RLS used to be a dashboard setting:

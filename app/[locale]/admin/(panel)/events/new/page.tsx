@@ -39,7 +39,7 @@ export default async function NewEventPage({
       {centers.length === 0 ? (
         <div className="section-card text-neutral-600">{t('noCenters')}</div>
       ) : (
-        <EventStepper centers={centers} initialStep={initialStep} />
+        <EventStepper centers={centers} initialStep={initialStep} draftOwnerId={ctx.userId} />
       )}
     </div>
   )

@@ -238,6 +238,26 @@ describe("submitRegistration", () => {
     expect(h.prisma.$transaction).not.toHaveBeenCalled();
   });
 
+  // The form does not ask about accommodation on a one-day event; a payload that
+  // still claims it (an old tab, a crafted request) must not store a bed.
+  it("a one-day event stores no accommodation, whatever the payload says", async () => {
+    h.prisma.event.findFirst.mockResolvedValue({ ...fakeEvent, dates: [fakeEvent.dates[0]] });
+    await submitRegistration(
+      { ...validInput, departureDateId: "d_fri", hasAccommodation: true },
+      meta,
+    );
+    expect(h.prisma.registration.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ hasAccommodation: false }) }),
+    );
+  });
+
+  it("a longer event keeps the accommodation the registrant chose", async () => {
+    await submitRegistration({ ...validInput, hasAccommodation: true }, meta);
+    expect(h.prisma.registration.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ hasAccommodation: true }) }),
+    );
+  });
+
   it("a same-day morning visit leaving after breakfast is accepted", async () => {
     const res = await submitRegistration(
       { ...validInput, departureDateId: "d_fri", arrivalTime: "MORNING", earlyDeparture: "AFTER_BREAKFAST" },

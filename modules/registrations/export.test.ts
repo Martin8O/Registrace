@@ -355,6 +355,23 @@ describe("the settlement sheet", () => {
     return sheets.find((x) => x.sheetName === "Vyúčtování")!;
   }
 
+  // The label check in front already refuses a foreign event; this holds the
+  // settlement's own read to the same scope, so dropping it cannot pass silently.
+  it("reads the event only within a centre admin's own centres", async () => {
+    const admin = { role: "ADMIN", userId: "admin-a", ip: null, centerIds: ["center-A"] } as unknown as AdminContext;
+    h.eventFindFirst.mockClear(); // this file keeps calls across tests
+    h.eventFindFirst.mockResolvedValue(EVENT);
+    h.findMany.mockResolvedValue([]);
+    h.eventDateFindMany.mockResolvedValue([]);
+    h.eventMealFindMany.mockResolvedValue([]);
+    h.participantMealFindMany.mockResolvedValue([]);
+    await buildRegistrationExportWorkbook({ eventId: "e1" }, admin, "cs");
+    const settlementRead = h.eventFindFirst.mock.calls
+      .map((c) => c[0])
+      .find((args) => args?.select?.registrations);
+    expect(settlementRead.where).toMatchObject({ id: "e1", deletedAt: null, centerId: { in: ["center-A"] } });
+  });
+
   it("splits each day into people, beds, day rate and meals — all, then paid only", async () => {
     const { rows } = await settlement();
     //            people acc  day  meals sum | paid: people acc day meals sum

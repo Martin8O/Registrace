@@ -117,9 +117,9 @@ export default async function EventPage({
   if (event.contactName) contactParts.push(<span>{event.contactName}</span>)
   if (event.contactPhone)
     contactParts.push(
-      // tel: takes no spaces — the admin types "+420 721 830 991", which a dialler
-      // must receive as digits.
-      <a href={`tel:${event.contactPhone.replace(/\s+/g, '')}`} className={contactLink}>
+      // tel: takes digits — the admin types "+420 721 830 991" or "721-830-991",
+      // which a dialler must receive without the separators.
+      <a href={`tel:${event.contactPhone.replace(/[^\d+]/g, '')}`} className={contactLink}>
         {event.contactPhone}
       </a>,
     )

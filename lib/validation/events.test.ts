@@ -123,10 +123,21 @@ describe("event contact phone", () => {
 
   it("rejects letters, other symbols and a number too short to dial", () => {
     expect(withPhone("vladikuv telefon")).toBe(false);
-    expect(withPhone("724-051-765")).toBe(false);
     expect(withPhone("+420 72x 051 765")).toBe(false);
     expect(withPhone("12345")).toBe(false);
     expect(withPhone("420+724051765")).toBe(false);
+  });
+
+  // Dashes, slashes and brackets are how Czech numbers are often written; refusing
+  // them made an older event stored that way unsavable until the phone was retyped.
+  it("accepts the separators Czech numbers are written with", () => {
+    expect(withPhone("724-051-765")).toBe(true);
+    expect(withPhone("777/123 456")).toBe(true);
+    expect(withPhone("+420 (724) 051.765")).toBe(true);
+    expect(withPhone("724-05")).toBe(false);
+    expect(withPhone("724 051 765 (Jana)")).toBe(false);
+    // Two numbers in the one field would be dialled as a single 18-digit one.
+    expect(withPhone("724 051 765 / 603 123 456")).toBe(false);
   });
 
   it("holds on an update too", () => {

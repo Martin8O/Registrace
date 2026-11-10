@@ -668,7 +668,8 @@ function EditorBody({
               onPick={(v) => changeStay({ earlyDeparture: v as EarlyDeparture })}
             />
           </Field>
-          <Field label={t('registrationDetail.accommodation')}>
+          {/* A one-day event has no night: nothing to ask, and the server stores no. */}
+          {ev.dates.length > 1 && <Field label={t('registrationDetail.accommodation')}>
             <Pills
               name="hasAccommodation"
               options={['yes', 'no']}
@@ -676,7 +677,7 @@ function EditorBody({
               labelFor={(v) => t(`common.${v}`)}
               onPick={(v) => changeDraft({ hasAccommodation: v === 'yes' })}
             />
-          </Field>
+          </Field>}
         </div>
         {stayViolation && (
           <p role="alert" className="mt-4 rounded-lg border border-danger-500/40 bg-danger-50 p-3 text-sm text-danger-700">

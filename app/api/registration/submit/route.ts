@@ -43,7 +43,7 @@ function emailLang(req: NextRequest): "cs" | "en" {
 }
 
 export async function POST(req: NextRequest) {
-  // Rate limit (P4): 10 submits / IP / hour, before any parsing.
+  // Rate limit (P4): 30 submits / IP / hour, before any parsing.
   const limited = enforceRateLimit(req, { bucket: "submit", limit: 30, windowMs: 3_600_000 });
   if (limited) return limited;
 

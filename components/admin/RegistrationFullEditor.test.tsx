@@ -116,6 +116,12 @@ afterEach(() => {
 // ─── It opens exactly as the registrant submitted it ──────────────────────────
 
 describe("the stored registration, shown as it is", () => {
+  // A one-day event has no night to stay; the server stores no accommodation.
+  it("asks nothing about accommodation on a one-day event", () => {
+    renderEditor(data({ departureDateId: "d1", event: { dates: [DATES[0]!] } }));
+    expect(document.querySelector('input[name="hasAccommodation"]')).toBeNull();
+  });
+
   it("the stay, accommodation, names, ages, diets and ticked meals are the stored ones", () => {
     renderEditor();
     expect(radio("arrivalDateId-d1").checked).toBe(true);

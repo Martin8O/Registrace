@@ -428,7 +428,7 @@
         "pricingType": "Price type",
         "childNote": "Child categories are usually 0, but you can set your own daily and night rate – the calculation always follows the price list exactly. Arrival/departure discounts do not apply to children.",
         "discountsLabel": "Discounts",
-        "discountAboveDayRate": "Note, a discount exceeds the daily rate ({rate} CZK): {fields}. The arrival or departure day will come out negative and a short stay free. If that is not intended, lower the discount.",
+        "discountAboveDayRate": "Note, {count, plural, one {this discount exceeds} other {these discounts exceed}} the daily rate ({rate} CZK): {fields}. The arrival or departure day will come out negative and a short stay free. If that is not intended, lower the discount.",
         "discountAboveDayRateSummary": "Note: in {rows} a discount exceeds the daily rate. You can save, but check the Pricing step."
       },
       "settings": {
@@ -461,7 +461,7 @@
       },
       "errors": {
         "required": "Required",
-        "phone": "Digits and spaces only, optionally + at the start (at least 9 digits)",
+        "phone": "Digits only, optionally + at the start and spaces, dashes, slashes, dots or brackets between them (9 to 15 digits)",
         "sessionExpired": "Your sign-in expired and the event was not saved. Sign in again in a new window, then click here again — what you entered is kept.",
         "email": "Invalid email",
         "endDate": "End date must be on or after the start date",

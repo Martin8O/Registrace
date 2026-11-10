@@ -18,7 +18,7 @@ list of invariants before changing anything structural.
 ```bash
 npm run dev                 # dev server on :3000
 npm run build               # production build
-npm test                    # Vitest (550 tests, no database needed)
+npm test                    # Vitest (567 tests, no database needed)
 npm run lint                # ESLint
 npm run typecheck           # tsc --noEmit, test files included
 npm run gate                # typecheck → lint → tests → build: run this before any commit

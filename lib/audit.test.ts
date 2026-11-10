@@ -31,6 +31,13 @@ describe("logAuditEvent", () => {
     expect(h.userFindUnique).not.toHaveBeenCalled();
     expect(h.auditCreate.mock.calls[0]![0].data).toMatchObject({ userId: null, actorEmail: null });
   });
+
+  it("still writes the row when the author's e-mail cannot be looked up", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    h.userFindUnique.mockRejectedValue(new Error("connection reset"));
+    await logAuditEvent({ userId: "u1", action: "event.update", entityType: "Event", entityId: "e1" });
+    expect(h.auditCreate.mock.calls[0]![0].data).toMatchObject({ userId: "u1", actorEmail: null });
+  });
 });
 
 describe("listAuditLogs", () => {

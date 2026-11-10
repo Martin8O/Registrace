@@ -46,11 +46,11 @@ describe("LogoutButton", () => {
   // The new-event wizard keeps a half-typed event in this browser; the next admin
   // signing in on the same computer must not open it.
   it("drops a half-typed new event kept in this browser", async () => {
-    window.localStorage.setItem("registrace:new-event-draft:v1", "{}");
+    window.localStorage.setItem("registrace:new-event-draft:v2", "{}");
     logout();
     click();
     await waitFor(() => expect(h.push).toHaveBeenCalledWith("/cs/admin/login"));
-    expect(window.localStorage.getItem("registrace:new-event-draft:v1")).toBeNull();
+    expect(window.localStorage.getItem("registrace:new-event-draft:v2")).toBeNull();
   });
 
   it("asks first when a screen holds unsaved changes — and keeps the session when told to stay", async () => {

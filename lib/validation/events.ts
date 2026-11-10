@@ -24,7 +24,13 @@ const pricingTypeSetSchema = z
 // String length caps (P8 item 7) — bound every free-text/id input.
 export function isPhoneOrEmpty(value: string): boolean {
   const v = value.trim();
-  return v === "" || (/^\+?[0-9\s]+$/.test(v) && v.replace(/\D/g, "").length >= 9);
+  // Digits, then the separators Czech numbers are written with — spaces, "-",
+  // "/", "." and brackets — and an optional leading "+". Refusing the separators
+  // made every older event stored as "603-123-456" unsavable until retyped.
+  // At most 15 digits, the international maximum: two numbers typed into the one
+  // field ("724 051 765 / 603 123 456") would be dialled as one.
+  const digits = v.replace(/\D/g, "").length;
+  return v === "" || (/^\+?[0-9\s\-/.()]+$/.test(v) && digits >= 9 && digits <= 15);
 }
 
 const eventFields = {
@@ -37,8 +43,8 @@ const eventFields = {
   description_en: z.string().max(5000).optional(),
   contactName: z.string().max(200).optional(),
   // Shown on the public page and dialled from it, so it must be a number: an
-  // optional leading "+", then digits in any spacing (a number pasted from a web
-  // page carries non-breaking spaces), at least 9 of them. Empty
+  // optional leading "+", then digits with the usual separators (a number pasted
+  // from a web page carries non-breaking spaces), at least 9 of them. Empty
   // means "no phone". Free text (a name instead of a number) used to pass.
   contactPhone: z.string().max(50).refine(isPhoneOrEmpty, { message: "phone" }).optional(),
   contactEmail: z.string().email().max(254).optional(),

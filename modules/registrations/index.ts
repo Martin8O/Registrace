@@ -207,6 +207,11 @@ export async function submitRegistration(
   if (stayViolation) {
     throw new RegistrationStayMismatchError(STAY_RULE_MESSAGES[stayViolation]);
   }
+  // A one-day event has no night to stay, and the form does not ask about one.
+  // A payload that still says "accommodation" (a tab opened before the question
+  // was dropped, or a crafted one) is stored as no accommodation, so neither the
+  // registration detail nor the export claims a bed nobody can have.
+  const hasAccommodation = input.hasAccommodation && event.dates.length > 1;
   const center = await prisma.center.findFirst({
     where: { id: input.centerId, isActive: true },
     select: { id: true, name_cs: true, name_en: true },
@@ -286,7 +291,7 @@ export async function submitRegistration(
     arrivalTime: input.arrivalTime,
     departureDateId: input.departureDateId,
     earlyDeparture: input.earlyDeparture,
-    hasAccommodation: input.hasAccommodation,
+    hasAccommodation,
   });
 
   let registrationId: string;
@@ -336,7 +341,7 @@ export async function submitRegistration(
           arrivalTime: input.arrivalTime,
           departureDateId: input.departureDateId,
           earlyDeparture: input.earlyDeparture,
-          hasAccommodation: input.hasAccommodation,
+          hasAccommodation,
           email: input.email,
           gdprConsent: input.gdprConsent,
           totalPrice: pricing.totalPrice,
@@ -428,7 +433,7 @@ export async function submitRegistration(
       arrivalTime: input.arrivalTime,
       departureDate,
       earlyDeparture: input.earlyDeparture,
-      hasAccommodation: input.hasAccommodation,
+      hasAccommodation,
       totalPrice: pricing.totalPrice,
       participants: participantsInput.map((p, i) => ({
         fullName: p.fullName,
@@ -991,6 +996,9 @@ type FullEditPlan = {
   removed: FullEditStored["participants"];
   totalPrice: number;
   mealDeadlinePassed: boolean;
+  // What is stored: a one-day event has no night, so never accommodation (as on
+  // the public submit), whatever the editor sent.
+  hasAccommodation: boolean;
 };
 
 async function prepareFullUpdate(
@@ -1125,7 +1133,7 @@ async function prepareFullUpdate(
     arrivalTime: input.arrivalTime,
     departureDateId: input.departureDateId,
     earlyDeparture: input.earlyDeparture,
-    hasAccommodation: input.hasAccommodation,
+    hasAccommodation: input.hasAccommodation && ev.dates.length > 1,
   });
 
   const participants = input.participants.map((p, i) => ({
@@ -1157,6 +1165,7 @@ async function prepareFullUpdate(
     totalPrice: priced.totalPrice,
     mealDeadlinePassed:
       ev.mealRegistrationDeadline !== null && Date.now() >= ev.mealRegistrationDeadline.getTime(),
+    hasAccommodation: input.hasAccommodation && ev.dates.length > 1,
   };
 }
 
@@ -1299,7 +1308,7 @@ export async function applyFullUpdate(
           updatedAt: savedAt,
           status: input.status,
           centerId: input.centerId,
-          hasAccommodation: input.hasAccommodation,
+          hasAccommodation: plan.hasAccommodation,
           arrivalDateId: input.arrivalDateId,
           arrivalTime: input.arrivalTime,
           departureDateId: input.departureDateId,
@@ -1385,7 +1394,7 @@ export async function applyFullUpdate(
       })),
     ),
     newData: fullEditAuditImage(
-      { ...input, totalPrice: plan.totalPrice },
+      { ...input, hasAccommodation: plan.hasAccommodation, totalPrice: plan.totalPrice },
       plan.participants.map((p, index) => ({
         id: p.current?.id ?? createdIds.get(index) ?? null,
         fullName: p.input.fullName,
@@ -1979,7 +1988,11 @@ async function buildMealAndAccommodationSheets(
 // and the PAID ones only (what the team has marked as received) — each with the
 // people present that day and the accommodation / day-rate / meal amounts that
 // day stands for. Cancelled registrations and removed participants are left out,
-// as on the kitchen and bed sheets.
+// as on the kitchen and bed sheets. Like those two, it is always the whole event:
+// the export's status / date / search filters shape only the two data sheets (the
+// admin help says so). A discount larger than its day rate shows that day as a
+// negative amount — honest arithmetic that still sums to the stored price; the
+// event wizard warns about such a discount when it is entered.
 //
 // Amounts are the STORED ones (invariant 4: the stored price is what was
 // charged). Meals are each meal row's stored price on its own day. The stay

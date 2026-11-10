@@ -47,15 +47,26 @@ function asJson(value: unknown): Prisma.InputJsonValue | undefined {
   return value === undefined || value === null ? undefined : (value as Prisma.InputJsonValue);
 }
 
-export async function logAuditEvent(params: AuditParams): Promise<void> {
+// The author's e-mail is a courtesy for reading the log later; failing to look
+// it up must not cost the row itself, which still carries the author's id.
+async function actorEmailOf(userId: string | null): Promise<string | null> {
+  if (!userId) return null;
   try {
-    const actor = params.userId
-      ? await prisma.user.findUnique({ where: { id: params.userId }, select: { email: true } })
-      : null;
+    const actor = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+    return actor?.email ?? null;
+  } catch (err) {
+    console.error(`[audit] could not look up the author ${userId}`, err);
+    return null;
+  }
+}
+
+export async function logAuditEvent(params: AuditParams): Promise<void> {
+  const actorEmail = await actorEmailOf(params.userId);
+  try {
     await prisma.auditLog.create({
       data: {
         userId: params.userId,
-        actorEmail: actor?.email ?? null,
+        actorEmail,
         ip: params.ip ?? null,
         action: params.action,
         entityType: params.entityType,

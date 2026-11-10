@@ -346,6 +346,19 @@ describe("applyFullUpdate — meals", () => {
 // ─── The stay ─────────────────────────────────────────────────────────────────
 
 describe("applyFullUpdate — the stay", () => {
+  // A one-day event has no night; the editor no longer asks, and an old row or
+  // a stale editor that still says "accommodation" is saved as none.
+  it("a one-day event saves no accommodation, whatever the editor sent", async () => {
+    const base = stored({ departureDateId: "d1" });
+    h.prisma.registration.findFirst.mockResolvedValue({
+      ...base,
+      hasAccommodation: true,
+      event: { ...base.event, dates: [DATES[0]!], meals: MEALS.filter((m) => m.eventDateId === "d1") },
+    });
+    await applyFullUpdate("r1", input({ departureDateId: "d1", hasAccommodation: true }), SUPER);
+    expect(regWrite().data).toMatchObject({ hasAccommodation: false });
+  });
+
   it("arriving a day later while day-1 meals are still ticked → meal_outside_stay, nothing written", async () => {
     await expect(applyFullUpdate("r1", input({ arrivalDateId: "d2" }), SUPER)).rejects.toMatchObject({
       code: "meal_outside_stay",

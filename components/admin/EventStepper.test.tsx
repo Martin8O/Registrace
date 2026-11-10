@@ -48,6 +48,8 @@ type Mode = {
   canEditRelations?: boolean;
   canUnpublish?: boolean;
   readOnly?: boolean;
+  // The signed-in admin the create page names as the draft's owner.
+  owner?: string;
 };
 type EventFormStatus = "DRAFT" | "PUBLISHED" | "CLOSED" | "ARCHIVED";
 
@@ -63,6 +65,7 @@ function renderWizard(over: Mode = {}) {
         canEditRelations={over.canEditRelations ?? false}
         canUnpublish={over.canUnpublish ?? true}
         readOnly={over.readOnly ?? false}
+        draftOwnerId={isEdit ? undefined : (over.owner ?? "admin-1")}
       />
     </NextIntlClientProvider>,
   );
@@ -464,7 +467,80 @@ describe("a new event's unsaved work", () => {
     fireEvent.click(buttonNamed(F.save)!);
     await waitFor(() => expect(dialogShows(F.success.savedTitle)).toBe(true));
     expect(window.localStorage.length).toBe(0);
-    expect(confirmLeave()).toBe(true);
+    // The guard is released by an effect that runs just after the dialog is on
+    // screen, so it is waited for rather than read in the same tick.
+    await waitFor(() => expect(confirmLeave()).toBe(true));
+  });
+
+  // A session can end without the logout button (it expires, or an invite link
+  // signs the browser in as someone else); the next admin there must not open
+  // the previous one's event and contact details.
+  it("is not brought back for another admin on the same browser", async () => {
+    renderWizard({ owner: "admin-1" });
+    fireEvent.change(titleInput(), { target: { value: "Letní kurz" } });
+    await waitFor(() => expect(window.localStorage.length).toBe(1));
+    cleanup();
+
+    renderWizard({ owner: "admin-2" });
+    await waitFor(() => expect(window.localStorage.length).toBe(0));
+    expect(titleInput().value).toBe("");
+    expect(document.body.textContent).not.toContain(F.draftDiscard);
+  });
+
+  it("from before drafts named their author is dropped, not restored", async () => {
+    window.localStorage.setItem(
+      "registrace:new-event-draft:v1",
+      JSON.stringify({ savedAt: "2026-11-01T10:00:00.000Z", step: 0, data: "{}" }),
+    );
+    renderWizard();
+    await waitFor(() => expect(window.localStorage.length).toBe(0));
+    expect(titleInput().value).toBe("");
+  });
+
+  // Rendered as it was, a draft of an unknown shape crashed "Nová akce" on every
+  // visit, with the button that discards it inside the crashed screen.
+  it("of a shape this wizard does not know is discarded and the wizard still opens", async () => {
+    window.localStorage.setItem(
+      "registrace:new-event-draft:v2",
+      JSON.stringify({
+        ownerId: "admin-1",
+        savedAt: "2026-11-01T10:00:00.000Z",
+        step: 2,
+        data: JSON.stringify({ values: { title_cs: "Stará" }, pricingRules: {} }),
+      }),
+    );
+    renderWizard();
+    await waitFor(() => expect(window.localStorage.length).toBe(0));
+    expect(titleInput().value).toBe("");
+    expect(document.body.textContent).not.toContain(F.draftDiscard);
+  });
+
+  // A form field present in the draft must be of the kind the form starts it
+  // as: an object where a text is expected crashes the review step.
+  it("with a form field of another kind is discarded too", async () => {
+    renderWizard();
+    fireEvent.change(titleInput(), { target: { value: "Letní kurz" } });
+    await waitFor(() => expect(window.localStorage.length).toBe(1));
+    cleanup();
+    const key = "registrace:new-event-draft:v2";
+    const draft = JSON.parse(window.localStorage.getItem(key)!);
+    const data = JSON.parse(draft.data);
+    data.values.contactPhone = { number: "724051765" };
+    window.localStorage.setItem(key, JSON.stringify({ ...draft, data: JSON.stringify(data) }));
+
+    renderWizard();
+    await waitFor(() => expect(window.localStorage.length).toBe(0));
+    expect(titleInput().value).toBe("");
+  });
+
+  it("keeps the last words typed when the wizard closes at once", async () => {
+    renderWizard();
+    fireEvent.change(titleInput(), { target: { value: "Letní kurz" } });
+    cleanup();
+    expect(window.localStorage.length).toBe(1);
+
+    renderWizard();
+    await waitFor(() => expect(titleInput().value).toBe("Letní kurz"));
   });
 
   it("leaves nothing to ask about on a wizard nobody has touched", () => {
@@ -496,6 +572,20 @@ describe("declining the publish question", () => {
     goToStep(F.steps.settings);
     expect(document.querySelector<HTMLSelectElement>('select[name="status"]')!.value).toBe("DRAFT");
   });
+
+  // Stopped before the question is asked, there is nothing to decline.
+  it("is never reached when the start date is past, and the status stays as chosen", () => {
+    renderWizard();
+    goToStep(F.steps.schedule);
+    fireEvent.change(document.querySelector<HTMLInputElement>('input[name="startDate"]')!, {
+      target: { value: "2000-01-01" },
+    });
+    goToStep(F.steps.save);
+    fireEvent.click(buttonNamed(F.saveAndPublish)!);
+    expect(dialogShows(F.publishConfirmTitle)).toBe(false);
+    goToStep(F.steps.settings);
+    expect(document.querySelector<HTMLSelectElement>('select[name="status"]')!.value).toBe("DRAFT");
+  });
 });
 
 // A toddler's meal prefilled at the adult catalogue price was easy to overlook
@@ -516,7 +606,7 @@ describe("a new event's meal price list", () => {
 // arrival discount, by mistake. It stays allowed, but it is pointed out.
 describe("a discount larger than the day rate", () => {
   const pricingInputs = () => [...document.querySelector("section")!.querySelectorAll<HTMLInputElement>('input[type="number"]')];
-  const warning = () => document.body.textContent?.includes("sleva je vyšší než denní sazba") ?? false;
+  const warning = () => document.body.textContent?.includes("než denní sazba (") ?? false;
 
   it("is pointed out on the pricing step and again before saving", async () => {
     renderWizard();
@@ -524,8 +614,13 @@ describe("a discount larger than the day rate", () => {
     expect(warning()).toBe(false);
     // 15+ standard: daily rate is the first of its six fields (after 3 child ages × 3 tiers × 2).
     const [daily] = pricingInputs().slice(18, 24);
-    fireEvent.change(daily!, { target: { value: "40" } }); // evening discount 80 > 40
+    fireEvent.change(daily!, { target: { value: "60" } }); // only the evening discount, 80
     await waitFor(() => expect(warning()).toBe(true));
+    expect(document.body.textContent).toContain("tato sleva je vyšší než denní sazba (60 Kč)");
+    fireEvent.change(daily!, { target: { value: "40" } }); // afternoon 50, evening 80, departure 50
+    await waitFor(() =>
+      expect(document.body.textContent).toContain("tyto slevy jsou vyšší než denní sazba (40 Kč)"),
+    );
     goToStep(F.steps.save);
     expect(document.body.textContent).toContain("Pozor: u řádků");
   });
